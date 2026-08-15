@@ -182,6 +182,24 @@ test('leaves a plain image alone', () => {
 	assert.strictEqual(format(src), src);
 });
 
+test('never wraps a list marker into column one', () => {
+	// A dash used as punctuation mid-sentence becomes a NESTED LIST ITEM if a wrap lands it at the
+	// start of a line. The words are identical and the document structure is not.
+	const src = '- **Never trust green tests.** State the goal as green tests and green tests are what you get - agents will weaken an assertion to get there.\n';
+	const out = format(src);
+	const continuations = out.split('\n').slice(1);
+
+	assert.ok(!continuations.some(l => /^\s*[-*+>#|]\s/.test(l)),
+		`a wrap created a spurious list item:\n${out}`);
+});
+
+test('never wraps an ordered-list number into column one', () => {
+	const src = 'Some prose that runs on for a good long while before it finally reaches the wrap column at 1. something\n';
+	const out = format(src);
+	assert.ok(!out.split('\n').slice(1).some(l => /^\s*\d+\.\s/.test(l)),
+		`a wrap created a spurious ordered item:\n${out}`);
+});
+
 // --- links -----------------------------------------------------------------
 
 console.log('\nlinks');
