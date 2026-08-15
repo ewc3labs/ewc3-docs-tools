@@ -165,6 +165,23 @@ test('an unterminated marker does not swallow the rest of the file', () => {
 	assert.ok(out.split('\n').length > 3, 'prose after an unclosed marker must still be formatted');
 });
 
+test('leaves the badge idiom untouched', () => {
+	// [![alt](image)](href) is how every README writes a badge. The scan matches the OUTER bracket
+	// with "![alt" as the link text, so it used to rewrite the IMAGE url into a reference and emit
+	// [![alt][label]](href) - still valid markdown, rendered by GitHub, and not what was written.
+	const src = '- [![CI/CD](https://github.com/ewc3labs/excel-power-query-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/ewc3labs/excel-power-query-editor/actions/workflows/ci.yml)\n';
+	const out = format(src);
+
+	assert.ok(out.includes('[![CI/CD](https://github.com/ewc3labs/excel-power-query-editor/actions/workflows/ci.yml/badge.svg)]'),
+		`badge was rewritten:\n${out}`);
+	assert.ok(!/\]\[[a-z-]+\]/.test(out), `image became a reference:\n${out}`);
+});
+
+test('leaves a plain image alone', () => {
+	const src = '![a screenshot](https://example.com/some/quite/long/path/shot.png)\n';
+	assert.strictEqual(format(src), src);
+});
+
 // --- links -----------------------------------------------------------------
 
 console.log('\nlinks');
