@@ -18,9 +18,17 @@ const { resolveValues, syncFiles } = require('../lib/values');
 
 const CONFIG_NAME = '.ewc3-docs.json';
 
+/**
+ * Read `.ewc3-docs.json` if there is one.
+ *
+ * There usually should not be. Every field has a working default, so a repository only needs this
+ * file to say what is genuinely different about it - which in practice means `values`, and an
+ * `include` list if the documents are not where they normally are. Declaring a default back to the
+ * tool is noise that later reads as deliberate divergence.
+ */
 function loadConfig(root) {
 	const file = path.join(root, CONFIG_NAME);
-	if (!fs.existsSync(file)) { return {}; }
+	if (!fs.existsSync(file)) { return { __missing: true }; }
 	try {
 		return JSON.parse(fs.readFileSync(file, 'utf8'));
 	} catch (err) {
@@ -131,7 +139,9 @@ function cmdLinks(root, config) {
 function cmdValues(root, config, argv) {
 	const check = argv.includes('--check');
 	if (!config.values) {
-		console.log('No values declared in .ewc3-docs.json - nothing to do.');
+		console.log(config.__missing
+			? `No ${CONFIG_NAME} - no computed values to check.`
+			: `No values declared in ${CONFIG_NAME} - nothing to check.`);
 		return 0;
 	}
 

@@ -123,6 +123,48 @@ test('still wraps a paragraph containing an inline marker', () => {
 	assert.ok(out.includes('<!--ewc3:tests-->111<!--/ewc3:tests-->'), 'marker must survive intact');
 });
 
+test('never duplicates a definition, however many blocks there were', () => {
+	// Stripping only the trailing block meant an earlier block was harvested, left in place, and
+	// emitted again at the foot - so every run added another copy.
+	const src = [
+		'Text with [a link](https://example.com/some/quite/long/path).', '',
+		'[stray]: https://example.com/stray', '',
+		'[other]: https://example.com/other', ''
+	].join('\n');
+	const once = format(src);
+	const count = label => (once.match(new RegExp('^\\[' + label + '\\]: ', 'gm')) || []).length;
+
+	assert.strictEqual(count('stray'), 1, `stray duplicated:\n${once}`);
+	assert.strictEqual(count('other'), 1, `other duplicated:\n${once}`);
+	assert.strictEqual(format(once), once, 'must be idempotent');
+});
+
+test('a marker inside a code span is documentation, not a marker', () => {
+	// Writing about the syntax used to break the syntax: a table row mentioning `<!--ewc3:name-->`
+	// opened a block that never closed, so every real marked region AFTER it stopped being
+	// protected - and its definition was harvested and duplicated at the foot of the file.
+	const src = [
+		'| `npm run docs:values` | Refresh values between `<!--ewc3:name-->` markers |', '',
+		'<!--ewc3:badgeTests-->',
+		'[tests]: https://img.shields.io/badge/tests-115-brightgreen.svg',
+		'<!--/ewc3:badgeTests-->', ''
+	].join('\n');
+	const out = format(src);
+	const defs = (out.match(/^\[tests\]: /gm) || []).length;
+
+	assert.strictEqual(defs, 1, `definition duplicated:\n${out}`);
+	assert.strictEqual(format(out), out, 'must be idempotent');
+});
+
+test('an unterminated marker does not swallow the rest of the file', () => {
+	const src = [
+		'<!--ewc3:oops-->', '',
+		'Ordinary prose that is long enough that it really does need to be wrapped somewhere before the hundred column mark.', ''
+	].join('\n');
+	const out = format(src);
+	assert.ok(out.split('\n').length > 3, 'prose after an unclosed marker must still be formatted');
+});
+
 // --- links -----------------------------------------------------------------
 
 console.log('\nlinks');

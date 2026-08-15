@@ -140,14 +140,28 @@ conditionally skipped test is declared but pending. Name the value for what it c
 
 ## Configuration
 
-`.ewc3-docs.json` in the repository root. Every field is optional.
+**Most repositories need no configuration at all.** Every field has a working default, and this
+repository is its own example - it has no `.ewc3-docs.json`, and `ewc3-docs check` behaves
+identically with or without one.
+
+| Default | |
+| --- | --- |
+| `include` | `["README.md", "docs/**.md"]` |
+| `exclude` | nothing |
+| `format.width` | `100` |
+| `links.orphanRoot` | `docs` |
+| `values` | none |
+
+Add `.ewc3-docs.json` to the repository root to say what is genuinely different. In practice that
+means `values`, which cannot be guessed, and sometimes `include`.
+
+**`include` replaces the default rather than adding to it**, so a repository that also documents
+`SUPPORT.md` lists all three:
 
 ```json
 {
-  "include": ["README.md", "docs/**.md"],
+  "include": ["README.md", "SUPPORT.md", "docs/**.md"],
   "exclude": ["docs/Config_Reference.md"],
-  "format": { "width": 100 },
-  "links": { "orphanRoot": "docs" },
   "values": {
     "tests": { "countMatches": { "files": ["test/*.ts"], "pattern": "^\\s*(test|it)\\(" } },
     "version": { "fromJson": { "file": "package.json", "path": "version" } }
@@ -157,6 +171,12 @@ conditionally skipped test is declared but pending. Name the value for what it c
 
 **Exclude generated files.** If a document is produced by a generator and checked byte-for-byte,
 formatting it afterwards will make the two disagree.
+
+**Do not declare a default back.** `"format": {"width": 100}` does nothing except make a later
+reader wonder which repository has a different width, and why.
+
+Anything in the toolkit that ends up identical in every repository is a sign the default is wrong -
+fix it here rather than copying it there.
 
 ## What lives here, and when
 
