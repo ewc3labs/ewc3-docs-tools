@@ -1,0 +1,29 @@
+{
+  "name": "@ewc3labs/docs-tools",
+  "version": "0.1.0",
+  "description": "Documentation tooling for EWC3 Labs repositories: prose formatting, link checking, and computed values that cannot drift.",
+  "license": "MIT",
+  "author": "EWC3 Labs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ewc3labs/ewc3-docs-tools.git"
+  },
+  "bin": {
+    "ewc3-docs": "bin/ewc3-docs.js"
+  },
+  "main": "lib/index.js",
+  "files": [
+    "bin/",
+    "lib/",
+    "USAGE.txt",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "keywords": ["markdown", "documentation", "lint", "links", "formatting"]
+}

@@ -1,0 +1,28 @@
+EWC3 Labs documentation tools
+
+  ewc3-docs format [--check] [files...]   Wrap prose so a source line is as wide as it renders.
+                                          Long URLs move to reference definitions; short relative
+                                          links stay inline. Never changes a word.
+
+  ewc3-docs links                         Check every relative link resolves, with the case it was
+                                          written in, that every [text][label] has a definition,
+                                          and that no document is unreachable.
+
+  ewc3-docs values [--check]              Refresh computed numbers written between
+                                          <!--ewc3:name-->value<!--/ewc3:name--> markers.
+
+  ewc3-docs check                         All three in --check mode. This is the CI command.
+
+Configuration: .ewc3-docs.json in the repository root. All fields optional.
+
+  {
+    "include": ["README.md", "docs/**.md"],
+    "exclude": ["docs/Config_Reference.md"],
+    "format": { "width": 100 },
+    "links":  { "orphanRoot": "docs" },
+    "values": {
+      "tests":    { "countMatches": { "files": ["test/*.ts"], "pattern": "^\s*(test|it)\(" } },
+      "version":  { "fromJson":     { "file": "package.json", "path": "version" } },
+      "commands": { "countJson":    { "file": "package.json", "path": "contributes.commands" } }
+    }
+  }
