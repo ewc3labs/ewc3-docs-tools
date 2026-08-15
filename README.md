@@ -124,6 +124,20 @@ and where it comes from.
 The same marker works around a whole block, which is how badges are handled: a URL cannot contain an
 HTML comment, so the markers go around the line and a `template` rebuilds it.
 
+**Inside an HTML block, keep the markers inline.** A badge row is usually a `<p align="center">`
+full of `<img>` tags, and putting the open marker on its own line inside it ends the HTML block for
+some renderers - GitHub renders it correctly and a local preview does not, which is a confusing way
+to find out. Put the whole row on one line with the markers inline around each value, and separate
+the badges with `&nbsp;` so the row is not broken across lines:
+
+```html
+<p align="center">
+<img alt="License" src="..."><!--ewc3:badgeVersion--><img alt="Version" src="..."><!--/ewc3:badgeVersion-->
+</p>
+```
+
+`format` leaves that line alone, because it begins with `<`.
+
 ### Resolvers
 
 | Resolver | Takes |
