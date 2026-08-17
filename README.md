@@ -74,7 +74,37 @@ Then add to `package.json`:
 }
 ```
 
-`ewc3-docs check` runs all three in check mode and is the one CI should call.
+`ewc3-docs check` runs everything in check mode and is the one CI should call.
+
+## Two pipelines, and the difference matters
+
+| | writes to your tree | when |
+| --- | --- | --- |
+| **fix** | **yes**, idempotently | before you commit, as often as you like |
+| **check** | never | in CI, and whenever you want an answer |
+
+**Do not hook the fixer to `build` or `test`.** A command that rewrites files as a side effect of
+compiling or observing is one you stop trusting, and in CI it would quietly modify the checkout.
+Keep the mutating step something a person or an agent chooses to run.
+
+**CI refuses; it does not repair.** `check` compares and fails, naming the file. It never edits your
+documents, because a CI job that rewrites your work behind you is its own kind of horror. The value
+is not that documentation fixes itself - it is that it can no longer be wrong and green at the same
+time.
+
+## Shell shortcuts
+
+`scripts/git-bash/bashrc.d/ewc3-docs.sh` provides `docsfix`, `docscheck`, `docsseries` and
+`docsready` (fix, then check, then `git status`). Source it from `~/.bashrc`:
+
+```bash
+source /path/to/ewc3-docs-tools/scripts/git-bash/bashrc.d/ewc3-docs.sh
+```
+
+They work in any git repository, and prefer the repo's own `docs:*` npm script when one exists -
+because that script is allowed to know things the generic tool does not, such as regenerating a
+config reference first. Repositories with no `package.json` at all, like a .NET add-in, get the
+`npx` form automatically.
 
 ## format
 
