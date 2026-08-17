@@ -169,6 +169,28 @@ sensible for a six-leg test matrix — then a docs-only change triggers *nothing
 in the one workflow that never runs on doc changes. This separate workflow inverts the filter on
 purpose.
 
+## Pinning, and what it costs you
+
+The two wiring styles differ in one way that only shows up when the toolkit changes:
+
+| | resolves to | a formatter change arrives |
+| --- | --- | --- |
+| `npm install --save-dev github:...` | the commit in your lockfile | when you bump the dependency |
+| `npx --yes github:...` | latest, every run | immediately, including in CI |
+
+**Neither is wrong, and the difference is not academic.** A change to how prose wraps once landed in
+two repositories on the same day: the `npx` one stayed green, and the pinned one failed its Docs job
+because CI ran the previous formatter against documents reflowed with the new one. The documents
+were fine; the checker was old.
+
+**Pin if you want documentation formatting to be a deliberate change**, and treat the bump as the
+moment you reflow. **Use `npx` if you would rather never think about it.** What you must not do is
+pin the dependency and reflow with a different local copy — that is how a repository ends up failing
+CI over its own passing check.
+
+> Until the toolkit is published to npm — `DT-3` in the [roadmap][roadmap] — `github:` specs pin a
+> commit but carry no version number, so there is nothing to read that tells you what changed.
+
 ## Shell shortcuts
 
 `scripts/git-bash/bashrc.d/ewc3-docs.sh` gives you four verbs that work in **any** git repository:
