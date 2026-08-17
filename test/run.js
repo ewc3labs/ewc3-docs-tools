@@ -201,6 +201,132 @@ test('never wraps an ordered-list number into column one', () => {
 		`a wrap created a spurious ordered item:\n${out}`);
 });
 
+test('never breaks an inline code span across lines', () => {
+	// A split span still RENDERS fine - CommonMark converts the line ending to a space. The problem
+	// is that this toolkit's scanners are line-based, so a split span defeats code-span stripping in
+	// format, links, and values alike, and a `(img)` in an example becomes a link the checker chases.
+	const src = 'Some prose that runs on for a good while before it reaches the wrap column so `- <!--ewc3:x-->[![Badge](img)](url)<!--/ewc3:x-->` renders as literal text.\n';
+	const out = format(src);
+	assert.ok(out.includes('`- <!--ewc3:x-->[![Badge](img)](url)<!--/ewc3:x-->`'),
+		`a wrap split a code span:\n${out}`);
+});
+
+test('never wraps a raw-HTML token into column one', () => {
+	// An HTML comment is a CommonMark type-2 block and MAY interrupt a paragraph. Once a wrap puts
+	// one in column one the block splitter treats that line as verbatim forever, so the formatter is
+	// stable on the damage and cannot undo it. The only fix is never to create it.
+	const src = 'Prose that runs on for a good long while before it finally reaches the wrap column <!--ewc3:x-->and continues.\n';
+	const out = format(src);
+	assert.ok(!out.split('\n').slice(1).some(l => /^\s*</.test(l)),
+		`a wrap created a raw-HTML line:\n${out}`);
+});
+
+// --- values ----------------------------------------------------------------
+
+test('a marker inside a code span is not a value to substitute', () => {
+	const src = 'Write `<!--ewc3:tests-->136<!--/ewc3:tests-->` to embed a count.\n';
+	const r = applyToText(src, {});
+	assert.deepStrictEqual(r.unknown, [], 'an example was treated as a live marker');
+	assert.strictEqual(r.text, src);
+});
+
+test('a marker inside a fenced block is not a value to substitute', () => {
+	const src = '```md\n<!--ewc3:tests-->136<!--/ewc3:tests-->\n```\n';
+	const r = applyToText(src, {});
+	assert.deepStrictEqual(r.unknown, []);
+	assert.strictEqual(r.text, src);
+});
+
+test('a real marker outside code is still substituted', () => {
+	const src = 'Suite: <!--ewc3:tests-->1<!--/ewc3:tests--> tests, e.g. `<!--ewc3:tests-->`.\n';
+	const r = applyToText(src, { tests: 136 });
+	assert.ok(r.text.includes('<!--ewc3:tests-->136<!--/ewc3:tests-->'));
+	assert.strictEqual(r.replaced, 1);
+});
+
+
+test('converges in one pass on a CRLF file', () => {
+	// A CRLF file never converged: rewrapped prose loses its carriage returns while verbatim lines
+	// keep theirs, so every pass changed a few more and `fix` was always followed by a failing
+	// `check`. Measured on a real README: 49 carriage returns, falling by three per pass.
+	const { formatFiles } = require('../lib/format');
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ewc3-crlf-'));
+	const file = path.join(dir, 'a.md');
+	const body = '# Title\n\nSome prose that runs on for a good long while indeed before it finally reaches the wrap column and has to be broken somewhere sensible.\n\n| a | b |\n| --- | --- |\n';
+	fs.writeFileSync(file, body.replace(/\n/g, '\r\n'));
+
+	assert.deepStrictEqual(formatFiles([file], { check: true }).length, 1, 'nothing to do?');
+	formatFiles([file]);
+	assert.deepStrictEqual(formatFiles([file], { check: true }), [], 'did not converge in one pass');
+
+	const after = fs.readFileSync(file, 'utf8');
+	assert.ok(after.includes('\r\n'), 'the file lost its line endings');
+	assert.ok(!/[^\r]\n/.test(after), 'the file ended up with mixed line endings');
+});
+
+// --- documentation coverage -------------------------------------------------
+//
+// DOGFOOD. The toolkit's own rule is "derive what can be derived, check what cannot", and a list of
+// commands in a document is exactly the kind of thing that goes stale silently. This caught a real
+// one: every guide referenced `ewc3-docs fix` for a week before the command existed, because the
+// shell shortcuts wrapped it and the failing exit code was swallowed by a fallback.
+
+const BIN = fs.readFileSync(path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'utf8');
+const USAGE = fs.readFileSync(path.join(__dirname, '..', 'USAGE.txt'), 'utf8');
+const REFERENCE = fs.readFileSync(path.join(__dirname, '..', 'docs', 'Reference.md'), 'utf8');
+
+const commands = [...BIN.matchAll(/^\tcase '([a-z]+)':/gm)].map(m => m[1]);
+
+test('every command the CLI dispatches is in USAGE.txt', () => {
+	assert.ok(commands.length >= 5, `only found ${commands.length} commands - the scan is broken`);
+	const missing = commands.filter(c => !USAGE.includes(`ewc3-docs ${c}`));
+	assert.deepStrictEqual(missing, [], `undocumented in USAGE.txt: ${missing.join(', ')}`);
+});
+
+test('every command the CLI dispatches is in the reference', () => {
+	const missing = commands.filter(c => !new RegExp('`' + c + '[ `]').test(REFERENCE));
+	assert.deepStrictEqual(missing, [], `undocumented in docs/Reference.md: ${missing.join(', ')}`);
+});
+
+test('USAGE.txt does not describe a command that does not exist', () => {
+	const claimed = [...USAGE.matchAll(/ewc3-docs ([a-z]+)/g)].map(m => m[1]);
+	const phantom = [...new Set(claimed)].filter(c => !commands.includes(c));
+	assert.deepStrictEqual(phantom, [], `USAGE.txt describes non-existent command(s): ${phantom.join(', ')}`);
+});
+
+test('every flag the CLI reads is documented', () => {
+	const flags = [...new Set([...BIN.matchAll(/'(--[a-z-]+)'/g)].map(m => m[1]))];
+	assert.ok(flags.length >= 2, `only found ${flags.length} flags - the scan is broken`);
+	const missing = flags.filter(f => !REFERENCE.includes('`' + f));
+	assert.deepStrictEqual(missing, [], `undocumented flag(s): ${missing.join(', ')}`);
+});
+
+test('every resolver is documented', () => {
+	const { RESOLVERS } = require('../lib/values');
+	const missing = Object.keys(RESOLVERS).filter(r => !REFERENCE.includes('`' + r + '`'));
+	assert.deepStrictEqual(missing, [], `undocumented resolver(s): ${missing.join(', ')}`);
+});
+
+test('every config field the code reads is documented', () => {
+	const fields = [...new Set([...BIN.matchAll(/config\.([a-zA-Z]+)/g)].map(m => m[1]))]
+		.filter(f => !f.startsWith('_'));
+	assert.ok(fields.length >= 5, `only found ${fields.length} config fields - the scan is broken`);
+	const missing = fields.filter(f => !REFERENCE.includes('`' + f + '`'));
+	assert.deepStrictEqual(missing, [], `undocumented config field(s): ${missing.join(', ')}`);
+});
+
+test('every format default is documented', () => {
+	const { DEFAULTS } = require('../lib/format');
+	const missing = Object.keys(DEFAULTS).filter(k => !REFERENCE.includes('`format.' + k + '`'));
+	assert.deepStrictEqual(missing, [], `undocumented format option(s): ${missing.join(', ')}`);
+});
+
+test('every directory skipped by default is documented', () => {
+	const { DEFAULT_SKIP } = require('../lib/links');
+	const missing = DEFAULT_SKIP.filter(d => !REFERENCE.includes(d));
+	assert.deepStrictEqual(missing, [], `undocumented skipped dir(s): ${missing.join(', ')}`);
+});
+
 // --- glob ------------------------------------------------------------------
 
 console.log('\nglob');

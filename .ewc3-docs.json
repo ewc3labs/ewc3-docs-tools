@@ -1,0 +1,8 @@
+{
+  "values": {
+    "lastDTNum": { "lastId": { "prefix": "DT" } },
+    "lastDT": { "template": { "text": "DT-${lastDTNum}" } },
+    "lastFIXNum": { "lastId": { "prefix": "FIX" } },
+    "lastFIX": { "template": { "text": "FIX-${lastFIXNum}" } }
+  }
+}

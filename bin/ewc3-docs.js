@@ -5,9 +5,11 @@
 //   ewc3-docs format [--check] [globs...]   wrap prose so source width matches rendered width
 //   ewc3-docs links  [--root <dir>]         dead links, wrong case, undefined refs, orphans
 //   ewc3-docs values [--check]              refresh computed numbers between <!--ewc3:name--> markers
-//   ewc3-docs check                         all three in --check mode, for CI
+//   ewc3-docs fix                           values + format in write mode - the pre-commit button
+//   ewc3-docs check                         all of the above in --check mode, for CI
 //
-// Configuration is `.ewc3-docs.json` in the repository root. Every field is optional.
+// Configuration is `.ewc3-docs.json` in the repository root, or `config/ewc3-docs.json` if the
+// repository keeps its whole-repo configuration in one folder. Every field is optional.
 
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +22,11 @@ const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
 } = require('../lib/series');
 
-const CONFIG_NAME = '.ewc3-docs.json';
+// Where the config may live. A repository that keeps whole-repo configuration in one folder should
+// not have to make an exception for this tool, so `config/` is a first-class location rather than a
+// fallback. Both are searched, and finding TWO is an error - a second config that is silently
+// ignored is exactly the kind of quiet wrongness this toolkit exists to prevent.
+const CONFIG_NAMES = ['.ewc3-docs.json', 'config/ewc3-docs.json'];
 
 /**
  * Read `.ewc3-docs.json` if there is one.
@@ -30,14 +36,37 @@ const CONFIG_NAME = '.ewc3-docs.json';
  * `include` list if the documents are not where they normally are. Declaring a default back to the
  * tool is noise that later reads as deliberate divergence.
  */
-function loadConfig(root) {
-	const file = path.join(root, CONFIG_NAME);
-	if (!fs.existsSync(file)) { return { __missing: true }; }
-	try {
-		return JSON.parse(fs.readFileSync(file, 'utf8'));
-	} catch (err) {
-		fail(`${CONFIG_NAME} is not valid JSON: ${err.message}`);
+function loadConfig(root, explicit) {
+	let found;
+
+	if (explicit) {
+		found = [path.isAbsolute(explicit) ? explicit : path.join(root, explicit)];
+		if (!fs.existsSync(found[0])) { fail(`no config at ${explicit}`); }
+	} else {
+		found = CONFIG_NAMES.map(n => path.join(root, n)).filter(f => fs.existsSync(f));
+		if (!found.length) { return { __missing: true }; }
+		if (found.length > 1) {
+			const names = found.map(f => path.relative(root, f).split(path.sep).join('/'));
+			fail(`two config files, and only one would be read: ${names.join(', ')}. Keep one.`);
+		}
 	}
+
+	const file = found[0];
+	const shown = path.relative(root, file).split(path.sep).join('/');
+	try {
+		const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+		// Paths inside the config are relative to the REPOSITORY, never to the config file. Moving the
+		// file into `config/` must not silently reinterpret every glob in it.
+		config.__source = shown;
+		return config;
+	} catch (err) {
+		fail(`${shown} is not valid JSON: ${err.message}`);
+	}
+}
+
+/** What to call the config in a message: where it actually is, or where it would go. */
+function configLabel() {
+	return (typeof config === 'object' && config && config.__source) || CONFIG_NAMES[0];
 }
 
 function fail(message) {
@@ -112,8 +141,8 @@ function cmdValues(root, config, argv) {
 	const check = argv.includes('--check');
 	if (!config.values) {
 		console.log(config.__missing
-			? `No ${CONFIG_NAME} - no computed values to check.`
-			: `No values declared in ${CONFIG_NAME} - nothing to check.`);
+			? `No ${configLabel()} - no computed values to check.`
+			: `No values declared in ${configLabel()} - nothing to check.`);
 		return 0;
 	}
 
@@ -128,7 +157,7 @@ function cmdValues(root, config, argv) {
 	const { changed, unknown } = syncFiles(files, values, { check });
 
 	if (unknown.length) {
-		console.error(`\nUnknown value marker(s) - not declared in ${CONFIG_NAME}:\n`);
+		console.error(`\nUnknown value marker(s) - not declared in ${configLabel()}:\n`);
 		unknown.forEach(n => console.error(`  <!--ewc3:${n}-->`));
 		return 1;
 	}
@@ -223,7 +252,8 @@ function cmdSeries(root, config) {
 
 const [, , command, ...argv] = process.argv;
 const root = process.cwd();
-const config = loadConfig(root);
+const configFlag = process.argv.indexOf('--config');
+const config = loadConfig(root, configFlag > -1 ? process.argv[configFlag + 1] : null);
 
 let code;
 switch (command) {
@@ -231,6 +261,14 @@ switch (command) {
 	case 'links': code = cmdLinks(root, config); break;
 	case 'values': code = cmdValues(root, config, argv); break;
 	case 'series': code = cmdSeries(root, config); break;
+	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
+	// line, and the wrap has to see the result. Links and series never write, so they are not here.
+	case 'fix':
+		code = Math.max(
+			cmdValues(root, config, argv),
+			cmdFormat(root, config, argv)
+		);
+		break;
 	case 'check':
 		code = Math.max(
 			cmdValues(root, config, ['--check']),

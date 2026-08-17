@@ -45,6 +45,14 @@ describe** and let CI notice, which is a much smaller job than it sounds.
 The look is shamelessly stolen from [Klipper][klipper] - flat files, one document per feature, and
 references that enumerate everything - with far less handrolling. Thanks, Klipper community.
 
+## Start here
+
+- **[Adopting](docs/Adopting.md)** — wiring it into a repository, whatever it is written in. Node,
+  Python, .NET, or a pile of markdown. The easy buttons and the CI job.
+- **[For agents](docs/For_Agents.md)** — if an AI agent is working in your repo, point it here. It
+  is mostly about failure modes that are specifically theirs.
+- **[Overview](docs/Overview.md)** — the documentation index.
+
 ## What is in here
 
 - **format** - wrap prose so a source line is as wide as it renders

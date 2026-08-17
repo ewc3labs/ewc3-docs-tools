@@ -23,7 +23,17 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/run.js"
+    "test": "node test/run.js",
+    "docs:fix": "node bin/ewc3-docs.js fix",
+    "docs:check": "node bin/ewc3-docs.js check",
+    "fix": "npm run docs:fix",
+    "verify": "npm run docs:check && npm test"
   },
-  "keywords": ["markdown", "documentation", "lint", "links", "formatting"]
+  "keywords": [
+    "markdown",
+    "documentation",
+    "lint",
+    "links",
+    "formatting"
+  ]
 }
