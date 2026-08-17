@@ -14,6 +14,12 @@ using it.
 - [For agents](For_Agents.md): if you are an AI agent working in a repo that uses this. Short, and
   mostly about failure modes that are specifically yours.
 
+## Proposals
+
+- [Prefix registry and `repoHQ`][prefix-registry-and]: cross-repo prefix ownership — `prefixOwner`,
+  an HQ pointer, and generating the registry instead of hand-syncing it. Proposal only; nothing
+  built.
+
 ## Project
 
 - [Roadmap][roadmap]: what is planned, and the `DT` prefix registration.
@@ -27,4 +33,5 @@ which nobody sustains. So instead: **derive what can be derived, and check what 
 much smaller job than it sounds, and it is the only version of this that survives contact with a
 busy month.
 
+[prefix-registry-and]: design/prefix-registry-and-repo-hq.md
 [roadmap]: project/EWC3_Docs_Tools_Roadmap.md
