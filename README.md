@@ -145,12 +145,23 @@ the badges with `&nbsp;` so the row is not broken across lines:
 | `fromJson` | `{file, path}` — a dotted path into a JSON file |
 | `countJson` | `{file, path}` — the size of an array or object |
 | `countMatches` | `{files, pattern}` — regex matches across files |
+| `maxMatch` | `{files, pattern}` — the HIGHEST number captured, for allocating the next ID in a series |
 | `template` | `{text}` — interpolates other values with `${name}` |
 | `literal` | `{value}` — for things with no better source yet |
 
 `countMatches` counts what is **declared**, which is not always what a runner reports — a
 conditionally skipped test is declared but pending. Name the value for what it counts (`tests`, not
 `testsPassing`) and the number stays true.
+
+`maxMatch` is for the "last number used" cell in a roadmap or ID registry, and it is **max rather
+than count on purpose**. Counting rows gives the right answer only while a series is contiguous, and
+starts handing out already-taken IDs the moment one is retired — a wrong number that looks derived
+is worse than an obviously stale one. Compose it with `template` to format:
+
+```json
+"lastNum": { "maxMatch": { "files": ["ROADMAP.md"], "pattern": "^\| PQ-(\d+)" } },
+"lastId":  { "template": { "text": "PQ-${lastNum}" } }
+```
 
 ## Configuration
 

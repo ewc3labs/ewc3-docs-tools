@@ -308,6 +308,49 @@ test('a template naming an undeclared value fails loudly', () => {
 	}, tmpdir()), /nope/);
 });
 
+test('takes the HIGHEST captured number, not the count', () => {
+	// A roadmap "last number" cell is the INPUT to minting an ID. Counting rows gives the right
+	// answer only while the series is contiguous, and starts handing out taken IDs the moment one
+	// is retired.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'roadmap.md'),
+		'| PQ-9 | x |\n| PQ-31 | y |\n| PQ-4 | z |\n');
+	const values = resolveValues({
+		values: { last: { maxMatch: { files: ['roadmap.md'], pattern: '^\\| PQ-(\\d+)' } } }
+	}, dir);
+	assert.strictEqual(values.last, '31');
+});
+
+test('is not fooled by a gap in the series', () => {
+	// Three rows, highest is 34. A count would say 3.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'roadmap.md'), '| PQ-1 | x |\n| PQ-2 | y |\n| PQ-34 | z |\n');
+	const values = resolveValues({
+		values: { last: { maxMatch: { files: ['roadmap.md'], pattern: '^\\| PQ-(\\d+)' } } }
+	}, dir);
+	assert.strictEqual(values.last, '34', 'must be the max, never the count');
+});
+
+test('respects the anchor, so prose cannot inflate it', () => {
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'roadmap.md'),
+		'| PQ-7 | x |\nsee PQ-9999 in the notes\n');
+	const values = resolveValues({
+		values: { last: { maxMatch: { files: ['roadmap.md'], pattern: '^\\| PQ-(\\d+)' } } }
+	}, dir);
+	assert.strictEqual(values.last, '7');
+});
+
+test('returns 0 when nothing matches', () => {
+	// An absurd value is better than a plausible one: a broken pattern should look broken.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'roadmap.md'), 'nothing here\n');
+	const values = resolveValues({
+		values: { last: { maxMatch: { files: ['roadmap.md'], pattern: '^\\| PQ-(\\d+)' } } }
+	}, dir);
+	assert.strictEqual(values.last, '0');
+});
+
 test('reads a field from JSON', () => {
 	const dir = tmpdir();
 	fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ version: '0.6.0' }));
