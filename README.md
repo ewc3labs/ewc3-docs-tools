@@ -241,9 +241,15 @@ elsewhere.
 
 ## Configuration
 
-**Most repositories need no configuration at all.** Every field has a working default, and this
-repository is its own example - it has no `.ewc3-docs.json`, and `ewc3-docs check` behaves
-identically with or without one.
+**Most repositories need no configuration at all.** Every field has a working default, and
+[ewc3-test-hole-generator][test-hole] is the proof - it has no `.ewc3-docs.json` and
+`ewc3-docs check` behaves identically without one.
+
+This repository used to be that example, and the sentence outlived the fact: a config was added here
+to derive the `DT` and `FIX` series, and the boast stayed put for a while. Which is the honest
+boundary of the whole toolkit — **structural facts are now mechanically honest, and ordinary prose
+can still lie.** The bar for building machinery against that is a real silent failure showing a
+generalizable pattern, and one sentence in one README is not it.
 
 | Default | |
 | --- | --- |
@@ -313,3 +319,4 @@ MIT.
 [ewc3labs]: https://github.com/ewc3labs
 [excel-power-query]: https://github.com/ewc3labs/excel-power-query-editor
 [klipper]: https://github.com/Klipper3d/klipper
+[test-hole]: https://github.com/ewc3labs/ewc3-test-hole-generator

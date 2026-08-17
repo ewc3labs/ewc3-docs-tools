@@ -60,7 +60,7 @@ Declaring a default back to the tool reads, later, as deliberate divergence.
 | field | default | |
 | --- | --- | --- |
 | `include` | `["README.md", "docs/**.md"]` | what `format` and `values` act on |
-| `exclude` | `[]` | removed from `include`; this is where `archive/` goes |
+| `exclude` | `[]` | removed from `include`; `archive/` and `scratch/` are already skipped |
 | `format.width` | `100` | wrap column |
 | `format.urlMin` | `26` | shorter URLs stay inline, because they do not distort the line |
 | `format.labelMax` | `20` | a long reference label distorts the line just as the URL did |
@@ -69,10 +69,12 @@ Declaring a default back to the tool reads, later, as deliberate divergence.
 | `series.roadmaps` | `["docs/project/*Roadmap.md", "docs/project/*ROADMAP.md"]` | where roadmaps live |
 | `values` | `{}` | see [Resolvers](#resolvers) |
 
-Default `skipDirs`: `node_modules`, `.git`, `dist`, `out`, `.vscode-test`, `archive`, `coverage`.
+Default `skipDirs`: `node_modules`, `.git`, `dist`, `out`, `.vscode-test`, `archive`, `scratch`,
+`coverage`.
 
-**`archive` is skipped by default and should stay skipped.** Reformatting an archive rewrites the
-past.
+**`archive` and `scratch` are skipped by default and should stay skipped.** Reformatting an archive
+rewrites the past. A scratch note — a review, a paste, a half-thought — is working material, and it
+is not an orphan merely because nothing links to it.
 
 ## Globs
 

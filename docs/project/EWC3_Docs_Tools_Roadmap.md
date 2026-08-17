@@ -16,15 +16,18 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-14<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-17<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-0<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
 **Max, not a count** — counting rows agrees with the highest ID only while a series is contiguous.
 
-**A global prefix belongs to exactly one roadmap** across EWC3 Labs; see the [prefix
-registry][prefix-registry]. **`FIX` is repo-local and that is canon** — every roadmap owns its own,
-because a fix is never referenced from outside the repository it fixes.
+**A global prefix belongs to exactly one roadmap.** Two layers enforce that, and only one of them is
+mechanical: `series` sees only the roadmaps beneath the repository it runs in, so it catches two
+roadmaps in *this* repo claiming the same prefix and cannot know another repository claimed it too.
+Uniqueness across EWC3 Labs rests on the [prefix registry][prefix-registry], which is a convention,
+not a check. **`FIX` is repo-local and that is canon** — every roadmap owns its own, because a fix
+is never referenced from outside the repository it fixes.
 
 ## Delivery Index
 
@@ -36,6 +39,8 @@ because a fix is never referenced from outside the repository it fixes.
 | DT-2 | ⬜ planned | `format --check` should say WHAT would change | S | — | it names the file and not the reason, so the fix is "run the tool and read the diff" |
 | DT-3 | ⬜ planned | Publish to npm rather than installing from git | M | — | `github:` specs work but pin nothing; a version number would let consumers upgrade deliberately |
 | DT-4 | ⬜ planned | Anchor checking for `[text](file.md#heading)` | M | — | the file is verified, the heading is not, so a renamed heading breaks silently |
+| DT-15 | ⬜ planned | `next <PREFIX>`: print the next free ID | S | — | **not yet earned.** Derived Last Used already removed the state that could go stale; only the `+1` is manual. Build it when an agent demonstrably gets the `+1` wrong, not before |
+| DT-16 | ⬜ planned | Org-level series check across every roadmap | M | — | `series` sees only its own repository, so cross-repo uniqueness rests on the HQ registry by convention. An HQ job could scan all roadmaps and validate it mechanically |
 
 ## Done
 
@@ -51,6 +56,7 @@ because a fix is never referenced from outside the repository it fixes.
 | DT-12 | ✅ done | Full command, config, and resolver reference | M | [Reference](../Reference.md) | complete published surface, now that other repositories are adopting the toolkit |
 | DT-13 | ✅ done | Tests asserting the docs cover the code's surface | S | [Reference](../Reference.md) | commands, resolvers, config fields, format options, skipped dirs — all derived from source |
 | DT-14 | ✅ done | `format` converges in one pass on a CRLF file | S | [Reference](../Reference.md) | it never converged: rewrapped prose lost its carriage returns while verbatim lines kept theirs, so `fix` was always followed by a failing `check` |
+| DT-17 | ✅ done | `scratch/` skipped by default, like `archive/` | S | [Reference](../Reference.md) | a pasted review was reported as an orphan; working material is not part of the documentation graph |
 
 ## Notes
 
