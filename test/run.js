@@ -13,6 +13,7 @@ const path = require('path');
 const { format } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { applyToText, resolveValues } = require('../lib/values');
+const { expand } = require('../lib/glob');
 
 let passed = 0, failed = 0;
 
@@ -198,6 +199,48 @@ test('never wraps an ordered-list number into column one', () => {
 	const out = format(src);
 	assert.ok(!out.split('\n').slice(1).some(l => /^\s*\d+\.\s/.test(l)),
 		`a wrap created a spurious ordered item:\n${out}`);
+});
+
+// --- glob ------------------------------------------------------------------
+
+console.log('\nglob');
+
+function treeWithSubdirs() {
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'a.md'), 'x');
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'b.md'), 'x');
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'c.md'), 'x');
+	fs.writeFileSync(path.join(dir, 'docs', 'notes.txt'), 'x');
+	return dir;
+}
+
+test('`docs/**.md` reaches subdirectories', () => {
+	// THE REGRESSION. `**` used to be detected by splitting on "/" and testing whether an element
+	// equalled "**" - false for `docs/**.md`, whose second element is `**.md`. The spec silently
+	// degraded to `docs/*.md`, and since it is also the DEFAULT include, every repo using the
+	// default checked only its top-level docs while being told everything passed.
+	assert.strictEqual(expand('docs/**.md', treeWithSubdirs()).length, 3);
+});
+
+test('`docs/**/*.md` means the same thing', () => {
+	assert.strictEqual(expand('docs/**/*.md', treeWithSubdirs()).length, 3);
+});
+
+test('`docs/*.md` stays shallow', () => {
+	assert.strictEqual(expand('docs/*.md', treeWithSubdirs()).length, 1);
+});
+
+test('a recursive glob respects the extension', () => {
+	// notes.txt must not come along.
+	const files = expand('docs/**.md', treeWithSubdirs());
+	assert.ok(files.every(f => f.endsWith('.md')), files.join(', '));
+});
+
+test('a literal path resolves, and a missing one yields nothing', () => {
+	const dir = treeWithSubdirs();
+	assert.strictEqual(expand('docs/a.md', dir).length, 1);
+	assert.strictEqual(expand('docs/nope.md', dir).length, 0);
 });
 
 // --- links -----------------------------------------------------------------

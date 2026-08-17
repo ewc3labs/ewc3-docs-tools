@@ -15,6 +15,10 @@ const path = require('path');
 const { formatFiles } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
+const { expand } = require('../lib/glob');
+const {
+	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
+} = require('../lib/series');
 
 const CONFIG_NAME = '.ewc3-docs.json';
 
@@ -39,38 +43,6 @@ function loadConfig(root) {
 function fail(message) {
 	console.error(`ewc3-docs: ${message}`);
 	process.exit(2);
-}
-
-/** Minimal glob expansion: `dir/*.md`, `dir/**` + `.md`, or a literal path. */
-function expand(spec, root) {
-	const parts = spec.split('/');
-	const deep = parts.includes('**');
-
-	if (deep) {
-		const base = path.join(root, parts.slice(0, parts.indexOf('**')).join('/'));
-		const ext = path.extname(parts[parts.length - 1]) || '.md';
-		const walk = (dir, out = []) => {
-			if (!fs.existsSync(dir)) { return out; }
-			for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-				if (e.isDirectory()) {
-					if (e.name !== 'node_modules' && !e.name.startsWith('.')) { walk(path.join(dir, e.name), out); }
-				} else if (e.name.endsWith(ext)) {
-					out.push(path.join(dir, e.name));
-				}
-			}
-			return out;
-		};
-		return walk(base);
-	}
-
-	const full = path.join(root, spec);
-	const dir = path.dirname(full);
-	const base = path.basename(full);
-	if (!base.includes('*')) { return fs.existsSync(full) ? [full] : []; }
-	if (!fs.existsSync(dir)) { return []; }
-
-	const re = new RegExp('^' + base.split('*').map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
-	return fs.readdirSync(dir).filter(f => re.test(f)).map(f => path.join(dir, f)).sort();
 }
 
 /** Files the format and values commands act on: config `include`, minus `exclude`. */
@@ -180,6 +152,73 @@ function cmdValues(root, config, argv) {
 	return 0;
 }
 
+/**
+ * Report ID series, and refuse a prefix the roadmap has not declared it owns.
+ *
+ * A GLOBAL prefix belongs to exactly one roadmap, across every repository. That is the cross-repo
+ * discipline: `DT` is owned by ewc3-docs-tools, so nothing else mints a DT number and anyone reading
+ * a DT reference knows which document to open.
+ *
+ * A LOCAL prefix - `FIX` above all - is deliberately per-repository. `FIX-3` in one repo is a
+ * different thing from `FIX-3` in another, and that is fine, because a fix never needs to be
+ * referenced from outside the repository it fixes. Local prefixes are exempt from the
+ * claimed-twice check; everything else is not.
+ */
+function cmdSeries(root, config) {
+	const specs = (config.series || {}).roadmaps;
+	const files = roadmapFiles(root, specs);
+	const rel = f => path.relative(root, f).split(path.sep).join('/');
+
+	if (!files.length) {
+		console.log('No roadmaps found. Looked for: ' + (specs || DEFAULT_ROADMAPS).join(', '));
+		return 0;
+	}
+
+	for (const file of files) {
+		const { declared, used } = readSeries(file);
+		console.log(rel(file));
+		if (!declared.size) {
+			console.log('  (no Prefix table - declare the series this roadmap owns)');
+		}
+		for (const prefix of [...declared].sort()) {
+			const highest = used.get(prefix);
+			const scope = isLocalPrefix(prefix) ? 'repo-local' : 'global';
+			// padEnd, not printf width specifiers - console.log supports %s but not %-11s, and prints
+			// the modifier literally.
+			const last = highest === undefined ? 'none yet' : `${prefix}-${highest}`;
+			console.log(`  ${prefix.padEnd(8)} ${scope.padEnd(11)} last used: ${last}`);
+		}
+	}
+
+	let code = 0;
+
+	// Two global roadmaps claiming the same prefix is a collision waiting to be discovered by
+	// somebody following a reference to the wrong document.
+	const contested = [...declaredOwnership(root, specs).entries()]
+		.filter(([prefix, claims]) => claims.length > 1 && !isLocalPrefix(prefix));
+
+	if (contested.length) {
+		console.error('\nA global prefix is claimed by more than one roadmap:\n');
+		for (const [prefix, claims] of contested) {
+			console.error(`  ${prefix}  claimed by ${claims.map(rel).join(', ')}`);
+		}
+		code = 1;
+	}
+
+	const undeclared = undeclaredPrefixes(root, specs);
+	if (undeclared.length) {
+		console.error('\nIDs used under a prefix the roadmap does not declare it owns:\n');
+		for (const u of undeclared) {
+			console.error(`  ${u.prefix.padEnd(8)} up to ${u.prefix}-${u.highest}   in ${rel(u.file)}`);
+		}
+		console.error('\nAdd it to the Prefix table, or move those IDs to the roadmap that owns it.');
+		code = 1;
+	}
+
+	if (!code) { console.log('\nEvery prefix in use is declared, and no global prefix is claimed twice.'); }
+	return code;
+}
+
 // --- entry -----------------------------------------------------------------
 
 const [, , command, ...argv] = process.argv;
@@ -191,11 +230,13 @@ switch (command) {
 	case 'format': code = cmdFormat(root, config, argv); break;
 	case 'links': code = cmdLinks(root, config); break;
 	case 'values': code = cmdValues(root, config, argv); break;
+	case 'series': code = cmdSeries(root, config); break;
 	case 'check':
 		code = Math.max(
 			cmdValues(root, config, ['--check']),
 			cmdFormat(root, config, ['--check']),
-			cmdLinks(root, config)
+			cmdLinks(root, config),
+			cmdSeries(root, config)
 		);
 		break;
 	default:

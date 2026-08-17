@@ -50,6 +50,7 @@ references that enumerate everything - with far less handrolling. Thanks, Klippe
 - **format** - wrap prose so a source line is as wide as it renders
 - **links** - dead links, wrong case, undefined references, and unreachable documents
 - **values** - numbers in prose that come from the thing they describe
+- **series** - who owns which ID prefix, and what number comes next
 
 Node 18+, no dependencies. Every one of them exists because of a specific failure, not a style
 preference, and each section below says which.
@@ -162,6 +163,43 @@ is worse than an obviously stale one. Compose it with `template` to format:
 "lastNum": { "maxMatch": { "files": ["ROADMAP.md"], "pattern": "^\| PQ-(\d+)" } },
 "lastId":  { "template": { "text": "PQ-${lastNum}" } }
 ```
+
+## series
+
+Allocating the next ID is where hand-maintained numbers do real damage. A roadmap's "last number
+used" cell is the **input** to minting an ID, not a summary of one — so when it drifts, the next
+person takes a number that is already taken and nothing complains.
+
+A roadmap declares what it owns:
+
+```markdown
+| Prefix | Scope | Owner | Series |
+| --- | --- | --- | --- |
+| PQ | global | excel-power-query-editor | product slices and fixes |
+| FIX | repo-local | excel-power-query-editor | small corrections |
+```
+
+`ewc3-docs series` then reports the last number per prefix, and **fails** when a roadmap uses a
+prefix it has not declared, or when two roadmaps claim the same global prefix. That check is what
+makes the table load-bearing instead of decorative.
+
+**`FIX` is repo-local by convention.** Every roadmap may own its own `FIX` series, because a fix is
+never referenced from outside the repository it fixes. Everything else is global: one prefix, one
+roadmap, so a reference points somewhere unambiguous.
+
+Pair it with the `lastId` resolver to make the cell itself derived:
+
+```json
+"lastPQNum": { "lastId": { "prefix": "PQ" } },
+"lastPQ":    { "template": { "text": "PQ-${lastPQNum}" } }
+```
+
+```markdown
+| PQ | <!--ewc3:lastPQ-->PQ-34<!--/ewc3:lastPQ--> |
+```
+
+Roadmaps default to `docs/project/*Roadmap.md`. Override with `series.roadmaps` if they live
+elsewhere.
 
 ## Configuration
 

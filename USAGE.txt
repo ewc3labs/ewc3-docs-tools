@@ -11,7 +11,11 @@ EWC3 Labs documentation tools
   ewc3-docs values [--check]              Refresh computed numbers written between
                                           <!--ewc3:name-->value<!--/ewc3:name--> markers.
 
-  ewc3-docs check                         All three in --check mode. This is the CI command.
+  ewc3-docs series                        Who owns which ID prefix, and the last number used.
+                                          Fails on an undeclared prefix, or on two roadmaps
+                                          claiming the same global one. FIX is repo-local.
+
+  ewc3-docs check                         All of the above in check mode. This is the CI command.
 
 Configuration: .ewc3-docs.json in the repository root. All fields optional.
 
