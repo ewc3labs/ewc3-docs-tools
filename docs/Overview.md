@@ -19,6 +19,8 @@ using it.
 - [Prefix registry and `repoHQ`][prefix-registry-and]: cross-repo prefix ownership — `prefixOwner`,
   an HQ pointer, and generating the registry instead of hand-syncing it. Proposal only; nothing
   built.
+- [Clerical work belongs to CI][clerical-work]: the canon these proposals serve - what is
+  bookkeeping, what is judgement, and the measurements that make it a rule rather than a preference.
 
 ## Project
 
@@ -33,5 +35,6 @@ which nobody sustains. So instead: **derive what can be derived, and check what 
 much smaller job than it sounds, and it is the only version of this that survives contact with a
 busy month.
 
+[clerical-work]: design/clerical-work-belongs-to-ci.md
 [prefix-registry-and]: design/prefix-registry-and-repo-hq.md
 [roadmap]: project/EWC3_Docs_Tools_Roadmap.md
