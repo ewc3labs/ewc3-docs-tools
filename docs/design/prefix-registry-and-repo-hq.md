@@ -471,7 +471,7 @@ keep their conventions. Equality buys nothing extra and costs one of them.
 
 The document decides this twice, differently:
 
-> the registry records **display width per prefix**, and every generated cell uses it
+> the registry records **display width per prefix** (default 5), and every generated cell uses it
 
 > **five digits**, everywhere tooling emits. Decided.
 
@@ -639,7 +639,7 @@ So the fix is not *preserve the padding in the derived cell* — that hides the 
 durably. It is:
 
 - **compare numerically** — an ID is its number, which is already how `lastId` behaves;
-- **render from a declared width** — the registry records display width per prefix, and every
+- **render from a declared width** — default 5, declarable per prefix in the registry, and every
   generated cell uses it.
 
 One change, both problems: the derived cell renders `DT-049` among its padded siblings, **and**
@@ -787,11 +787,23 @@ With a derivable name the check is mechanical and worth having:
 ```text
 Doc cell is empty (—)                  -> fine, no slice doc yet
 Doc cell present                       -> must resolve to a real file
-under a slices/ convention             -> must equal <PREFIX>-<5-padded>.md for its row's ID
+under a slices/ convention             -> must START WITH <PREFIX>-<padded> for its row's ID
 ```
 
-The last rule is the strong one: it catches `VS-00391.md` sitting in the `VS-392` row, which a mere
-existence check would pass and a human would not notice.
+**Prefix match, not equality** — corrected by Labs. The equality version would have rejected every
+slice file they have:
+
+```text
+PQ-33_AutoSave_And_Live_Sync.md
+PQ-34_Marketplace_Prerelease_Channel.md
+```
+
+The tail is not decoration. The lesson this check descends from names the failure as *unfindable
+because there is nothing to search* — and the tail is the searchable part. `PQ-00034.md` sorts
+correctly and tells you nothing.
+
+Prefix matching keeps the property that actually matters — a wrong number in a real filename, such
+as `VS-00391_...md` sitting in the `VS-392` row — while letting both houses keep their conventions.
 
 ## Who refreshes `observed`: nobody — it rides an existing chain
 
@@ -857,6 +869,70 @@ the frequency is tied to the risk rather than to a guess.
 gets built. The remaining work is small and additive: a walk step at the HQ end of an existing
 chain, a per-repo `{commit, observedAt}` record, and an org enumeration to catch the repos that
 never reported.
+
+## SXC final — three corrections taken, and one of them was mine twice over
+
+> **SXC**, against `cf3a01d`. All three land, and the width one is the sharper hit: I criticised a
+> design doc for contradicting itself this same week, then did it in this one.
+
+### The padding migration cannot live in `fix` — Labs is right, and it is enforced
+
+`format` carries exactly one hard guarantee, and it is a **test**, not a comment:
+
+```text
+test/run.js:64   test('never changes a word', ...)
+```
+
+`PQ-34 -> PQ-00034` changes a word. Folding the migration into `fix` means either the invariant goes
+or the test grows a carve-out — and that invariant is the entire reason `fix` is safe to run blind
+before every commit. A tool you can run without reading the diff is worth more than one that saves a
+command.
+
+So: **a separate one-shot command.** Same 541 rows, same single pass, different contract. The
+clerical canon is satisfied either way — the work goes to tooling, just not to the tool whose
+promise is *"changes no words."*
+
+### The filename rule was equality; it should be prefix match
+
+Corrected above. Worth recording *why* I got it wrong: I derived the rule from the sorting problem
+alone, and sorting only needs the head. The lesson it descends from is about **findability**, which
+needs the tail. Optimising for one property and silently dropping the other is how a check ends up
+technically correct and practically hostile.
+
+### Five is a default, not a constant — and I decided it twice, differently
+
+Labs caught the document saying *"display width per prefix"* in two places and *"five, decided"* in
+a third. Both are now **default 5, declarable per prefix, recorded in the registry**.
+
+The failure mode is worth naming because it is the one this week keeps producing: **I replaced the
+section I was editing and did not re-read the rest of the document.** That is exactly what happened
+to `SX_Coder_Security_Model.md`, where line 88 outlived the matrix two lines above it and the code
+obeyed the stale sentence for months.
+
+Labs' reason for declarability is the better one, though: this toolkit is public and works with zero
+configuration, and emitting `AB-00007` for a twelve-slice project reads as a tool that thinks it is
+bigger than the project. Accepting any form solves *tooling*; a consistent rendered form is what
+stops a **human** having to be told that `VS-00392` here and `DT-01` there are the same scheme.
+
+## Residue: the outermost link has nothing watching it
+
+Labs is right and this is a real hole in what I wrote. I argued the pullup chain needs no cron
+because *"the check runs as often as the thing it guards can change"*. True of the **children**.
+False of **HQ itself**:
+
+```text
+child workflow disabled     -> its own pushes stop dispatching     -> other children still report
+HQ workflow disabled        -> children dispatch into silence      -> LOOKS EXACTLY LIKE A QUIET WEEK
+```
+
+Every link in the chain is watched by the link above it. Nothing watches the top. So a **scheduled
+heartbeat on HQ alone** — one repo, one job, no walk — is the cheapest possible assertion that the
+outermost check is still alive. It respects the cost constraint precisely because it does no work:
+it exists to fail when the thing that does the work has stopped.
+
+That closes the argument honestly. *Frequency tied to risk* holds for everything the chain guards;
+the chain itself needs one heartbeat, because a stopped clock and a quiet week are indistinguishable
+from inside.
 
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [our-own-canon]: clerical-work-belongs-to-ci.md
