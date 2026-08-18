@@ -934,6 +934,88 @@ That closes the argument honestly. *Frequency tied to risk* holds for everything
 the chain itself needs one heartbeat, because a stopped clock and a quiet week are indistinguishable
 from inside.
 
+## Wilson: insist on the structure, and the write-target question dissolves
+
+> *"I just have this nagging feeling we're going to HAVE to insist on common folder structure, once
+> we migrate to common folder structure. It's easier for the tooling. Searching far and wide for
+> `*roadmap.md` will cause problems."*
+
+He is right, and this **supersedes** both earlier attempts above at *"which roadmap receives the
+table"*. Labs and I circled that question twice and each time answered it as *separate the read glob
+from the write target, and fail rather than pick*. That is the correct answer to the wrong question.
+The question only exists because discovery is a glob.
+
+**A glob tells you what it found. It never tells you where to write.** Make the path canonical and
+there is nothing to pick:
+
+```text
+read glob    -> "these files look like roadmaps"       (a guess, from a filename)
+canonical    -> "the roadmap is at docs/project/X.md"  (a fact, from the standard)
+```
+
+### Measured: insisting is cheap, because the drift is one folder deep
+
+Ten MedAR daily-driver repos, checked against `docs/project/<Repo>_Development_Roadmap.md`:
+
+| Outcome | Repos |
+| --- | --- |
+| Conforms exactly | `DevTools`, `HDCTranslators`, `MedAR_PyPackages`, `MedAR_Service_Daemons` |
+| No planning surface at all | `SX_Coder_API`, `SX_Coder_UI`, `medar-web-foundation` |
+| Real structural drift | `SX_DW`, `MedAR_AI_Runtime` — both `docs/project/roadmap/`, one level too deep |
+| False positive | `SX_Coder` — its three extra hits are all under `docs/_ARCHIVE/` |
+
+So the entire structural migration is **one `git mv` in two repos**. The standard is not
+aspirational; it is already what most of the estate does. What is missing is the tooling insisting
+on it.
+
+### The decoys are the proof, and they are benign *today*
+
+A wide search finds three files that are not slice registries at all:
+
+```text
+SX_DW/docs/powerbi/history/PowerBI_Implementation_Roadmap.md   a delivery history
+SX_DW/docs/SX_DW_Agent/CICD_Roadmap.md                         a different plan entirely
+MedAR_AI_Runtime/docs/MedAR_AI_Runtime_Build_Roadmap.md        a build sequence
+```
+
+None currently contains a slice-shaped ID or an ID-column table, so nothing is broken right now.
+That is **luck, not a control** — and it is exactly the failure shape this whole document exists to
+kill. The day someone writes `VS-123` in prose inside `CICD_Roadmap.md`, `lastNumber` inflates, the
+next mint collides, and nothing says a word. A filename is not a semantic; matching on one means the
+tool cannot distinguish a registry from a document that merely shares a noun.
+
+### What this changes
+
+1. **Canonical path is the contract.** `docs/project/<Repo>_Development_Roadmap.md`, declarable in
+   config for a genuine exception, defaulted otherwise. The write target is always this. It is never
+   inferred, so it can never be inferred wrongly.
+2. **The glob demotes to a migration aid.** Its job is no longer *find the roadmap* but *report that
+   this repo is not on the standard yet* — which is a *check*, and therefore something that can
+   fail. `untracked` already names that state; this gives it a detector.
+3. **`_ARCHIVE/` is excluded by rule, everywhere.** Three of SX_Coder's four hits are archived. Any
+   discovery that counts an archived document is manufacturing its own false positives.
+4. **The read-glob/write-target split is no longer needed.** Not because the reasoning was wrong,
+   but because the ambiguity it managed stops existing once the path is declared. Deleting the
+   problem beats handling it.
+
+### Migration shape: `project_v2` alongside, swapped at the end
+
+Wilson: *"We don't want to mess with git TOO much but a `projects_v2` folder that we eventually swap
+out with `projects` might work."*
+
+This is better than emitting sibling files, and it also sidesteps the collision cleanly — nothing
+under `docs/project_v2/` matches `docs/project/*Roadmap.md`, so old and new coexist without the
+tooling seeing two registries:
+
+```text
+docs/project/      untouched, live, still authoritative     <- humans keep working here
+docs/project_v2/   generated, reviewable, diffable          <- tooling writes only here
+                   ...swap when it is right, as one commit
+```
+
+Non-destructive by construction: the emitter has exactly one writable root, and it is not the one
+anybody depends on. If the output is wrong, the fix is `rm -rf docs/project_v2` — not a revert.
+
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [our-own-canon]: clerical-work-belongs-to-ci.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
