@@ -203,11 +203,26 @@ function cmdSeries(root, config) {
 		return 0;
 	}
 
+	// A file the roadmap glob matched but which declares NOTHING is the dangerous case: `series` has
+	// nothing to check, says so quietly, and exits 0. Silence and cleanliness look identical, which is
+	// the same failure shape as a glob that matches no files and reports success.
+	//
+	// Measured on MedAR: `MedAR_PyPackages/docs/project/*Roadmap.md` is a package INVENTORY - column 1
+	// is `Package`, so no ID is ever in ID_IN_TABLE position and no Prefix table exists. It is not a
+	// malformed roadmap, it is a different document the glob picks up anyway. It reported success.
+	//
+	// A genuinely new roadmap declares its prefixes BEFORE it has any IDs, so `declared.size === 0` is
+	// not "empty and fine" - it is "this has not been told what it owns, or it is not a roadmap".
+	const undeclaredFiles = [];
+
 	for (const file of files) {
 		const { declared, used } = readSeries(file);
 		console.log(rel(file));
 		if (!declared.size) {
-			console.log('  (no Prefix table - declare the series this roadmap owns)');
+			undeclaredFiles.push({ file, usesIds: used.size > 0 });
+			console.log(used.size
+				? '  (no Prefix table, but IDs are in use - declare what this roadmap owns)'
+				: '  (no Prefix table and no IDs - is this a roadmap? the glob may be too wide)');
 		}
 		for (const prefix of [...declared].sort()) {
 			const highest = used.get(prefix);
@@ -220,6 +235,15 @@ function cmdSeries(root, config) {
 	}
 
 	let code = 0;
+
+	if (undeclaredFiles.length) {
+		console.error('\nRoadmap(s) that declare no prefixes, so nothing was checked:\n');
+		for (const u of undeclaredFiles) {
+			console.error(`  ${rel(u.file)}${u.usesIds ? '  (IDs in use)' : '  (no IDs found either)'}`);
+		}
+		console.error('\nAdd a Prefix table, or narrow `series.roadmaps` so this file is not read as one.');
+		code = 1;
+	}
 
 	// Two global roadmaps claiming the same prefix is a collision waiting to be discovered by
 	// somebody following a reference to the wrong document.

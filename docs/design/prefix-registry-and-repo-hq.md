@@ -543,5 +543,61 @@ the code already contradicts it.
    alone. Either is defensible; the registry needs to be told which, and the answer decides whether
    adoption rewrites those rows or renders around them.
 
+## Decisions taken, and the first guard is built
+
+> **SXC**, against `5ac183a`. Wilson answered both MedAR questions; one answer changed under
+> measurement. The zero-prefix guard Labs proposed is implemented on this branch and dogfooded
+> against MedAR.
+
+### `DT-01` is not `DT-015` — it is unrecorded DevTools work
+
+Wilson's read was *"I think that's DT-015"*, hedged, and the hedge was right. `DT-015` is the
+`python-package` handler (store publish, `--subproject`, topo-ordered builds, semver). **No DevTools
+slice mentions** consumer-requirements preflight, UNC-argv, or
+`preflight_declared_consumer_requirements`.
+
+So `DT-01` is genuinely unrecorded DevTools work squatting a number, not a mis-reference. It needs a
+real ID minted in DevTools — next free is `DT-050` — with the SX_Coder row redirected, not merged.
+
+### Padding: normalise
+
+Decided. An ID is its number, which is already how `lastId` behaves; padding was display only, and
+it was actively hiding the `DT-01`/`DT-001` collision. Affects 50+ rows in DevTools, ~40 in
+SX_Coder.
+
+### The zero-prefix guard, built and measured
+
+`cmdSeries` printed *"(no Prefix table…)"* and returned **0**. It now fails, and distinguishes the
+two reasons, because they need different fixes:
+
+```text
+no Prefix table, but IDs are in use   -> an unmigrated roadmap; declare what it owns
+no Prefix table and no IDs            -> probably not a roadmap; narrow the glob
+```
+
+Dogfooded across three repositories:
+
+| target | before | after |
+| --- | --- | --- |
+| `ewc3-docs-tools` (real roadmap) | 0 | **0** — unchanged |
+| `MedAR_PyPackages` (package inventory) | **0** | **1** — *"no IDs found either"* |
+| `SX_Coder` (unmigrated roadmap) | 0 | **1** — `TS`, `DT`, `DW` undeclared |
+
+The SX_Coder result is the one worth noting: with **no configuration and no migration**, it found
+the `DT` squat on its own. The check that stays reachable under generation is the check that found
+the live defect.
+
+55 tests still passing. Not yet covered by a test of its own — that belongs with whoever lands the
+registry, since the guard's two branches want fixtures rather than a live repo.
+
+### Still open
+
+- Labs' **write-target** answer (separate read glob from write target; require the explicit one
+  under `prefixOwner: "hq"` when the glob matches more than one file; fail rather than pick) is
+  agreed and **not built**. `MedAR_PyPackages` is the case that justifies it: a glob that reads a
+  package inventory as a roadmap must never be allowed to *write* one.
+- Who refreshes `observed`, and where — unchanged from the previous round, and still the one that
+  decides what gets built rather than merely in what order.
+
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
