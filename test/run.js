@@ -14,6 +14,8 @@ const { format } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { applyToText, resolveValues } = require('../lib/values');
 const { expand } = require('../lib/glob');
+const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
+	isLocalPrefix, roadmapFiles } = require('../lib/series');
 
 let passed = 0, failed = 0;
 
@@ -536,6 +538,108 @@ test('counts entries in a JSON collection', () => {
 	}, dir);
 	assert.strictEqual(values.n, '2');
 });
+
+// ---------------------------------------------------------------------------
+// ID series. Untested until now, which is uncomfortable given this module decides what number gets
+// minted next: every failure here hands out an ID that is already taken, silently.
+
+function roadmapRepo(body) {
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'), body);
+	return dir;
+}
+
+const OWNS_VS = '| Prefix | Owner | Series description |\n| --- | --- | --- |\n| VS | x | slices |\n';
+
+test('[series] last number is the MAX, never a count', () => {
+	// A count agrees with the max only while the series is contiguous, and starts handing out taken
+	// numbers the moment one is retired. One row holding VS-42 must report 42, not 1.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-42 | only row |\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 42);
+});
+
+test('[series] a retired ID does not lower the next mint', () => {
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-1 | a |\n| VS-9 | b |\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 9);
+});
+
+test('[series] prose cannot inflate the series', () => {
+	// The anchor is the defence: an ID must be a table row's FIRST cell to count. Without this, any
+	// sentence mentioning a slice would push the next mint past it.
+	const dir = roadmapRepo(`${OWNS_VS}\nWe should revisit VS-123 next quarter, then VS-999.\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+});
+
+test('[series] an ID in a second column does not count either', () => {
+	const dir = roadmapRepo(`${OWNS_VS}\n| Slice | ID |\n| --- | --- |\n| a thing | VS-123 |\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+});
+
+test('[series] using a prefix without declaring it is reported', () => {
+	// This is what makes the ownership table load-bearing instead of decorative.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| DT-3 | undeclared |\n`);
+	const problems = undeclaredPrefixes(dir);
+	assert.strictEqual(problems.length, 1);
+	assert.strictEqual(problems[0].prefix, 'DT');
+	assert.strictEqual(problems[0].highest, 3);
+});
+
+test('[series] a declared prefix is not reported', () => {
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | declared |\n`);
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
+test('[series] the ownership table stops at the blank line after it', () => {
+	// Rows below the table belong to other tables. An unbounded scan would read the NEXT table's
+	// header cell `| ID |` as a declaration, because a bare uppercase token is exactly what a
+	// declaration looks like. Assert the set EXACTLY: 'no DT' is too weak to catch that.
+	const dir = roadmapRepo(OWNS_VS + `
+| ID | Slice |
+| --- | --- |
+| DT-1 | a row |
+`);
+	const { declared } = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...declared].sort(), ['VS'],
+		'only the ownership table may declare; a later table must contribute nothing');
+});
+
+test('[series] FIX is repo-local, everything else is global', () => {
+	assert.ok(isLocalPrefix('FIX'));
+	assert.ok(isLocalPrefix('fix'), 'case must not decide ownership scope');
+	assert.ok(!isLocalPrefix('VS'));
+	assert.ok(!isLocalPrefix('DT'));
+});
+
+test('[series] declared ownership names the file that claims each prefix', () => {
+	const dir = roadmapRepo(OWNS_VS);
+	const owners = declaredOwnership(dir);
+	assert.deepStrictEqual([...owners.keys()], ['VS']);
+	assert.strictEqual(owners.get('VS').length, 1);
+	assert.match(owners.get('VS')[0], /X_Development_Roadmap\.md$/);
+});
+
+test(`[series] the MedAR "Series / Last Num" table declares NOTHING - the migration trigger`, () => {
+	// SX_Coder's register is headed `| Series | Last Num | ... |`, not `| Prefix | ... |`, so no
+	// ownership table is found at all and every prefix in use reads as undeclared. Pinning this means
+	// the project_v2 migration cannot quietly appear to succeed against an unmigrated register.
+	const dir = roadmapRepo(
+		'| Series | Last Num | Series Description |\n| --- | --- | --- |\n| Vertical Slices | VS-390 | x |\n' +
+		'\n| ID | Slice |\n| --- | --- |\n| VS-390 | a slice |\n');
+	const file = path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md');
+	assert.strictEqual(readSeries(file).declared.size, 0,
+		'a Series-headed register must not be mistaken for an ownership table');
+	assert.strictEqual(undeclaredPrefixes(dir).length, 1,
+		'and the guard must therefore fire, rather than reporting a clean repo');
+});
+
+test('[series] a repo with no roadmap at all yields no series and no crash', () => {
+	const dir = tmpdir();
+	assert.deepStrictEqual(roadmapFiles(dir, null), []);
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
 
 // ---------------------------------------------------------------------------
 

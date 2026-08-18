@@ -979,10 +979,17 @@ MedAR_AI_Runtime/docs/MedAR_AI_Runtime_Build_Roadmap.md        a build sequence
 ```
 
 None currently contains a slice-shaped ID or an ID-column table, so nothing is broken right now.
-That is **luck, not a control** — and it is exactly the failure shape this whole document exists to
-kill. The day someone writes `VS-123` in prose inside `CICD_Roadmap.md`, `lastNumber` inflates, the
-next mint collides, and nothing says a word. A filename is not a semantic; matching on one means the
-tool cannot distinguish a registry from a document that merely shares a noun.
+That is **luck, not a control** — though the exposure is narrower than it first looks, and worth
+stating precisely rather than dramatically.
+
+`ID_IN_TABLE` is anchored to the **first cell of a table row**, so prose cannot inflate anything.
+Measured: `VS-123` in a sentence contributes nothing, and neither does `VS-123` in a second column.
+Only a first-column ID counts. That anchoring is a deliberate defence, and it already holds.
+
+The residual exposure is a decoy that grows a **first-column ID table** — which is precisely what a
+document called `CICD_Roadmap.md` does the moment it starts tracking work. Then `lastNumber`
+inflates, the next mint collides, and nothing says a word. A filename is not a semantic; matching on
+one means the tool cannot distinguish a registry from a document that merely shares a noun.
 
 ### What this changes
 
