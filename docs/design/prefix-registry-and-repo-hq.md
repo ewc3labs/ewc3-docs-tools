@@ -599,34 +599,60 @@ registry, since the guard's two branches want fixtures rather than a live repo.
 - Who refreshes `observed`, and where — unchanged from the previous round, and still the one that
   decides what gets built rather than merely in what order.
 
-## Padding: one canonical number, two render targets
+## Padding: five digits, everywhere tooling emits
 
-**Decided.** An ID is a **number**. It renders differently depending on what is reading it:
+**Decided.** An ID is a **number**. Everything the tooling writes renders it **padded to five**;
+everything the tooling reads accepts any numeric form.
 
-| Context | Form | Why |
-| --- | --- | --- |
-| tables, prose, references | `VS-392` — unpadded | canonical; comparison is numeric anyway |
-| **filenames** | `VS-00392.md` — padded to **5** | file trees sort lexicographically and nothing can fix that from inside the file |
+| Direction | Rule |
+| --- | --- |
+| **emit** — filenames, generated tables, derived cells | `VS-00392` — always padded to 5 |
+| **accept** — commits, prose, hand-typed references | `VS-392`, `VS-00392`, `DT-01`, `DT-001` all resolve |
 
-**Why normalising the tables costs nothing:** MedAR pads to **2 digits in a 3-digit series** — 97
-IDs are two characters, 273 are three — so lexicographic order already fails:
+*Be liberal in what you accept, strict in what you emit.* Nothing the tooling produces is ever
+ambiguous, and the one surface nobody can control — a human typing a commit message — stays
+tolerated rather than policed.
+
+### Why padded rather than canonical-unpadded
+
+An earlier draft of this section split the two: unpadded in tables, padded only in filenames. Wilson
+rejected it, and the argument that settled it is that **anything reading text sorts
+lexicographically unless someone taught it not to** — and mostly nobody did:
 
 ```text
-lexicographic   VS-01 … VS-09 VS-10 VS-100 VS-101 …     <- VS-100 before VS-11
-numeric         VS-01 … VS-09 VS-10 VS-11  VS-12  …
+Apr 25   Apr 26   Aug 25        <- sorts Apr, Apr, Aug. Not a date order. Everyone has lived this.
+VS-01 … VS-09  VS-10  VS-100    <- VS-100 lands before VS-11
 ```
 
-Padding stopped buying a correct sort the moment `VS-100` was minted. There is no working behaviour
-to lose.
+Splitting the render targets means every consumer must know which context it is in, and a grep — the
+most common consumer of all — has no way to know. One form everywhere removes the question.
 
-**Why 5 in filenames, and not 3:** padding is a bet on the final size of a series, and the loss is
-silent — `VS-1000` breaks a 3-wide scheme exactly as `VS-100` broke the 2-wide one, with nothing
-erroring and the order just quietly going wrong. Five carries to 99,999, which no series here will
-reach, so the bet never has to be re-made. Wilson: *"We're not Microsoft, who needs freaking guids
-for fix numbers."*
+### Why the migration is not an argument against it
 
-Everywhere else, the rule is **IDs sort numerically** — which is what `lastId` already does. Do not
-re-pad the tables later "to fix the sort": that is what hid the `DT-01`/`DT-001` collision.
+Measured across **all** commit history in six repositories:
+
+```text
+distinct (prefix, number) pairs   340
+written more than one way           1     DT-1  as  DT-001  and  DT-01
+```
+
+History is 99.7% single-form. Each repository has been internally consistent; the one mixed pair
+appeared exactly at the cross-repo boundary — which is the collision this registry exists to
+prevent. So normalising forward fights almost nothing.
+
+And rewriting 541 rows is **clerical work**, which by [our own canon][our-own-canon] is the
+tooling's job, not a reason to avoid the decision. `fix` should do it in one pass and be
+indistinguishable from a no-op on the second.
+
+### What does NOT change: comparison stays numeric
+
+Padding is a rendering rule, never an identity one. `lastId` parses `(\d+)` and must keep doing so,
+because commit messages are typed by humans forever and `[VS-392]` will be written next month
+whatever the roadmap says.
+
+This is also the guard against the collision that started this: **`DT-01` and `DT-001` are the same
+slice**, and only numeric comparison sees it. Do not "simplify" the comparison to string equality on
+the grounds that everything is padded now — the inputs are not, and cannot be made so.
 
 ### Consequence: the slice filename becomes derivable, and therefore checkable
 
@@ -717,4 +743,5 @@ chain, a per-repo `{commit, observedAt}` record, and an org enumeration to catch
 never reported.
 
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
+[our-own-canon]: clerical-work-belongs-to-ci.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
