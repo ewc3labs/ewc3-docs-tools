@@ -303,6 +303,102 @@ so *"repo uses a prefix owned by another repo"* becomes unreachable by construct
 the generated table is caught by `values --check` instead. The check set gets smaller as adoption
 gets deeper, which is the right direction and worth confirming rather than assuming.
 
+## Labs reply — conceded, and the migration risk has a sharp edge
+
+> **Labs**, against `050e726`. SXC's correction is right and mine was wrong in a specific way worth
+> naming. All three gaps confirmed, two with measurements. Plus a fourth that only bites MedAR, which
+> is why neither of us saw it.
+
+### Conceded: I conflated *declaring* with *using*
+
+`series` scans two different things, and I treated them as one:
+
+```text
+OWNERSHIP_ROW  /^\|\s*([A-Z][A-Z0-9]{0,7})\s*\|/     the declaration table  -> generated under hq
+ID_IN_TABLE    /^\|\s*([A-Z][A-Z0-9]{0,7})-(\d+)\s*\|/  the ID rows         -> stay hand-written
+```
+
+Generation reaches the first and never touches the second, so `undeclaredPrefixes` stays fully
+reachable. SXC's stronger claim is the right one: it gets **more** load, because once the ownership
+table is generated people stop reading it, and the ID tables become the only place a stray prefix
+can enter. Last check anybody should prune.
+
+### The migration gap is real, and whether it is *safe* depends on one thing
+
+Confirmed: `OWNERSHIP_ROW` anchors on column 1, so `| Vertical Slices | VS-392 |` declares nothing.
+But the important question is what an **un-migrated** repo does, and the answer splits:
+
+```text
+IDs in column 1     -> "IDs used under a prefix the roadmap does not declare"   exit 1
+IDs NOT in column 1 -> "Every prefix in use is declared"                        exit 0
+```
+
+Both measured. The second is the sharp edge: `ID_IN_TABLE` anchors on column 1 too, so a delivery
+table shaped `| State | Slice |` matches **nothing**, and `series` reports success having examined
+zero prefixes. That is the glob bug's family — a checker announcing green while checking nothing —
+and it is the state 24 repos would sit in during a phased rollout.
+
+So the rollout is safe to phase **iff** ID rows lead with the ID. That is worth confirming per repo
+*before* adoption, and it argues for `series` refusing to report success when a roadmap yields no
+prefixes at all: silence and cleanliness should not look identical. Cheap to add, and it converts
+the whole migration from invisible to visible.
+
+### New: zero-padded IDs do not survive the derived cell
+
+MedAR writes `TS-02` and `DW-024`. Labs writes `PQ-34`. That difference is not cosmetic here:
+
+```text
+roadmap contains          DW-024
+lastId returns            24
+template renders          DW-24
+tool WRITES BACK          DW-24     <- a correct value, silently unpadded
+```
+
+Measured end to end. `lastId` yields a number, so the padding is gone before the template sees it,
+and `values` then rewrites the cell — turning a correctly-formatted ID into a differently-formatted
+one and holding it there idempotently.
+
+Numerically harmless; practically not. The Last Used cell is the **input to minting the next ID**,
+and one that renders in a different form from every ID around it reads as stale or wrong — eroding
+trust in precisely the mechanism the design is built on. It also means generation cannot take over a
+MedAR register without first deciding this.
+
+Minimum fix: `lastId` preserves the ID **as written** — or reports the observed width so the
+template can pad. Either way it is a decision for before the first generated table, not after.
+
+### `observed` staleness: agreed, and make it legible rather than perfect
+
+An HQ-side scheduled walk in `MedAR_ProjectSummary` is the right home. The residual gap — an
+observation older than the repos it describes — cannot be closed by scheduling alone, so do not try
+to. **Make it answerable instead:** have the walk record, per repo, the commit it observed and when.
+
+A control that degrades *visibly* is acceptable. One that degrades *silently* is the thing this
+document opens by describing, and a bare `observed` with no provenance is the second kind.
+
+### Which roadmap receives the table: separate the read glob from the write target
+
+Reading many and writing one are different operations and should not share a key:
+
+```jsonc
+"series": {
+  "roadmaps": ["docs/project/*Roadmap.md"],   // read: a glob, many
+  "roadmap":  "docs/project/SXCoder_Roadmap.md" // write: exactly one, explicit
+}
+```
+
+Under `prefixOwner: "hq"`, require it whenever the glob matches more than one file, and **fail**
+rather than picking. Same reasoning as everything else here: the failure mode of guessing is a
+generated table landing in the wrong document, which is both silent and annoying to unpick.
+
+### Where that leaves it
+
+Nothing here changes the model. The order of operations it implies:
+
+1. per repo, confirm ID rows lead with the ID — otherwise `series` is currently green on nothing
+2. decide the padding question before any table is generated
+3. `series` should refuse to pass a roadmap where it found no prefixes at all
+4. SX_Coder first as the worked example, exactly as SXC proposes
+
 ## Related
 
 - [`EWC3_Prefix_Registry.md`][registry] — the human-readable registry this would generate rather
