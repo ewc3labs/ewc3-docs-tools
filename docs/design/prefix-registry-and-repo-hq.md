@@ -481,5 +481,67 @@ exactly one target. A repo with two roadmaps is currently well-defined for `chec
 generation. SX_Coder has one, so this is not blocking — but it wants an answer before the first repo
 that does not.
 
+## SXC verification — both Labs findings confirmed on MedAR, and padding is worse than cosmetic
+
+> **SXC**, against `790f96f`. Labs reasoned both of these out; measuring MedAR found live instances of
+> each, plus a consequence of the padding bug that changes what the fix should be.
+
+### Both measured failures exist in MedAR today
+
+```text
+repo               ID-in-column-1   zero-padded IDs
+DevTools                       49   DT-000 … DT-049   (the ENTIRE series)
+SX_Coder                      456   DT-*, DW-*, TS-01/02, VS-01..09, FIX-01..09
+HDCTranslators                  9   DT-006
+MedAR_PyPackages                0   DT-015, DT-016
+```
+
+`MedAR_PyPackages` is Labs' *green-while-examining-nothing* case, live: its table is a package
+inventory whose column 1 is `Package`, so `ID_IN_TABLE` matches nothing and `series` would report
+success having read no IDs at all. It is not a roadmap wearing the wrong shape — it is a genuinely
+different document that the glob picks up anyway.
+
+### A live cross-repo collision, currently invisible
+
+| repo | ID | slice | state |
+| --- | --- | --- | --- |
+| SX_Coder | `DT-01` | cictl consumer-requirements preflight (UNC-argv fix) | smoked |
+| DevTools | `DT-001` | First-class deploy-root logging for every `cictl deploy` | planned |
+
+Different work. Same number. Same global prefix. Two repositories — and SX_Coder's own register says
+in prose that `DT-*` is not minted there, which is precisely the unenforced sentence this proposal
+exists to replace.
+
+### Therefore: padding is a rendering concern, not an identity one
+
+Labs framed unpadding as cosmetic — a derived cell that *"reads as stale"* beside padded siblings.
+True, and it is also the smaller half. `lastId` parses `(\d+)`, so **`DT-01` and `DT-001` both
+normalize to `1`**: they collide numerically while looking distinct textually. Padding is what kept
+the collision above out of sight.
+
+So the fix is not *preserve the padding in the derived cell* — that hides the collision more
+durably. It is:
+
+- **compare numerically** — an ID is its number, which is already how `lastId` behaves;
+- **render from a declared width** — the registry records display width per prefix, and every
+  generated cell uses it.
+
+One change, both problems: the derived cell renders `DT-049` among its padded siblings, **and**
+`DT-01` is recognised as `DT-001`.
+
+If instead an ID is defined as its *text*, then `DT-01` and `DT-001` are different IDs and the
+collision above is legal. That reading should be rejected explicitly rather than left open, because
+the code already contradicts it.
+
+### Two questions only MedAR can answer
+
+1. **Is SX_Coder's `DT-01` misfiled?** It describes `cictl` work — which is DevTools' domain —
+   sitting in SX_Coder's tables under a prefix SX_Coder disclaims. Likely a slice recorded in the
+   wrong roadmap rather than a naming accident, and worth resolving before a registry freezes it in
+   place.
+2. **Does MedAR want padded display preserved, or normalised away?** Affects 50+ rows in DevTools
+   alone. Either is defensible; the registry needs to be told which, and the answer decides whether
+   adoption rewrites those rows or renders around them.
+
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
