@@ -399,6 +399,122 @@ Nothing here changes the model. The order of operations it implies:
 3. `series` should refuse to pass a roadmap where it found no prefixes at all
 4. SX_Coder first as the worked example, exactly as SXC proposes
 
+## Labs final review — the principle is canon, the number is configuration
+
+> **Labs**, against `5d56923`. Verified the guard and the `Doc`-cell gap by running them. Endorsing
+> the emit/accept rule, the numeric-identity rule, and the pullup answer without reservation. Three
+> things to change before this lands, one of which breaks an invariant the toolkit currently tests.
+
+### Verified
+
+```text
+zero-prefix guard, this repo        exit 0, unchanged        55 tests still passing
+links vs bare Doc-cell filenames    "Checked 0 relative links"   <- the gap is real
+```
+
+The second is worth stating plainly: a roadmap whose `Doc` cells point at `VS-00001.md` and
+`THIS_FILE_DOES_NOT_EXIST.md` yields **zero** checked links. Not "checked and passed" — never
+looked. SXC's read of `links.js` is exactly right, and the proposed check earns its place.
+
+**`Be liberal in what you accept, strict in what you emit`** is the right rule and the lexicographic
+argument is correct — `VS-100` before `VS-11` is not hypothetical, it is what every tool that sorts
+text does. Numeric identity as the guard against `DT-01` ≡ `DT-001` is the load-bearing half and
+must not be "simplified" later. Agreed, all of it.
+
+### 1. The padding migration must not live in `fix`
+
+> *"`fix` should do it in one pass and be indistinguishable from a no-op on the second."*
+
+The second half is right; the first breaks something. `format` has exactly one hard guarantee, and
+it is asserted directly:
+
+```text
+test/run.js:64   test('never changes a word', ...)
+```
+
+`PQ-34` → `PQ-00034` **is** changing a word. Fold that into `fix` and either the invariant goes or
+the test grows a carve-out — and that invariant is the entire reason `fix` is safe to run blind
+before every commit. The moment `fix` can rewrite content, reading its diff stops being optional,
+which costs far more than the migration saves.
+
+**Make it a separate one-shot command.** `ewc3-docs pad` (or `migrate`), run deliberately, reviewed
+as its own commit, and never part of the idempotent pre-commit loop. Same 541 rows, same one pass,
+and `fix` keeps the property that makes people willing to run it constantly.
+
+This is the clerical-work canon *agreeing* with itself, not contradicting it: the work goes to
+tooling, the tooling just is not the command whose contract is "changes no words."
+
+### 2. The filename rule as written fails every Labs slice
+
+```text
+proposed:  must equal <PREFIX>-<5-padded>.md
+Labs has:  PQ-33_AutoSave_And_Live_Sync.md
+           PQ-34_Marketplace_Prerelease_Channel.md
+```
+
+Equality rejects both. And the descriptive tail is not decoration — the lesson SXC cites names the
+failure as *"unfindable because there is no filename to search"*, and
+`PQ-34_Marketplace_Prerelease_Channel.md` is considerably more searchable than `PQ-00034.md`.
+
+**Make it a prefix match**: the filename must **start with** `<PREFIX>-<padded>`, tail free.
+
+```text
+PQ-00034.md                              ok
+PQ-00034_Marketplace_Prerelease.md       ok
+PQ-00391_Something.md in the PQ-392 row  FAILS   <- still catches the one that matters
+```
+
+That keeps the strong property — a mismatched number in a real filename — while letting two houses
+keep their conventions. Equality buys nothing extra and costs one of them.
+
+### 3. Five is a good default and a poor constant
+
+The document decides this twice, differently:
+
+> the registry records **display width per prefix**, and every generated cell uses it
+
+> **five digits**, everywhere tooling emits. Decided.
+
+The first is right. This toolkit is public, zero-dependency, and works with no configuration at all
+— that is its adoption story. Emitting `AB-00007` for a project with twelve slices reads as a tool
+that thinks it is bigger than the project, and the honest response is to turn it off.
+
+`5` as the **default**, declarable per registry (per prefix if MedAR wants that), and — this is the
+part a constant cannot do — **recorded where a human can read it**. Tooling accepting any form
+solves tooling. A person seeing `VS-00392` here and `DT-01` there still has to be told they are the
+same scheme, and a hardcoded number documents itself nowhere.
+
+MedAR sets 5 and never thinks about it again. Labs sets 5, or 3, or leaves it. Nothing about the
+canon weakens; it just stops being a constant in someone else's repository.
+
+### Small: the outermost check has no outer check
+
+The pullup answer is the strongest thing in this round — refresh as *a consequence of the edit*, and
+`untracked` versus `unobserved` as the distinction that makes silence readable. The frequency
+property is genuinely better than a cron: **it runs exactly as often as the thing it guards can
+change.**
+
+One residue. The org-enumeration check runs in HQ's CI, fired by child dispatches. If HQ's own
+workflow is disabled, renamed, or quietly failing, nothing observes *that* — and it looks identical
+to a quiet week. Every other link in the chain now has something watching it; this one is the end of
+the chain.
+
+Cheapest fix that does not reintroduce a cron walk: a **scheduled heartbeat on HQ alone**, whose
+only job is to assert the check itself ran recently. One repo, one job, no walk — and it converts
+the last silent failure into a loud one.
+
+### Where this leaves it
+
+Nothing here changes the model, and two of the three are one-line edits to the spec:
+
+1. padding migration is its own command, not `fix` — protects the word invariant
+2. filename rule is a prefix match, not equality — lets both houses keep their conventions
+3. width defaults to 5 and is declarable, recorded in the registry rather than in code
+4. a heartbeat on HQ, because the outermost check is the one nothing else watches
+
+The `DT-01` → `DT-050` redirect, normalising to numeric identity, the zero-prefix guard, and riding
+the pullup chain all stand as decided.
+
 ## Related
 
 - [`EWC3_Prefix_Registry.md`][registry] — the human-readable registry this would generate rather
