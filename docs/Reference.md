@@ -13,6 +13,7 @@ that is a bug — there is a test asserting this page covers the code's surface.
 | `series` | never | Who owns which ID prefix, and the last number used. |
 | `fix` | yes | `values` then `format`, in write mode. **The pre-commit button.** |
 | `check` | never | All four in check mode. **The CI command.** |
+| `migrate-project [--write]` | into `docs/project_v2/` only | Emits a migrated planning surface beside the live one. Never touches `docs/project/`. |
 
 `fix` and `check` are mirrors of each other: one makes it right, one asks whether it is.
 
@@ -26,6 +27,9 @@ the wrap has to see the result. Running `format` then `values` can leave a line 
 | `--check` | Report what would change and exit non-zero. Writes nothing. `format` and `values` only. |
 | `--config <path>` | Use this config instead of searching. |
 | `[files...]` | Positional globs override `include` for this run. `format` and `values` only. |
+| `--repo <dir>` | Operate on another repository. `migrate-project` only. Defaults to the working directory. |
+| `--owner <name>` | Name written into the ownership table's Owner column. Defaults to the repo folder name. |
+| `--write` | Emit `docs/project_v2/`. Without it, `migrate-project` reports and writes nothing. |
 
 ### Exit codes
 

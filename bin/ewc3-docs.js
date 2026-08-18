@@ -18,6 +18,7 @@ const { formatFiles } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
+const { migrateText } = require('../lib/migrate');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
 } = require('../lib/series');
@@ -272,6 +273,99 @@ function cmdSeries(root, config) {
 	return code;
 }
 
+/**
+ * Emit a migrated planning surface into a SHADOW folder, leaving the live one untouched.
+ *
+ *   ewc3-docs migrate-project [--repo <dir>] [--owner <name>] [--write]
+ *
+ * Wilson's shape, and the reason it is right: the live `docs/project/` stays authoritative while
+ * `docs/project_v2/` accumulates, so the two can be diffed and the swap is one commit at the end.
+ * Nothing under `project_v2/` matches the roadmap glob, so the tooling never sees two registers.
+ * A bad emit is `rm -rf docs/project_v2`, not a revert.
+ *
+ * This is deliberately re-runnable and idempotent. The cleanup is a long WIP that gets chipped at
+ * during normal feature work, so a repo will sit half-migrated for weeks: running this again must
+ * always be safe, and the report must be readable when the answer is still "not yet".
+ */
+function cmdMigrateProject(root, config, argv) {
+	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null; };
+	const repo = path.resolve(flag('--repo') || root);
+	const write = argv.includes('--write');
+	const owner = flag('--owner') || path.basename(repo);
+
+	// Canonical first, then the known off-canon location. Finding it in the second place is itself a
+	// finding: it is reported, never silently accepted, because "insist on the structure" is the
+	// whole point and a tool that quietly copes removes the pressure to converge.
+	const CANON = 'docs/project';
+	const OFF = 'docs/project/roadmap';
+	let from = null, offCanon = false;
+	for (const sub of [CANON, OFF]) {
+		const dir = path.join(repo, sub);
+		if (!fs.existsSync(dir)) { continue; }
+		const hit = fs.readdirSync(dir).find((f) => /Roadmap\.md$/i.test(f));
+		if (hit) { from = path.join(dir, hit); offCanon = sub === OFF; break; }
+	}
+
+	console.log(`${owner}`);
+	if (!from) {
+		console.log('  no roadmap under docs/project/ - nothing to migrate');
+		return 0;
+	}
+	console.log(`  source: ${path.relative(repo, from).split(path.sep).join('/')}`);
+	if (offCanon) {
+		console.log(`  NOTE:   off-canon path. The canonical home is ${CANON}/, one level up.`);
+	}
+
+	const result = migrateText(fs.readFileSync(from, 'utf8'), { owner });
+	if (!result.ok) {
+		console.log('  no ID register table found, so there is nothing to reshape yet.');
+		for (const r of result.rows) {
+			console.log(`    uses ${r.prefix} up to ${r.prefix}-${r.highestUsed}, declared nowhere`);
+		}
+		return result.rows.length ? 1 : 0;
+	}
+
+	for (const r of result.rows) {
+		const owned = r.owner === null ? 'UNCLAIMED' : r.owner;
+		console.log(`    ${r.prefix.padEnd(6)} ${r.scope.padEnd(11)} ${String(r.lastUsed).padStart(6)}  ${owned}`
+			+ (r.stale ? `  STALE: register said ${r.registered}` : ''));
+	}
+
+	const problems = result.rows.filter((r) => r.owner === null || r.stale);
+
+	if (!write) {
+		console.log('  (dry run - pass --write to emit docs/project_v2/)');
+		return problems.length ? 1 : 0;
+	}
+
+	const outDir = path.join(repo, 'docs', 'project_v2');
+	fs.mkdirSync(outDir, { recursive: true });
+	const outFile = path.join(outDir, path.basename(from));
+	fs.writeFileSync(outFile, result.text);
+	console.log(`  wrote:  docs/project_v2/${path.basename(from)}`);
+
+	// A migration nobody can undo in one move is not a safe migration.
+	const readme = path.join(outDir, 'README.md');
+	if (!fs.existsSync(readme)) {
+		fs.writeFileSync(readme, [
+			'# docs/project_v2 — generated, not authoritative',
+			'',
+			'`docs/project/` is still the live planning surface. This folder is a **generated preview**',
+			'of the migrated shape, emitted by `ewc3-docs migrate-project --write`.',
+			'',
+			'- Nothing here matches the roadmap glob, so tooling never sees two registers.',
+			'- Regenerate freely; the command is idempotent.',
+			'- To abandon it: `rm -rf docs/project_v2`. No revert needed.',
+			'- To adopt it: replace `docs/project/` in one commit, once it reads right.',
+			'',
+			'Do not hand-edit anything in this folder — edits are overwritten on the next run.',
+			'',
+		].join('\n'));
+		console.log('  wrote:  docs/project_v2/README.md');
+	}
+	return problems.length ? 1 : 0;
+}
+
 // --- entry -----------------------------------------------------------------
 
 const [, , command, ...argv] = process.argv;
@@ -285,6 +379,7 @@ switch (command) {
 	case 'links': code = cmdLinks(root, config); break;
 	case 'values': code = cmdValues(root, config, argv); break;
 	case 'series': code = cmdSeries(root, config); break;
+	case 'migrate-project': code = cmdMigrateProject(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':

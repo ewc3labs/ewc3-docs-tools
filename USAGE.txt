@@ -15,6 +15,16 @@ EWC3 Labs documentation tools
                                           Fails on an undeclared prefix, or on two roadmaps
                                           claiming the same global one. FIX is repo-local.
 
+  ewc3-docs migrate-project               Emit a migrated planning surface into docs/project_v2/,
+    [--repo <dir>]                        leaving the live docs/project/ untouched so the two can
+    [--owner <name>]                      be diffed and swapped in one commit at the end.
+    [--write]                             Reshapes the ID register into the ownership table; where
+                                          a roadmap has no register at all, synthesises one from
+                                          the IDs already in use. A GLOBAL prefix is left
+                                          unclaimed - a repo cannot award itself a series another
+                                          register may own. Dry run without --write. Idempotent;
+                                          to abandon it, delete the folder.
+
   ewc3-docs fix                           Values then format, in write mode. The button to press
                                           before you commit. Idempotent - running it when nothing
                                           changed costs a second and reports zero.

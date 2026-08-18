@@ -278,7 +278,7 @@ const BIN = fs.readFileSync(path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), '
 const USAGE = fs.readFileSync(path.join(__dirname, '..', 'USAGE.txt'), 'utf8');
 const REFERENCE = fs.readFileSync(path.join(__dirname, '..', 'docs', 'Reference.md'), 'utf8');
 
-const commands = [...BIN.matchAll(/^\tcase '([a-z]+)':/gm)].map(m => m[1]);
+const commands = [...BIN.matchAll(/^\tcase '([a-z][a-z-]*)':/gm)].map(m => m[1]);
 
 test('every command the CLI dispatches is in USAGE.txt', () => {
 	assert.ok(commands.length >= 5, `only found ${commands.length} commands - the scan is broken`);
@@ -292,7 +292,7 @@ test('every command the CLI dispatches is in the reference', () => {
 });
 
 test('USAGE.txt does not describe a command that does not exist', () => {
-	const claimed = [...USAGE.matchAll(/ewc3-docs ([a-z]+)/g)].map(m => m[1]);
+	const claimed = [...USAGE.matchAll(/ewc3-docs ([a-z][a-z-]*)/g)].map(m => m[1]);
 	const phantom = [...new Set(claimed)].filter(c => !commands.includes(c));
 	assert.deepStrictEqual(phantom, [], `USAGE.txt describes non-existent command(s): ${phantom.join(', ')}`);
 });
