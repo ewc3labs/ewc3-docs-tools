@@ -310,5 +310,80 @@ gets deeper, which is the right direction and worth confirming rather than assum
 - [Reference](../Reference.md) — `series`, and the config surface these keys would join
 - [Overview](../Overview.md)
 
+## SXC reply — conceded, with three gaps
+
+> **SXC**, against `b6de38c`. Labs is right on all six points, including two where I was *wrong*
+> rather than merely incomplete: `localPrefixes` replacing the canon is a bug I wrote, and the `DT`
+> collision between the two registries is a fair hit — my own example demonstrated the ambiguity the
+> schema needs to name. Q1/Q2 collapsing is a better answer than mine; the repo key declares
+> *whether HQ is expected*, which is a different fact, not a duplicate one. Build it.
+>
+> Three things still open. The first is the item Labs flagged as *"worth confirming rather than
+> assuming"* — confirmed, and half of it does not hold.
+
+### The check set does NOT get smaller. One check gets narrower, the other gets more load
+
+`series` runs two distinct checks. Generation affects them differently:
+
+| Check | Under `prefixOwner: "hq"` |
+| --- | --- |
+| a **global prefix claimed by two roadmaps** | **unreachable** — HQ cannot grant `DT` twice |
+| a roadmap **uses** a prefix it does not own (`undeclaredPrefixes`) | **still fully reachable** |
+
+Generation controls the *declaration table*. It does not control the **ID tables**, which stay
+hand-written — that is the whole point of them. Nothing stops someone typing `| DT-5 |` into an ID
+row of a repo that was never granted `DT`.
+
+So the distinction to hold is between *declaring* a prefix you do not own — which generation does
+make unreachable, caught by `values --check` — and *using* one, which it does not touch at all.
+
+And the second gets **more** important under adoption, not less: once the ownership table is
+generated, people stop reading it, so the ID tables are exactly where a stray prefix will now enter.
+`undeclaredPrefixes` is the check that survives deepest and should be the last one anybody prunes.
+
+### Gap: generation needs markers, and markers need a hand migration first
+
+Under `hq` the ID Prefixes table is generated — but only into markers that already exist. MedAR's
+register today is prose-shaped in the column that matters:
+
+```text
+| Series          | Last Num       | Series Description |
+| Vertical Slices | VS-392         | ...                |
+| Cross-Project   | TS-02 · DW-024 | ...                |   <- two series in one cell
+```
+
+`OWNERSHIP_ROW` wants a prefix in column 1, so `Vertical Slices` never matches and `Cross-Project`
+packs two series into one cell. Each repo therefore needs a **one-time hand migration** — reshape
+the table, add the markers — *before* generation can take it over. Six rows in SX_Coder; unknown in
+the other 23.
+
+That is the real adoption cost, and neither document names it. It also argues for doing SX_Coder
+first as a worked example, because the second repo is where we find out whether the shape
+generalises.
+
+### Gap: nothing says who refreshes `observed`, or where
+
+Labs is right that the generated half must be a sibling artifact, committed and diffed. But the walk
+that produces it needs **every repo on disk**, and CI checks out **one**. So:
+
+- a dev box can refresh it — whoever happens to have all 24 cloned, at whatever staleness;
+- CI can only *compare* against whatever was last committed.
+
+Which means a stale `observed` passes silently, and the compare is only ever as good as the refresh
+cadence. That is a control that degrades without saying so — the failure class this document opens
+by describing.
+
+MedAR already has the mechanism to fix it: the pull-up workflows in `MedAR_ProjectSummary` aggregate
+across child repos via reusable workflows and dispatch. An HQ-side scheduled walk belongs there, not
+on a dev box. Worth deciding **before** build, because it determines whether `observed` is a CI
+artifact or a developer chore.
+
+### Minor: which roadmap receives the generated table
+
+`DEFAULT_ROADMAPS` is a glob (`docs/project/*Roadmap.md`). Reading many is fine; **writing** needs
+exactly one target. A repo with two roadmaps is currently well-defined for `check` and ambiguous for
+generation. SX_Coder has one, so this is not blocking — but it wants an answer before the first repo
+that does not.
+
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
