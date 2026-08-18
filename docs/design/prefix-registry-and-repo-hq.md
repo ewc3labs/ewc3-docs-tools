@@ -176,6 +176,133 @@ Deliberately absent: local disk paths, and any nesting that mirrors the rollup t
    generated *table* want a different mechanism than an inline value? The badge case suggests block
    markers already work for this.
 
+## Labs response
+
+> Written by **Labs** against `ebc38e5`. The model is right and I would build it. Two of the four
+> open questions are answerable with a measurement rather than an opinion, two collapse into one
+> answer, and there is one bug waiting in the config shape.
+
+**The two-axis split is the insight, and `prefixOwner: "local"` being "every prefix behaves like
+`FIX`" is the part that makes it a generalization rather than a special case.** Agreed, including
+that `LOCAL_PREFIXES` becomes data. It was hardcoded because one repo-local prefix existed and no
+second one was in sight; that is not an argument for it staying hardcoded once a registry exists.
+
+### Q4 — markers for a whole table: already works, measured
+
+Not a design question. The existing mechanism carries a multi-line table today:
+
+```text
+values substitutes a whole table between markers   yes  (the regex is [\s\S]*?)
+format leaves a multi-line marked region alone     yes  (markedLines -> verbatim block)
+```
+
+Both verified against `lib/values.js` and `lib/format.js` on `main`, with a table wide enough that
+reflow would have mangled it. So the ID Prefixes table can be generated with `<!--ewc3:name-->` and
+nothing new is needed. **Do not invent a second mechanism for this.**
+
+### Q1 and Q2 are the same question, and the answer is fail-closed
+
+SXC leans *HQ authoritative, repo key validated* on Q1 and *fail* on Q2. Both right, and they are
+load-bearing for each other:
+
+**The repo key is not a duplicate of the ownership fact. It is the declaration that makes failure
+detectable.** Strip it out and a repo whose HQ registry is missing cannot distinguish *"I am
+correctly local"* from *"HQ did not arrive"* — and the second silently becomes the first. That is
+the failure mode this whole toolkit exists to prevent, one level up.
+
+```text
+repo says hq   + registry present   -> HQ assigns
+repo says hq   + registry absent    -> FAIL. loudly. it was supposed to be there
+repo says local (or absent)         -> today's behaviour, no HQ consulted, no failure
+```
+
+So: **HQ is authoritative for *which prefixes*; the repo is authoritative for *whether HQ is
+expected*.** Different facts, both needed, no duplication. A mismatch — repo says `hq`, HQ has no
+row — is a fail, not a shrug.
+
+We just spent a day on this exact shape elsewhere: an auth mode selected by configuration, no
+default, no fallback, because a check that silently weakens itself is worse than no check. Same
+argument, same conclusion.
+
+### Q3 — keep `observed` and `untracked` out of the hand-edited file
+
+SXC names the tension and it is real, but the deciding factor is not aesthetics. **24 repos and more
+than one committer means a tool that writes into the file humans edit will produce merge conflicts
+in the file humans edit.** Generate a sibling artifact, commit it, diff it in CI.
+
+That also preserves the `fix`/`check` boundary the toolkit already commits to: one file is intent,
+one is observation, and CI compares them without editing either. `untracked` stays durable and
+reviewable — it is just durable in the generated half.
+
+At four repos this would not matter. At 24 it is the difference between a diff to approve and a
+rebase.
+
+### Pushback: `repoHQ.repo` implies a fetch the doc elsewhere rules out
+
+The prose says *"No network fetch inside the tool, no auth problem for a private org"* — good, and
+correct for a private org. But the config shape is a **URL plus a path inside that repo**, which
+reads exactly like a fetch target. Somebody will implement it as one, hit the auth wall, and add a
+token.
+
+Make it explicit: **`--registry <path>` is the only resolution mechanism.** Then give the URL a job
+worth having — have the registry file carry its own `repo` identity and assert it matches
+`repoHQ.repo`:
+
+```jsonc
+// HQ registry
+{ "repo": "https://github.com/MedARMS/MedAR_ProjectSummary", "repos": { } }
+```
+
+Now handing CI the *wrong* registry — easy with a rollup-of-rollups and several checkouts — fails
+loudly instead of validating against someone else's namespace. The URL stops being decoration and
+becomes an assertion.
+
+### Bug in waiting: `localPrefixes` must extend the default, not replace it
+
+```jsonc
+"localPrefixes": ["FIX"]
+```
+
+If that key is the source of truth, an HQ registry that omits it — or a typo — **silently makes
+`FIX` global**, and the first symptom is two repos being told they collide on `FIX-3`. The canon
+inverts quietly, which is the exact failure class the doc opens by describing.
+
+`FIX` is repo-local **canon**, not configuration. Keep it as a built-in and let `localPrefixes`
+*add* to it. Configuration should be able to widen that set, never to empty it.
+
+### `global` means registry-global, and the doc proves it
+
+The HQ example grants `DT` to MedAR's `DevTools`. Labs' registry — linked from this document —
+already owns `DT`:
+
+```text
+| DT | ewc3-docs-tools | documentation tooling |
+```
+
+Both marked `global`. Both correct. Nothing breaks, because they are different registries — which
+means **`global` is scoped to one HQ namespace, not to the universe.** Worth saying out loud in the
+schema docs, because "global" invites the other reading, and someone will eventually try to reason
+about a `DT-12` across both orgs.
+
+It is also a second argument for the registry carrying its own identity: it names whose "global"
+this is.
+
+### Labs stays `local`, and that is the design working
+
+Four repos, one committer, and the discipline has not drifted yet. Adopting `prefixOwner: "hq"` here
+would be adding machinery ahead of the failure, against the bar this repository sets for itself:
+
+> **Every check here exists because of a specific failure**, not a style preference.
+
+MedAR has the specific failure — 24 repos, three rollups, several committers. Build it for that.
+`repoHQ` absent leaving behaviour exactly as it is today is not a compatibility concession, it is
+what lets the mechanism ship without Labs having to want it yet.
+
+**One thing to watch when it lands:** under full `hq` adoption the ID Prefixes table is generated,
+so *"repo uses a prefix owned by another repo"* becomes unreachable by construction — hand-editing
+the generated table is caught by `values --check` instead. The check set gets smaller as adoption
+gets deeper, which is the right direction and worth confirming rather than assuming.
+
 ## Related
 
 - [`EWC3_Prefix_Registry.md`][registry] — the human-readable registry this would generate rather
