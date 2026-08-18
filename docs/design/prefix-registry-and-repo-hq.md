@@ -599,5 +599,57 @@ registry, since the guard's two branches want fixtures rather than a live repo.
 - Who refreshes `observed`, and where — unchanged from the previous round, and still the one that
   decides what gets built rather than merely in what order.
 
+## Padding: one canonical number, two render targets
+
+**Decided.** An ID is a **number**. It renders differently depending on what is reading it:
+
+| Context | Form | Why |
+| --- | --- | --- |
+| tables, prose, references | `VS-392` — unpadded | canonical; comparison is numeric anyway |
+| **filenames** | `VS-00392.md` — padded to **5** | file trees sort lexicographically and nothing can fix that from inside the file |
+
+**Why normalising the tables costs nothing:** MedAR pads to **2 digits in a 3-digit series** — 97
+IDs are two characters, 273 are three — so lexicographic order already fails:
+
+```text
+lexicographic   VS-01 … VS-09 VS-10 VS-100 VS-101 …     <- VS-100 before VS-11
+numeric         VS-01 … VS-09 VS-10 VS-11  VS-12  …
+```
+
+Padding stopped buying a correct sort the moment `VS-100` was minted. There is no working behaviour
+to lose.
+
+**Why 5 in filenames, and not 3:** padding is a bet on the final size of a series, and the loss is
+silent — `VS-1000` breaks a 3-wide scheme exactly as `VS-100` broke the 2-wide one, with nothing
+erroring and the order just quietly going wrong. Five carries to 99,999, which no series here will
+reach, so the bet never has to be re-made. Wilson: *"We're not Microsoft, who needs freaking guids
+for fix numbers."*
+
+Everywhere else, the rule is **IDs sort numerically** — which is what `lastId` already does. Do not
+re-pad the tables later "to fix the sort": that is what hid the `DT-01`/`DT-001` collision.
+
+### Consequence: the slice filename becomes derivable, and therefore checkable
+
+`Doc` pins a filename so a slice is findable — the lessons name the failure as *"unfindable because
+there is no filename to search"*. But **nothing validates that pin today**:
+
+- `links.js` matches markdown syntax only — `[text](target)`, `[label]: target`, `[text][label]`;
+- the `Doc` cell is a **bare filename** (`HOW-TO.md`), which matches none of those.
+
+So a renamed or deleted slice doc leaves a `Doc` cell pointing at nothing, and `check` stays green.
+That is the same shape as the padding bug: the mechanism that exists to make something findable can
+rot without complaining.
+
+With a derivable name the check is mechanical and worth having:
+
+```text
+Doc cell is empty (—)                  -> fine, no slice doc yet
+Doc cell present                       -> must resolve to a real file
+under a slices/ convention             -> must equal <PREFIX>-<5-padded>.md for its row's ID
+```
+
+The last rule is the strong one: it catches `VS-00391.md` sitting in the `VS-392` row, which a mere
+existence check would pass and a human would not notice.
+
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
