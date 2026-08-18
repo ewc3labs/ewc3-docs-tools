@@ -14,6 +14,7 @@ const { format } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { applyToText, resolveValues } = require('../lib/values');
 const { expand } = require('../lib/glob');
+const { migrateText } = require('../lib/migrate');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
 	isLocalPrefix, roadmapFiles } = require('../lib/series');
 
@@ -638,6 +639,85 @@ test('[series] a repo with no roadmap at all yields no series and no crash', () 
 	assert.deepStrictEqual(roadmapFiles(dir, null), []);
 	assert.strictEqual(lastNumber(dir, 'VS'), 0);
 	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
+
+// ---------------------------------------------------------------------------
+// Migrating a MedAR register to the ownership table. Non-destructive by contract, so the tests that
+// matter most are the ones asserting nothing was lost and nothing was invented.
+
+const REGISTER = `# Roadmap
+
+## Number Series
+
+| Series | Last Num | Series Description |
+| --- | --- | --- |
+| Vertical Slices | VS-392 | Feature drops |
+| Hotfixes | FIX-91 | Emergent fixes |
+| Cross-Project | TS-02 · DW-024 | Sibling-repo work |
+
+## Delivery Index
+
+| ID | Slice |
+| --- | --- |
+| VS-392 | a slice |
+| DT-01 | minted in DevTools, not here |
+`;
+
+test('[migrate] one register cell naming two series becomes two rows', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	const p = r.rows.map((x) => x.prefix);
+	assert.ok(p.includes('TS') && p.includes('DW'),
+		'TS-02 · DW-024 is two series sharing a cell, and must not survive as one row');
+});
+
+test('[migrate] a prefix used but never registered is NOT claimed for this repo', () => {
+	// The measured case: SX_Coder uses DT-01 while DT is minted in DevTools, whose roadmap already
+	// records DT-042 being minted twice by two registers that each thought they owned it. Claiming it
+	// here would manufacture that collision under a migration advertised as lossless.
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	const dt = r.rows.find((x) => x.prefix === 'DT');
+	assert.ok(dt, 'the unregistered prefix must still appear, or the problem stays invisible');
+	assert.strictEqual(dt.owner, null, 'an unregistered prefix must not be auto-assigned an owner');
+	assert.match(r.text, /\*\*\?\*\* _unclaimed_/, 'and it must render as a question a human resolves');
+});
+
+test('[migrate] a registered prefix keeps its owner', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	assert.strictEqual(r.rows.find((x) => x.prefix === 'VS').owner, 'SX_Coder');
+});
+
+test('[migrate] a register number behind the index is reported as stale', () => {
+	// The register is an INPUT to minting and goes stale; the IDs are evidence and cannot. This
+	// direction of disagreement means the next mint reuses a live number.
+	const behind = REGISTER.replace('| VS-392 | a slice |', '| VS-500 | a later slice |');
+	const r = migrateText(behind, { owner: 'SX_Coder' });
+	const vs = r.rows.find((x) => x.prefix === 'VS');
+	assert.strictEqual(vs.stale, true);
+	assert.strictEqual(vs.lastUsed, 500, 'the evidence wins over the stale register cell');
+});
+
+test('[migrate] the original register survives verbatim', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	for (const line of ['| Vertical Slices | VS-392 | Feature drops |',
+		'| Cross-Project | TS-02 · DW-024 | Sibling-repo work |']) {
+		assert.ok(r.text.includes(line), `migration dropped: ${line}`);
+	}
+});
+
+test('[migrate] IDs are padded to five in the emitted table', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	assert.match(r.text, /VS-00392/);
+	assert.match(r.text, /FIX-00091/);
+	assert.doesNotMatch(r.text.split('<details>')[0], /\| VS-392 \|/,
+		'the emitted table must not keep the unpadded form');
+});
+
+test('[migrate] a document with no register is reported, not half-migrated', () => {
+	const r = migrateText('# Roadmap\n\nNothing here.\n', { owner: 'X' });
+	assert.strictEqual(r.ok, false);
+	assert.strictEqual(r.reason, 'no-register');
+	assert.strictEqual(r.text, null, 'no text means the caller cannot accidentally write a partial');
 });
 
 
