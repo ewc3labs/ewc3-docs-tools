@@ -651,5 +651,70 @@ under a slices/ convention             -> must equal <PREFIX>-<5-padded>.md for 
 The last rule is the strong one: it catches `VS-00391.md` sitting in the `VS-392` row, which a mere
 existence check would pass and a human would not notice.
 
+## Who refreshes `observed`: nobody — it rides an existing chain
+
+The open question was who regenerates the observed half, given that a walk needs every repo and CI
+checks out one. **MedAR already solved this for STATUS rollups, and the mechanism is reusable
+as-is.**
+
+```text
+push to any child repo
+  -> pullup-children.yml
+       aggregate  ->  persist STATUS-pullup.yaml  ->  outputs `changed`
+         -> trigger-parent-pullup        (repository_dispatch, UP the tree)
+              -> parent repeats, to HQ
+```
+
+Deployed to every repo already, owned by `cictl reposync`, and gated so a **human** push always
+propagates:
+
+```yaml
+persist_changed: changed == 'true' || (github.event_name == 'push' && github.actor != 'github-actions[bot]')
+```
+
+A roadmap edit is a human push. So the walk that produces `observed` belongs in the HQ end of this
+chain, and refresh becomes **a consequence of the edit rather than a task anybody owns**. No cron,
+no memory, and it fires exactly when the thing it observes changed.
+
+### That is not sufficient on its own, and the gap is the interesting part
+
+Event-driven refresh fails **silently** in three ways, all of which look identical to "nothing
+changed":
+
+- a repo never got the workflow stub, so it never dispatches;
+- the dispatch fails — token, permissions, a rename;
+- a repo is created and nobody wires it up at all.
+
+In each case `observed` is simply *missing* that repo, and missing is indistinguishable from quiet.
+This is the same failure the toolkit exists to prevent, one level up again — so the refresh needs a
+**check that fails**, not a faster schedule.
+
+### The check: enumerate the org, and distinguish untracked from unobserved
+
+`observed` records, per repo, **the commit it saw and when**. HQ then compares its observations
+against the organisation's actual repository list:
+
+| Finding | Meaning | Result |
+| --- | --- | --- |
+| repo has no docs config | opted out, or not adopted yet | **`untracked`** — listed, expected, fine |
+| repo has config, observation present and current | working | pass |
+| repo has config, observation **absent** | the pipeline never reached HQ | **fail** |
+| repo has config, observation **behind its HEAD** | a dispatch was lost | **fail** |
+
+`untracked` versus `unobserved` is the distinction that makes this usable: the first is a repo that
+never promised anything, the second is a broken pipeline wearing the same silence.
+
+**And it runs often enough by construction.** HQ's CI fires on every dispatch — that is, on every
+child push. So the check runs exactly as often as the thing it guards can change. If every repo goes
+quiet, nothing runs, but nothing has drifted either. That is the property a cron cannot give you:
+the frequency is tied to the risk rather than to a guess.
+
+### What this leaves
+
+`observed` becomes a CI artifact, not a developer chore — which was the question that decided what
+gets built. The remaining work is small and additive: a walk step at the HQ end of an existing
+chain, a per-repo `{commit, observedAt}` record, and an org enumeration to catch the repos that
+never reported.
+
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
