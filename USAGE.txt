@@ -25,6 +25,11 @@ EWC3 Labs documentation tools
                                           register may own. Dry run without --write. Idempotent;
                                           to abandon it, delete the folder.
 
+  ewc3-docs tables                        Table rows whose cell count does not match their header -
+                                          almost always a pipe inside a cell that needs escaping
+                                          as |. Reports; never rewrites, because a bare pipe is
+                                          ambiguous between a literal and a forgotten column.
+
   ewc3-docs fix                           Values then format, in write mode. The button to press
                                           before you commit. Idempotent - running it when nothing
                                           changed costs a second and reports zero.

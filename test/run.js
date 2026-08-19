@@ -16,6 +16,7 @@ const { applyToText, resolveValues } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
+const { checkTable } = require('../lib/tables');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
 	isLocalPrefix, roadmapFiles } = require('../lib/series');
 
@@ -852,6 +853,46 @@ test('[slices] the summary one-liner is NOT invented', () => {
 		assert.ok(/has deliberately not been written/.test(d.content),
 			`${d.file} lost the notice that the summary is still owed`);
 	}
+});
+
+
+// ---------------------------------------------------------------------------
+// Unescaped pipes in table cells. Not carelessness - a generator keeps producing them, and Wilson
+// has been repairing them by hand for months. That is the arrangement this toolkit exists to end.
+
+const TBL = [
+	'| ID | State | Notes |',
+	'| --- | --- | --- |',
+	'| VS-1 | ok | plain prose, no pipes |',
+	'| VS-2 | ok | escaped `demo' + String.fromCharCode(92) + '|bill` is a literal |',
+	'| VS-3 | bad | bare `DSET SFE | resolved` splits the row |',
+].join('\n');
+
+test('[tables] a bare pipe in a cell is reported', () => {
+	const p = checkTable(TBL, 'r.md');
+	assert.strictEqual(p.length, 1, 'exactly the VS-3 row is wrong');
+	assert.strictEqual(p[0].line, 5);
+	assert.strictEqual(p[0].extra, 1);
+});
+
+test('[tables] an ESCAPED pipe is not reported', () => {
+	// The whole point: `\|` is legal and common. Flagging it would train people to ignore the check.
+	const p = checkTable(TBL, 'r.md');
+	assert.ok(!p.some((x) => x.line === 4), 'an escaped pipe is correct markdown, not a problem');
+});
+
+test('[tables] the report points near the offending pipe, not at the row', () => {
+	// A row can be 14,000 characters long. "This row is wrong" is not actionable at that size.
+	const p = checkTable(TBL, 'r.md');
+	assert.ok(p[0].near.length < 120, 'the excerpt must stay readable');
+	assert.ok(p[0].near.includes('|'), 'and must actually show the pipe');
+});
+
+test('[tables] a table with no recognised header is not guessed at', () => {
+	// Without a header there is no reference for the column count, and inventing one would produce
+	// confident nonsense on every prose table in the repository.
+	const p = checkTable('| a | b |\n| --- | --- |\n| x | y | z |\n', 'r.md');
+	assert.deepStrictEqual(p, []);
 });
 
 

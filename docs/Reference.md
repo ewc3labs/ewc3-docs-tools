@@ -12,7 +12,8 @@ that is a bug — there is a test asserting this page covers the code's surface.
 | `links` | never | Dead links, wrong-case links, undefined references, orphaned documents. |
 | `series` | never | Who owns which ID prefix, and the last number used. |
 | `fix` | yes | `values` then `format`, in write mode. **The pre-commit button.** |
-| `check` | never | All four in check mode. **The CI command.** |
+| `tables` | never | Table rows whose cell count disagrees with their header - an unescaped pipe. |
+| `check` | never | All of the above in check mode. **The CI command.** |
 | `migrate-project [--write]` | into `docs/project_v2/` only | Emits a migrated planning surface beside the live one. Never touches `docs/project/`. |
 
 `fix` and `check` are mirrors of each other: one makes it right, one asks whether it is.

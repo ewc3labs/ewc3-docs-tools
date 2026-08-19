@@ -20,6 +20,7 @@ const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
+const { checkTable } = require('../lib/tables');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
 } = require('../lib/series');
@@ -402,6 +403,33 @@ function cmdMigrateProject(root, config, argv) {
 	return problems.length ? 1 : 0;
 }
 
+/**
+ * Table rows whose cell count disagrees with their header - almost always an unescaped pipe.
+ *
+ * Runs inside `check`, so it is a control rather than a habit. The repair stays human: given one
+ * pipe too many, no tool can tell a literal pipe from a forgotten column.
+ */
+function cmdTables(root, config, argv) {
+	const files = targetFiles(config, root, argv);
+	const problems = [];
+	for (const file of files) {
+		problems.push(...checkTable(fs.readFileSync(file, 'utf8'),
+			path.relative(root, file).split(path.sep).join('/')));
+	}
+	if (!problems.length) {
+		console.log(`Every table row matches its header across ${files.length} file(s).`);
+		return 0;
+	}
+	console.error(`\n${problems.length} table row(s) do not match their header - `
+		+ 'usually a pipe inside a cell that needs escaping as \\|:\n');
+	for (const p of problems) {
+		console.error(`  ${p.file}:${p.line}  (${p.extra > 0 ? '+' : ''}${p.extra} cell`
+			+ `${Math.abs(p.extra) === 1 ? '' : 's'} vs the header on line ${p.headerLine})`);
+		console.error(`      …${p.near}…`);
+	}
+	return 1;
+}
+
 // --- entry -----------------------------------------------------------------
 
 const [, , command, ...argv] = process.argv;
@@ -416,6 +444,7 @@ switch (command) {
 	case 'values': code = cmdValues(root, config, argv); break;
 	case 'series': code = cmdSeries(root, config); break;
 	case 'migrate-project': code = cmdMigrateProject(root, config, argv); break;
+	case 'tables': code = cmdTables(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':
@@ -429,7 +458,8 @@ switch (command) {
 			cmdValues(root, config, ['--check']),
 			cmdFormat(root, config, ['--check']),
 			cmdLinks(root, config),
-			cmdSeries(root, config)
+			cmdSeries(root, config),
+			cmdTables(root, config, [])
 		);
 		break;
 	default:
