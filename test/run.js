@@ -15,6 +15,7 @@ const { checkLinks } = require('../lib/links');
 const { applyToText, resolveValues } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
+const { extractSlices } = require('../lib/slices');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
 	isLocalPrefix, roadmapFiles } = require('../lib/series');
 
@@ -718,6 +719,139 @@ test('[migrate] a document with no register is reported, not half-migrated', () 
 	assert.strictEqual(r.ok, false);
 	assert.strictEqual(r.reason, 'no-register');
 	assert.strictEqual(r.text, null, 'no text means the caller cannot accidentally write a partial');
+});
+
+
+// ---------------------------------------------------------------------------
+// Slice extraction. This module destroyed content three separate ways before it had any tests, and
+// every one of them was silent, so the regression tests below are the point of it rather than a
+// formality. The property that matters is CONTAINMENT: every word of the roadmap must survive
+// somewhere in the output. Assert it directly.
+
+const ROADMAP = [
+	'# Roadmap',
+	'',
+	'## Delivery Index',
+	'',
+	'### Vertical Slices',
+	'',
+	'| ID | State | Slice | Est | Priority | Lane | Status |',
+	'| --- | --- | --- | --- | --- | --- | --- |',
+	'| VS-371 | planned | Schema | 1d | High | SQL | Added 2026-08-08. Wilson said so. |',
+	'| VS-372 | planned | Engine | 2d | High | Daemon | Precedence is operator-authored. |',
+	'| VS-400 | planned | Escaped | 1d | Low | Tools | It `\\|`-joined the store list into one argv. |',
+	'| VS-401 | planned | CodeSpan | 1d | Low | UI | Now reads `DSET SFE \| unresolved` in the tooltip. |',
+	'| VS-273 | planned | Reject | 1d | High | Workflow | The reject dialog. |',
+	'| FIX-89 | planned | Mixup | 1d | High | SQL | The join was wrong. |',
+	'',
+	'## Slice Notes (Narrative)',
+	'',
+	'### VS-371 through VS-372 (MedFM Billing Rules Engine)',
+	'',
+	'The engine evaluates rules in operator order.',
+	'',
+	'### VS-273 — Reject-path mechanics',
+	'',
+	'Measured against fn_CalcStatus.',
+	'',
+	'### FIX-89 — the join that paired the wrong rows',
+	'',
+	'An INNER JOIN on RowNum mispaired the entries.',
+	'',
+	'### VS-273 / FIX-89 — the target model, and the one measured constraint',
+	'',
+	'Once every database runs through SXCoder, bolt a new overflow table on.',
+	'',
+].join('\n');
+
+/** Every word of the source must appear somewhere in the output. No parsing, so it cannot self-validate. */
+function assertLossless(source, result) {
+	const words = (t) => t.split(/\s+/).map((w) => w.trim()).filter((w) => w.length > 3);
+	const all = result.text + '\n' + result.docs.map((d) => d.content).join('\n');
+	// Substring, not token equality. Markdown glues words to punctuation - a heading that becomes a
+	// link renders "Engine)](slices/..)" - so a token-set check reports loss that did not happen,
+	// and a checker that cries wolf is worse than no checker.
+	const missing = [...new Set(words(source))].filter((w) => !all.includes(w));
+	assert.deepStrictEqual(missing, [], `content lost: ${[...new Set(missing)].slice(0, 8).join(' | ')}`);
+}
+
+test('[slices] nothing is lost - every word survives somewhere', () => {
+	assertLossless(ROADMAP, extractSlices(ROADMAP));
+});
+
+test('[slices] an escaped pipe is a literal, not a column boundary', () => {
+	// 504 rows in the real roadmap contain one. Splitting on it finds phantom columns, so the "last
+	// cell" is a fragment from the middle and rewriting it corrupts the row.
+	const r = extractSlices(ROADMAP);
+	const doc = r.docs.find((d) => d.content.includes('VS-00400'));
+	assert.ok(doc.content.includes('joined the store list into one argv'),
+		'the whole Status cell must reach the document, not just the tail after the escaped pipe');
+});
+
+test('[slices] an UNescaped pipe inside a code span does not truncate the row', () => {
+	// The author wrote `DSET SFE | unresolved`. Escaping alone does not save this; the column COUNT
+	// from the header does, because the last column simply keeps every pipe it contains.
+	const r = extractSlices(ROADMAP);
+	const doc = r.docs.find((d) => d.content.includes('VS-00401'));
+
+	// Assert the WHOLE cell arrived. Checking only the tail passes even when the split is broken,
+	// because the tail is precisely the fragment a naive split keeps - the front half is what gets
+	// stranded in the row. A test that inspects the surviving half cannot see the missing one.
+	assert.ok(doc.content.includes('Now reads `DSET SFE | unresolved` in the tooltip.'),
+		'the entire Status cell must reach the document, pipes and all');
+
+	// And the row must be thin afterwards. Containment alone is satisfied by prose that never moved.
+	const row = r.text.split('\n').find((l) => l.startsWith('| VS-401 |'));
+	assert.ok(!row.includes('Now reads'),
+		'the prose is still in the row, so it was pinned but never actually moved');
+});
+
+test('[slices] a row is pinned to its document exactly once, and keeps its other columns', () => {
+	const r = extractSlices(ROADMAP);
+	const row = r.text.split('\n').find((l) => l.startsWith('| VS-371 |'));
+	assert.match(row, /See \[slice notes\]\(slices\/VS-00371_[^)]+\)/);
+	for (const cell of ['planned', 'Schema', '1d', 'High', 'SQL']) {
+		assert.ok(row.includes(cell), `pinning the row dropped the ${cell} column`);
+	}
+	assert.ok(!row.includes('Wilson said so'), 'the prose should have MOVED, not been copied');
+});
+
+test('[slices] a later section revisiting claimed slices is appended, never deleted', () => {
+	// `### VS-273 / FIX-89` names IDs an earlier section already claimed. The group then has no
+	// members, is skipped before it is assigned a filename, and the splice still removes it - which
+	// deleted the prose and left a link to slices/undefined.
+	const r = extractSlices(ROADMAP);
+	assert.ok(!r.text.includes('slices/undefined'), 'a dangling link means a section was dropped');
+	const doc = r.docs.find((d) => d.content.includes('Measured against fn_CalcStatus'));
+	assert.ok(doc, 'the VS-273 document should exist');
+	assert.ok(doc.content.includes('bolt a new overflow table'),
+		'the revisiting section must be appended to the document that owns the IDs');
+});
+
+test('[slices] a range heading claims every slice in the range', () => {
+	const r = extractSlices(ROADMAP);
+	const doc = r.docs.find((d) => d.file.startsWith('VS-00371_'));
+	assert.ok(doc.ids.includes('VS-00371') && doc.ids.includes('VS-00372'),
+		'VS-371 through VS-372 is two slices in one document');
+});
+
+test('[slices] evidence is gathered but never asserted as completion', () => {
+	const status = 'statusDetails:\n  - accomplishments:\n    - "[VS-371] shipped the schema"\n';
+	const r = extractSlices(ROADMAP, { statusText: status });
+	const doc = r.docs.find((d) => d.file.startsWith('VS-00371_'));
+	assert.ok(doc.content.includes('shipped the schema'));
+	assert.ok(/not\*\* a judgement that the slice is complete/.test(doc.content),
+		'the document must say plainly that evidence is not a completion claim');
+});
+
+test('[slices] the summary one-liner is NOT invented', () => {
+	// The whole point of pinning rather than summarising: a generated one-liner reads like a decision
+	// and is not one. If this ever starts writing summaries, it must be a deliberate change.
+	const r = extractSlices(ROADMAP);
+	for (const d of r.docs) {
+		assert.ok(/has deliberately not been written/.test(d.content),
+			`${d.file} lost the notice that the summary is still owed`);
+	}
 });
 
 

@@ -19,6 +19,7 @@ const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
+const { extractSlices } = require('../lib/slices');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
 } = require('../lib/series');
@@ -340,9 +341,44 @@ function cmdMigrateProject(root, config, argv) {
 
 	const outDir = path.join(repo, 'docs', 'project_v2');
 	fs.mkdirSync(outDir, { recursive: true });
+
+	// Pull the narrative out into slices/ before writing the roadmap, so the roadmap that lands is
+	// the thin one with its rows already pinned.
+	const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
+	const extracted = extractSlices(result.text, {
+		statusText: read(path.join(repo, 'config', 'STATUS.yaml')),
+		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
+		sourceName: path.basename(from),
+	});
+
 	const outFile = path.join(outDir, path.basename(from));
-	fs.writeFileSync(outFile, result.text);
+	fs.writeFileSync(outFile, extracted.text);
 	console.log(`  wrote:  docs/project_v2/${path.basename(from)}`);
+
+	// Silently extracting nothing looks exactly like a roadmap with no narrative to extract. Say
+	// which section names were looked for and what the document has instead, so a fourth structural
+	// divergence surfaces as a finding rather than as a quiet no-op.
+	if (!extracted.docs.length) {
+		const heads = extracted.text.split('\n').filter((l) => /^##\s/.test(l))
+			.map((l) => l.replace(/^##\s+/, '').trim());
+		console.log('  no slices extracted - looked for `## Delivery Index` and `## Slice Notes`.');
+		if (heads.length) { console.log(`          this roadmap has: ${heads.slice(0, 6).join(' · ')}`); }
+	}
+
+	if (extracted.docs.length) {
+		const sliceDir = path.join(outDir, 'slices');
+		// Regenerating must not leave last run's files behind: a slice document whose group was
+		// renamed would otherwise persist forever, and a stale orphan reads exactly like a current one.
+		if (fs.existsSync(sliceDir)) {
+			for (const f of fs.readdirSync(sliceDir)) {
+				if (f.endsWith('.md')) { fs.unlinkSync(path.join(sliceDir, f)); }
+			}
+		}
+		fs.mkdirSync(sliceDir, { recursive: true });
+		for (const d of extracted.docs) { fs.writeFileSync(path.join(sliceDir, d.file), d.content); }
+		console.log(`  wrote:  docs/project_v2/slices/  (${extracted.docs.length} documents from `
+			+ `${extracted.rowCount} rows and ${extracted.noteCount} narrative sections)`);
+	}
 
 	// A migration nobody can undo in one move is not a safe migration.
 	const readme = path.join(outDir, 'README.md');
