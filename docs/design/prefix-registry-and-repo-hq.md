@@ -6,6 +6,28 @@
 
 ---
 
+<!-- ewc3:effort:start -->
+## 🧭 The effort — the same map, in every document
+
+**Goal: stop hand-maintaining derived facts.** A slice is authored **once**, as a document. Every
+list, roadmap row, status and per-repo evidence entry is **generated** from it. Local LLMs draft
+what is judgement-adjacent; **deterministic code decides anything that matters**, and a human still
+judges whether work is *done*.
+
+| Document | Decides | Owner |
+| --- | --- | --- |
+| [Clerical work belongs to CI][our-own-canon] | **the canon** — what is clerical, and the measurement that makes it urgent | Labs |
+| [The slice document is the object][the-slice-document] | the authored authority — frontmatter, typed graph, git trailers, Ready/Blocked | Labs |
+| **Prefix registry and `repoHQ`** | cross-repo prefix ownership, generated rather than hand-synced | Labs · ← **you are here** |
+| [EWC3 Prefix Registry][ewc3-prefix-registry] · [🔗][registry] | who owns which ID series **today**; global by default, `FIX` repo-local | Labs HQ |
+| [LLM-assisted docs & PHI boundary][llm-assisted-docs] · [🔗][2026-08-24-llm-assis] | **the lanes and the chat registry**, plus the shared invariants | MedAR |
+| [MedAR PHI-in-git convention][medar-phi-in-git] · [🔗][phi-anonymization-md] | what may enter git; only *impossible* values are exempt | MedAR |
+
+Cross-repo entries carry **both** links: the relative one resolves for an agent reading the
+filesystem (both trees are cloned to the same paths on every machine), the GitHub one resolves on
+the web. Same twin-link convention MedAR already uses.
+<!-- ewc3:effort:end -->
+
 ## The problem
 
 `series.js` already checks two things well, and says honestly where it stops:
@@ -1023,6 +1045,12 @@ docs/project_v2/   generated, reviewable, diffable          <- tooling writes on
 Non-destructive by construction: the emitter has exactly one writable root, and it is not the one
 anybody depends on. If the output is wrong, the fix is `rm -rf docs/project_v2` — not a revert.
 
+[2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
+[ewc3-prefix-registry]: ../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
+[llm-assisted-docs]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
+[medar-phi-in-git]: ../../../../../Programs_MedAR/DevTools/docs/PHI_ANONYMIZATION.md
 [our-own-canon]: clerical-work-belongs-to-ci.md
+[phi-anonymization-md]: https://github.com/MedARMS/DevTools/blob/main/docs/PHI_ANONYMIZATION.md
 [registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
+[the-slice-document]: the-slice-document-is-the-object.md
