@@ -132,7 +132,7 @@ The clerical share is a leading indicator. If it is not falling as the tooling i
 is not doing the CI things as a matter of course, whatever else it is doing.
 
 [2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
-[ewc3-prefix-registry]: ../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[ewc3-prefix-registry]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
 [ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
 [llm-assisted-docs]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [medar-phi-in-git]: ../../../../../Programs_MedAR/DevTools/docs/PHI_ANONYMIZATION.md

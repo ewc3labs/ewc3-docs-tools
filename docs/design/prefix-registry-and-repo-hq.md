@@ -1046,7 +1046,7 @@ Non-destructive by construction: the emitter has exactly one writable root, and 
 anybody depends on. If the output is wrong, the fix is `rm -rf docs/project_v2` — not a revert.
 
 [2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
-[ewc3-prefix-registry]: ../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[ewc3-prefix-registry]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
 [lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
 [llm-assisted-docs]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [medar-phi-in-git]: ../../../../../Programs_MedAR/DevTools/docs/PHI_ANONYMIZATION.md
