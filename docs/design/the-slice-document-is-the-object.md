@@ -54,6 +54,7 @@ priority: high
 lane: MedFM / Gateway / Caches
 depends_on: [VS-00352]
 followers: [VS-00398]
+implements:             # this repo's half of a cross-repo slice owned elsewhere
 parent:                 # a slice family, if this is a member
 summary:                # generated; a human value here is NEVER overwritten
 summary_source: generated
@@ -89,6 +90,12 @@ it is one.
 
 **Also required, cheaply:**
 
+- **`implements:` is a fourth edge, and the ladder needs it** *(SD, 2026-08-24)*. Nearly half of all
+  slices span repos, and per-repo state is genuinely different — coded in one, deployed in another,
+  untouched in a third. So a cross-repo slice gets **a pin slice in each participating repo**, each
+  carrying `implements: <owning-slice>` and **its own state**. Status then walks the ladder. An
+  untyped pin cannot tell *"this repo implements it"* from *"this repo mentions it"*. **The tool
+  mints the pin slice; a human owns its state** — clerk creates, judge decides.
 - **Cycle detection.** `A depends_on B`, `B followers A` will happen. Check it, fail loudly.
 - **Edge symmetry is derived, not authored.** If `A.depends_on = [B]`, then B is a follower of A.
   **Do not make a human write both halves** — that is the same fact stored twice, which this
@@ -214,7 +221,26 @@ argument; this is the decision EWC3Labs should make first.**
    cross-repo fan-out — it is the motivating case but also the riskier one.
 4. **Cross-repo trailer scan** overlaps **DT-16** (org-level series check). Same traversal, two
    uses.
-5. **`next <PREFIX>` was deferred as DT-15** (*"only the +1 is manual"*).
+5. **⚠️ Cross-repo pinning breaks the `FIX` canon** *(found by SD, 2026-08-24)*. The registry keeps
+   `FIX` repo-local on an explicit justification — *"a fix is never referenced from outside the
+   repository it fixes"* — and **`implements:` is exactly that reference**. `FIX-96` is unambiguous
+   inside `SX_Coder` and meaningless from `MedAR_Service_Daemons`, where another may exist.
+
+   | Option | | |
+   | --- | --- | --- |
+   | **1. Repo-qualify on reference** | `SX_Coder:FIX-96` | bare at home, qualified only where needed |
+   | **2. Compound prefix** | `DT-FIX-12` | recreates the coordination cost `FIX` exists to avoid |
+   | **3. Never pin a `FIX`** | promote it to a slice | defends the canon; **requires prescience** |
+
+   **SXC recommends 1; SD prefers 3.** The case against 3: it demands you know *at mint time*
+   whether work will ever be referenced cross-repo, which you usually do not — and its exit,
+   retroactive promotion, **breaks identifiers already written into commit trailers and merged
+   history, where we cannot rewrite them.** Option 1 needs no decision at mint time and costs
+   nothing when a `FIX` stays local. It is also a pattern already load-bearing at MedAR:
+   **`(SXdb, Record)`** — an identifier unique only within its scope, qualified by that scope when
+   referenced from outside. `Record 12345` alone is meaningless; `M55DB1:12345` is not. Both agree 2
+   is the worst option.
+6. **`next <PREFIX>` was deferred as DT-15** (*"only the +1 is manual"*).
    **Mint-that-creates-the-file is a different thing** — the file's existence is the reservation,
    which also removes the concurrent mint race. Justify it on that, not on `+1`.
 
