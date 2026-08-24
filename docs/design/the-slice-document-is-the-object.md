@@ -75,8 +75,16 @@ summarizer reads them too.
 ## 2. The graph, and the one decision that decides whether it works
 
 Slices link to slices. `ewc3-docs links` **already** verifies every relative link resolves and
-reports orphans — so **referential integrity is free**. The graph is a real graph the moment we say
-it is one.
+reports orphans.
+
+> ⚠️ **"Referential integrity is free" was wrong for this corpus** *(Labs, measured 2026-08-24)*. The
+> live SX_Coder roadmap carries **93 `[[wiki-link]]` references across ~35 targets** — agent-memory
+> names, not files — and `migrate-project` copied **92 of them verbatim** into the emitted slices,
+> correctly, under I4. **None resolve. None are visible to `links`.** A second link syntax the checker
+> cannot see is a silent hole in the exact guarantee this section leans on. Teach `links` the syntax
+> or convert them; do not assume coverage nobody measured.
+
+The graph is a real graph the moment we say it is one — **once the checker can see every edge.**
 
 > ### ⚠️ Typed edges, or the graph is noise
 >
@@ -159,7 +167,15 @@ Co-Authored-By: ...
 
 **The trailers are the clerical part.** `Slice:` and `State:` are git-native, machine-parseable,
 attributable, timestamped — and they are how the tooling learns state **without anyone updating a
-table**. The prose above them stays human, because it is the one thing no other artifact records.
+table**.
+
+> **This section was understated** *(Labs, measured 2026-08-24)*. I assumed `[VS-380]` in a subject
+> was a *working* convention a trailer would merely duplicate. It is not. Across all 1,015 `SX_Coder`
+> commits, **311 subjects carry a slice ID and 178 of them (57%) are invisible** to the `[ID]` scan —
+> the bracket slot was **colonised by commit type** (`[docs]` 53, `[status]` 28, `[design]` 22),
+> pushing the ID into prose. **The misses concentrate in the MINT commits**, so the safety net has a
+> hole shaped precisely like the thing it catches. **The trailer replaces a broken mechanism, not a
+> working one** — a materially stronger case than the one argued above. The prose above them stays human, because it is the one thing no other artifact records.
 
 **`State:` in a trailer is a human judgement recorded cheaply — not a derived fact.** Per the canon:
 *automation replaces the clerk, never the judge.* Deciding a slice is **done** rather than merely
@@ -202,21 +218,30 @@ argument; this is the decision EWC3Labs should make first.**
 | | Ships | Needs |
 | --- | --- | --- |
 | **1** | frontmatter object; Delivery Index generated from it | nothing new |
-| **2** | typed graph + cycle check + **Ready / Blocked** views | 1 |
+| **2a** | typed graph + cycle check, **single-repo edges only** | 1 |
+| **2b** | **Ready / Blocked** — only once the graph spans repos | 2a, 3 |
 | **3** | `Slice:`/`State:` trailers → frontmatter (option C) | 1 |
 | **4** | families as views | 2 |
 | **5** | LLM summaries over the closure | 1, endpoint optional |
 
 **Each ships alone. None requires an LLM.**
 
+> ⚠️ **Stage 2 could not ship as one step** *(Labs, 2026-08-24)*. `implements:` makes the graph
+> **cross-repo**, and CI checks out **one repo**. A `Ready` view from one repo's edges would be right
+> for the ~53% of slices living in a single repo and **silently wrong for the rest** — confidently
+> wrong for half a corpus is worse than absent, and violates I5 directly. Build the graph first; ship
+> the projections only when the traversal sees every repo.
+
 ---
 
 ## 9. Open questions
 
 1. **§6 — which direction wins.** Decide before building 3.
-2. **Frontmatter in a *generated* file?** `migrate-project` currently emits slice docs. Once they
-   are authored, migration is a one-time import, not a repeatable generator. **Say so explicitly**,
-   or someone regenerates over authored content.
+2. ~~**Frontmatter in a generated file?**~~ **Not a design question — a deadline** *(Labs,
+   2026-08-24)*. **383 slice documents are already committed with zero frontmatter.** The backfill
+   is trivial only while the generator is still sole author; every hand-edit after that makes it
+   less so. And once slice docs are authored, `migrate-project` **must refuse to overwrite them** —
+   a one-time import, not a repeatable generator. **Enforce it; do not merely document it.**
 3. **Do MedAR repos adopt this, or only Labs?** MedAR carries the 22% clerical tax and the 47%
    cross-repo fan-out — it is the motivating case but also the riskier one.
 4. **Cross-repo trailer scan** overlaps **DT-16** (org-level series check). Same traversal, two
@@ -445,7 +470,7 @@ lands, or the generated half is inert wherever it is written.
 [2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [clerical-work]: clerical-work-belongs-to-ci.md
 [dt-045]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-09_dt-045_slice_registry_and_cictl_slice_cli.md
-[ewc3-prefix-registry]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[ewc3-prefix-registry]: ../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
 [ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
 [llm-assisted-docs]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [medar-phi-in-git]: ../../../../../Programs_MedAR/DevTools/docs/PHI_ANONYMIZATION.md
