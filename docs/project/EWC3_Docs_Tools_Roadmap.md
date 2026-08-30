@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-29<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-30<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -49,6 +49,7 @@ is never referenced from outside the repository it fixes.
 | DT-21 | ⬜ planned | Widen the docs-surface test past `Reference.md` | S | — | it asserts every command is in the reference and nothing more, so `tables` shipped absent from the README, the agent guide and this roadmap while the test stayed green |
 | DT-22 | ⬜ planned | A derived marker for what is built | M | — | `Overview.md` claimed "nothing built" of two partly-built proposals; a prose claim about build state is the exact class this toolkit says to derive |
 | DT-23 | ⬜ planned | Cross-repo collision check: a mention is not a mint | M | — | an ID is minted where it appears in a **declaring** position and merely cited everywhere else; three false positives in one night came from a survey doc and a skill example that quote IDs while describing them, and a slice-document burst multiplies citations per repo by a hundredfold. `DT-24` built the position list this stands on |
+| DT-30 | ⬜ planned | Report an ID declared TWICE inside one repository | S | — | `declaredIds` keys by prefix and number and keeps the first hit, so a second declaration of the same ID is silently discarded; measured on SX_DW, where 10 IDs are declared in both the roadmap and the backlog and the reconcile still reported a clean repo |
 | DT-26 | ⬜ planned | `migrate-project` emits from ONE source, so extra planning surfaces are dropped | M | — | measured on MedAR_AI_Runtime: 41 declared IDs, 34 emitted slice documents, and the 7 lost are exactly its backlog's — a burst that looks complete and silently discards whatever the roadmap glob did not select |
 | DT-27 | ⬜ planned | Refuse an ID cell that ALMOST parses, instead of dropping it | S | — | `AIR-19 (was VS-19)` in a declaring position makes the ID vanish from every check rather than fail one; a rename convention that is right in prose silently unmakes the slice in an ID cell |
 
