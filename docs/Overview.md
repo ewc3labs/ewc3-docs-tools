@@ -16,12 +16,20 @@ using it.
 
 ## Proposals
 
+**Both are now partly built.** The design documents are the argument; the Delivery Index in the
+roadmap is what has actually shipped. This section claimed "nothing built" of both for longer than
+it was true, which is why `DT-22` exists — a prose claim about build state is precisely the class
+this toolkit says should be derived rather than written.
+
 - [Prefix registry and `repoHQ`][prefix-registry-and]: cross-repo prefix ownership — `prefixOwner`,
-  an HQ pointer, and generating the registry instead of hand-syncing it. Proposal only; nothing
-  built.
+  an HQ pointer, and generating the registry instead of hand-syncing it. **Partly built**: `series`
+  refuses a roadmap that declares no prefixes, and `migrate-project` reshapes a register into the
+  ownership table. The HQ pointer and cross-repo validation are not built.
 - [The slice document is the object][slice-object]: the slice doc becomes the authored authority -
   frontmatter, a typed dependency graph, `Slice:`/`State:` git trailers, and Ready/Blocked views.
-  Names the authority the canon calls for. Proposal only; nothing built.
+  Names the authority the canon calls for. **Partly built**: `migrate-project` extracts one document
+  per slice into `docs/project_v2/slices`. Frontmatter, the typed graph, the trailers and the
+  Ready/Blocked views are not.
 - [Clerical work belongs to CI][clerical-work]: the canon these proposals serve - what is
   bookkeeping, what is judgement, and the measurements that make it a rule rather than a preference.
 

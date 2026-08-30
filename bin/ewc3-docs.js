@@ -202,6 +202,25 @@ function cmdSeries(root, config) {
 	const rel = f => path.relative(root, f).split(path.sep).join('/');
 
 	if (!files.length) {
+		// A repository with no planning surface at all is fine and common - most repositories have
+		// nothing to check here. But a repository that HAS a docs/project folder and still matched
+		// nothing is the dangerous case: the glob missed, and silence is indistinguishable from a
+		// clean bill. Measured on MedAR_AI_Runtime, whose roadmap sits one directory deeper.
+		const planningDir = path.join(root, 'docs', 'project');
+		let stranded = [];
+		try {
+			stranded = fs.readdirSync(planningDir, { recursive: true, encoding: 'utf8' })
+				.filter((p) => /\.md$/i.test(p) && /roadmap|backlog/i.test(p));
+		} catch { /* no docs/project at all - genuinely nothing to check */ }
+
+		if (stranded.length) {
+			console.error('No roadmaps matched, but docs/project holds files that look like planning surfaces:\n');
+			for (const p of stranded) { console.error('  docs/project/' + p.split('\\').join('/')); }
+			console.error('\nLooked for: ' + (specs || DEFAULT_ROADMAPS).join(', '));
+			console.error('Add a matching pattern to `series.roadmaps`, or move the file.');
+			return 1;
+		}
+
 		console.log('No roadmaps found. Looked for: ' + (specs || DEFAULT_ROADMAPS).join(', '));
 		return 0;
 	}
@@ -217,27 +236,70 @@ function cmdSeries(root, config) {
 	// A genuinely new roadmap declares its prefixes BEFORE it has any IDs, so `declared.size === 0` is
 	// not "empty and fine" - it is "this has not been told what it owns, or it is not a roadmap".
 	const undeclaredFiles = [];
+	const frozenViolations = [];
+
+	// Declaration is repository-scoped: a backlog inherits the ownership table of the roadmap
+	// beside it. Only a repository that declares NOWHERE has told us nothing.
+	const declaresAnywhere = files.some((f) => readSeries(f).declared.size > 0);
 
 	for (const file of files) {
 		const { declared, used } = readSeries(file);
 		console.log(rel(file));
-		if (!declared.size) {
+		if (!declared.size && !declaresAnywhere) {
 			undeclaredFiles.push({ file, usesIds: used.size > 0 });
 			console.log(used.size
-				? '  (no Prefix table, but IDs are in use - declare what this roadmap owns)'
-				: '  (no Prefix table and no IDs - is this a roadmap? the glob may be too wide)');
+				? '  (no ownership table, but IDs are in use - declare what this roadmap owns)'
+				: '  (no ownership table and no IDs - is this a roadmap? the glob may be too wide)');
+		} else if (!declared.size && used.size) {
+			console.log('  (inherits the ownership table declared elsewhere in this repository)');
 		}
+
+		// A legacy register is READ rather than refused - a checker that cannot see an unmigrated
+		// estate cannot audit the only place drift lives. But it is named every time, because the
+		// alternative to refusing is not silence: `migrate-project` still has work to do here.
+		if (readSeries(file).legacyShape) {
+			console.log('  (legacy register: prefixes read from the `Last Num` column; `migrate-project` normalises this)');
+		}
+		const scopes = readSeries(file).scopes;
 		for (const prefix of [...declared].sort()) {
 			const highest = used.get(prefix);
-			const scope = isLocalPrefix(prefix) ? 'repo-local' : 'global';
+			const written = scopes.get(prefix);
+			// A DECLARED scope beats a guess from the prefix string. `isLocalPrefix` is the fallback
+			// for a register that has not said, never an override of one that has.
+			// Print the scope the register WROTE, not the nearest of two words this tool knows.
+			// `repo-owned` is a real and useful third answer - one repository owns a globally
+			// unique prefix - and flattening it to `global` discards the ownership the registry
+			// exists to record.
+			const spoken = written ? written.declared.replace(/[*`]/g, '').trim() : null;
+			const scope = written
+				? (written.frozen ? spoken.toUpperCase() : spoken)
+				: (isLocalPrefix(prefix) ? 'repo-local' : 'global');
 			// padEnd, not printf width specifiers - console.log supports %s but not %-11s, and prints
 			// the modifier literally.
 			const last = highest === undefined ? 'none yet' : `${prefix}-${highest}`;
 			console.log(`  ${prefix.padEnd(8)} ${scope.padEnd(11)} last used: ${last}`);
+
+			// A freeze that nothing enforces is a note, not a control - which is the failure mode
+			// this whole check exists to end. If a register says a series is retired, minting past
+			// its ceiling has to FAIL, or the freeze is worth exactly as much as the convention it
+			// replaced.
+			if (written && written.frozen && written.ceiling !== null
+				&& highest !== undefined && highest > written.ceiling) {
+				frozenViolations.push({ file, prefix, ceiling: written.ceiling, highest });
+			}
 		}
 	}
 
 	let code = 0;
+
+	if (frozenViolations.length) {
+		console.error('\nA RETIRED series has been minted into:\n');
+		for (const v of frozenViolations) {
+			console.error(`  ${v.prefix} is frozen at ${v.prefix}-${v.ceiling}, but ${v.prefix}-${v.highest} exists in ${rel(v.file)}`);
+		}
+		console.error('\nMint this work under the series the register points to, or un-freeze it deliberately.');
+		code = 1;
+	}
 
 	if (undeclaredFiles.length) {
 		console.error('\nRoadmap(s) that declare no prefixes, so nothing was checked:\n');

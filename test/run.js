@@ -18,7 +18,7 @@ const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
-	isLocalPrefix, roadmapFiles } = require('../lib/series');
+	isLocalPrefix, roadmapFiles, declaredIds } = require('../lib/series');
 
 let passed = 0, failed = 0;
 
@@ -622,18 +622,162 @@ test('[series] declared ownership names the file that claims each prefix', () =>
 	assert.match(owners.get('VS')[0], /X_Development_Roadmap\.md$/);
 });
 
-test(`[series] the MedAR "Series / Last Num" table declares NOTHING - the migration trigger`, () => {
-	// SX_Coder's register is headed `| Series | Last Num | ... |`, not `| Prefix | ... |`, so no
-	// ownership table is found at all and every prefix in use reads as undeclared. Pinning this means
-	// the project_v2 migration cannot quietly appear to succeed against an unmigrated register.
+test(`[series] the MedAR "Series / Last Num" register is READ, and flagged as legacy`, () => {
+	// SUPERSEDES an earlier contract, deliberately, and the reversal is worth stating.
+	//
+	// This register was previously read as declaring NOTHING, so that an unmigrated repository
+	// could not appear to pass - the refusal WAS the migration trigger. That made the estate's
+	// most carefully maintained registers indistinguishable from its absent ones, and left the
+	// cross-repo collision check blind to every repository that had not migrated yet: which is
+	// the only place a collision can be hiding. An auditor that presupposes the shape it audits
+	// for goes blind exactly where compliance failed.
+	//
+	// So: READ it, and NAME it. The migration signal survives as a notice rather than a refusal.
 	const dir = roadmapRepo(
 		'| Series | Last Num | Series Description |\n| --- | --- | --- |\n| Vertical Slices | VS-390 | x |\n' +
 		'\n| ID | Slice |\n| --- | --- |\n| VS-390 | a slice |\n');
 	const file = path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md');
-	assert.strictEqual(readSeries(file).declared.size, 0,
-		'a Series-headed register must not be mistaken for an ownership table');
-	assert.strictEqual(undeclaredPrefixes(dir).length, 1,
-		'and the guard must therefore fire, rather than reporting a clean repo');
+	const read = readSeries(file);
+	assert.ok(read.declared.has('VS'), 'the Last Num column declares the series');
+	assert.strictEqual(read.legacyShape, true, 'and it is flagged as the shape migrate-project normalises');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'so a maintained legacy register is not reported as owning nothing');
+});
+
+test('[series] the Series Description column does NOT declare, only Last Num does', () => {
+	// SX_Coder's cross-project row names `AIR`, `DW` and `DT` in its DESCRIPTION while owning none
+	// of them. A row-wide scan would have the hub re-declare exactly the series it has handed away.
+	// A mention is not a mint, in a register too.
+	const dir = roadmapRepo(
+		'| Series | Last Num | Series Description |\n| --- | --- | --- |\n| Cross-Project | TS-02 | mint `AIR-01`=Runtime, `DW-01`=Warehouse for new |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared].sort(), ['TS'],
+		'only the Last Num cell declares; prefixes named in prose beside it do not');
+});
+
+function backlogRepo(roadmapBody, backlogBody) {
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'backlog'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'), roadmapBody);
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'backlog', 'X_Backlog.md'), backlogBody);
+	return dir;
+}
+
+test('[series] a DECLARED scope beats the hardcoded prefix guess', () => {
+	// `isLocalPrefix` knows about FIX and nothing else, which is right for this toolkit and cannot
+	// be right for every register. A repository that has written down what it means is believed.
+	const dir = roadmapRepo('| Series | Scope | Last Num |\n| --- | --- | --- |\n| `PQ-NN` | repo-local | PQ-7 |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.strictEqual(read.scopes.get('PQ').local, true, 'the register said repo-local, so PQ is repo-local');
+	assert.strictEqual(isLocalPrefix('PQ'), false, 'even though the hardcoded fallback would not say so');
+});
+
+test('[series] a FROZEN series records its ceiling, so minting past it is detectable', () => {
+	// A freeze expressed only in prose is a convention, not a control - the exact failure this
+	// toolkit exists to end. Measured: MedAR_AI_Runtime retired OPS at 08 and every checker in the
+	// estate would still have accepted OPS-09 as the next mint.
+	const dir = roadmapRepo('| Series | Scope | Last Num | Next |\n| --- | --- | --- | --- |\n| `OPS-NN` | **FROZEN at 08** | 08 | — (do not mint) |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	const ops = read.scopes.get('OPS');
+	assert.strictEqual(ops.frozen, true, 'the register retired this series');
+	assert.strictEqual(ops.ceiling, 8, 'and named the number it stops at');
+});
+
+test('[series] the MedAR register shape declares, via `Series` and a mint template', () => {
+	// The canonical MedAR template ships `| Series | Scope | Meaning | Last Num | Next |` with a
+	// first cell like `` `AIR-NN` ``. Read only for `Prefix` and every carefully maintained MedAR
+	// register looked exactly like a repository that had declared nothing at all.
+	const dir = roadmapRepo('| Series | Scope | Meaning | Last Num | Next |\n| --- | --- | --- | --- | --- |\n| `AIR-NN` | repo-owned | value slices | 28 | **AIR-29** |\n\n| ID | Slice |\n| --- | --- |\n| AIR-28 | a thing |\n');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+	assert.strictEqual(lastNumber(dir, 'AIR'), 28);
+});
+
+test('[series] an ACTUAL id in the first cell does not declare a series', () => {
+	// `AIR-NN` is a mint template and declares; `AIR-28` is an ID and declares nothing. Without
+	// that discrimination a Delivery Index row would be read as an ownership row, and every
+	// roadmap would silently declare every prefix it happened to use.
+	const dir = roadmapRepo('| Series | Meaning |\n| --- | --- |\n| `AIR-28` | not a declaration |\n\n| ID | Slice |\n| --- | --- |\n| DT-3 | undeclared |\n');
+	const problems = undeclaredPrefixes(dir);
+	assert.ok(problems.some((p) => p.prefix === 'DT'), 'DT should still be reported as undeclared');
+});
+
+test('[series] a backlog inherits the ownership table of the roadmap beside it', () => {
+	// Declaration is REPOSITORY-scoped. A backlog mints into the same series as its roadmap, so
+	// requiring it to carry a second ownership table would mean two registers for one set of
+	// prefixes - the exact drift this tool exists to stop.
+	const dir = backlogRepo(
+		`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-4 | in the index |\n`,
+		'## Ordered Backlog\n\n1. `VS-07` - not declared here, and that is fine\n');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
+test('[series] a repo that declares NOWHERE is still reported', () => {
+	// The inheritance above must not become a blanket amnesty: a repository with IDs and no
+	// ownership table anywhere has still told us nothing about what it owns.
+	const dir = backlogRepo(
+		'| ID | Slice |\n| --- | --- |\n| VS-4 | no ownership table anywhere |\n',
+		'1. `VS-07` - also nothing\n');
+	const problems = undeclaredPrefixes(dir);
+	assert.ok(problems.length > 0, 'a repo declaring nowhere must still be reported');
+});
+
+test('[series] a numbered backlog item DECLARES, and the roadmap glob reaches it', () => {
+	// Measured on MedAR_AI_Runtime: a backlog written as "3. `VS-07` - definition" is not a table,
+	// so every first-column extractor in that estate returned zero for it. Four IDs minted there
+	// collided with another repository and were invisible to all of them.
+	const dir = backlogRepo(
+		`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-4 | in the index |\n`,
+		'## Ordered Backlog\n\n1. `VS-07` - GPU allocation validation\n2. `VS-13` - speculative decoding\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 13);
+});
+
+test('[series] a bulleted item that DEFINES an ID counts, using a dash or a colon', () => {
+	const dash = backlogRepo(`${OWNS_VS}\n`, '- `VS-21` - a defined thing\n');
+	assert.strictEqual(lastNumber(dash, 'VS'), 21);
+	const colon = backlogRepo(`${OWNS_VS}\n`, '- `VS-22`: a defined thing\n');
+	assert.strictEqual(lastNumber(colon, 'VS'), 22);
+});
+
+test('[series] a list item that CITES an ID mid-sentence does not declare it', () => {
+	// The separator after the ID is the whole defence. Without it, a roadmap Notes section
+	// bulleting a sibling repository's slice would register as a mint of a prefix this roadmap
+	// does not own, and `series` would fail on an undeclared prefix nobody minted.
+	const dir = backlogRepo(`${OWNS_VS}\n`,
+		'- see VS-999 for the background\n- blocked until VS-998 lands\n1. depends on VS-997 shipping\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+});
+
+test('[series] a rename annotation in a DECLARING position hides the ID completely', () => {
+	// Measured while planning a real cross-repo renumber. The migration convention "AIR-19 (was
+	// VS-19)" is good practice in PROSE and catastrophic in an ID cell: the ID is not misparsed,
+	// it DISAPPEARS - from the series check, the collision scan and the last-used number alike.
+	// The renumber intended to end an invisibility bug would have introduced a worse one.
+	//
+	// This test documents the behaviour rather than fixing it, deliberately. Making the parser
+	// tolerant of trailing text in a declaring position would readmit exactly the prose the
+	// position exists to exclude. The annotation belongs in the Status cell; see DT-27 for making
+	// the silent drop loud.
+	const annotated = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-19 (was VS-9) | a thing |\n`);
+	assert.strictEqual(lastNumber(annotated, 'VS'), 0, 'an annotated ID cell parses as NOTHING');
+
+	const clean = roadmapRepo(`${OWNS_VS}\n| ID | Slice | Notes |\n| --- | --- | --- |\n| VS-19 | a thing | was VS-9 |\n`);
+	assert.strictEqual(lastNumber(clean, 'VS'), 19, 'the same fact in the Notes cell is fine');
+});
+
+test('[series] declaredIds returns the whole SET, not the maximum', () => {
+	// `series` needs the max to mint the next ID; a cross-repo collision check needs every member,
+	// because two repositories can collide on any of them and usually not on the highest.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | a |\n| VS-9 | b |\n`);
+	const ids = declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...ids.keys()].sort(), ['VS-3', 'VS-9']);
+});
+
+test('[series] declaredIds keys by NUMBER, so VS-01 and VS-1 are one ID', () => {
+	// Padding is a rendering rule and must never reach identity. A collision check comparing the
+	// text as written would miss exactly the pairs a padding convention was introduced to tidy.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-01 | a |\n| VS-1 | same slice |\n`);
+	const ids = declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...ids.keys()], ['VS-1']);
 });
 
 test('[series] a repo with no roadmap at all yields no series and no crash', () => {
