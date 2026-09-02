@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-39<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-40<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -58,6 +58,7 @@ is never referenced from outside the repository it fixes.
 | DT-34 | ⬜ planned | `migrate-project` ACCEPTS the shapes `series` refuses | M | [One template beats three parsers][one-template-beats] | a converter that refuses what the checker refuses can never migrate anything, so the register-shape reading reverted out of `series` belongs here, where guessing is appropriate because a human reviews the emitted diff |
 | DT-33 | ⬜ planned | Configurable template roots, with the builtin as the fallback | M | [One template beats three parsers][one-template-beats] | lets a consumer keep its own canon instead of adopting the toolkit's, and the shape becomes DECLARED rather than sniffed — which is what separates it from the reverted `DT-25`/`DT-28` |
 | DT-39 | ⬜ planned | A derived `Last Used` must refuse to reconcile DOWNWARD | S | [One template beats three parsers][one-template-beats] | during a re-charter the series spans two repos, so deriving from one is systematically LOW — and low hands out a taken number; measured live on `DW-025`, where correcting the register down to match would have written a collision in as an instruction |
+| DT-40 | ⬜ planned | epo:slice qualified references, and a Registry column | M | [One template beats three parsers][one-template-beats] | DT-1..DT-39 mean different slices in ewc3-docs-tools and MedAR DevTools — 39 overlapping IDs across two estates; a qualifier cannot be mistaken for a mint because every declaring pattern needs - where a qualifier puts : |
 | DT-32 | ⬜ planned | One canonical register template, and refuse anything else | M | [One template beats three parsers][one-template-beats] | five MedAR registers in three shapes and three repos with none; the checker learned all three rather than the estate adopting one, which is backwards and does not scale to a fourth |
 | DT-26 | ⬜ planned | `migrate-project` emits from ONE source, so extra planning surfaces are dropped | M | — | measured on MedAR_AI_Runtime: 41 declared IDs, 34 emitted slice documents, and the 7 lost are exactly its backlog's — a burst that looks complete and silently discards whatever the roadmap glob did not select |
 | DT-27 | ⬜ planned | Refuse an ID cell that ALMOST parses, instead of dropping it | S | — | `AIR-19 (was VS-19)` in a declaring position makes the ID vanish from every check rather than fail one; a rename convention that is right in prose silently unmakes the slice in an ID cell |

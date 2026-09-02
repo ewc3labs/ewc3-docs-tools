@@ -165,6 +165,51 @@ sorts as **conformance and drift**, not as three equal shapes:
 **Two live canons, each internally consistent.** The decision is which one absorbs the other, and it
 was never a matter of dragging stragglers onto one shape.
 
+### ⚠️ `DT` collides across the two estates — 39 IDs, and this document was making it worse
+
+*(Wilson, 2026-09-02: "Umm… do we use DT for DevTools AND docs-tools? Specifying `repo:slice` is
+going to become very important for us.")*
+
+**Yes, and it is the largest collision measured so far:**
+
+| Register | Owner | Range | Declared |
+| --- | --- | --- | --- |
+| `ewc3-docs-tools` | ewc3-docs-tools | **DT-1 … DT-39** | `global` |
+| MedAR `DevTools` | DevTools | **DT-1 … DT-82** | *(no scope column)* |
+
+**39 overlapping IDs**, against 26 for the AIR/SX_Coder `VS` collision — and unlike that one it
+crosses **estates**, so no hub re-charter resolves it.
+
+It was previously called settled, on the grounds that *`global` means REGISTRY-global, and MedAR and
+Labs are different registries.* That reasoning is right. **It was never written into either
+register.** Both say `global`; neither names a registry; nothing mechanical distinguishes them. A
+decision recorded only in a survey document is a convention with no enforcement — the thing this
+whole effort exists to stop.
+
+And it is not theoretical: this branch's own documents cite `DT-33` and `DT-39` meaning *Labs*, in
+messages read by MedAR lanes whose registers say `DT → DevTools`.
+
+### The qualified reference — and it is free
+
+```text
+DT-39                        a MINT, in this registry
+ewc3-docs-tools:DT-39        a CITATION, from anywhere
+DevTools:DT-82               a CITATION of the other estate
+```
+
+**A qualified reference is structurally incapable of being a mint**, and this needs no new rule.
+Every declaring pattern is anchored and requires `-` immediately after the prefix token; a qualifier
+puts `:` there instead. Verified against the parser: `ewc3-docs-tools:DT-12` in a Delivery Index ID
+cell, `DevTools:DT-82` in a heading and `DevTools:DT-65` in a list item all declare **nothing**,
+while a bare `DT-39` beside them declares normally.
+
+It holds for any repository name, including all-caps ones, because the discriminator is the `:` and
+not the case.
+
+**When to qualify: whenever the reference leaves its own registry.** Inside one, the register
+resolves a bare ID and qualifying is noise. Crossing, a bare ID is ambiguous and always has been —
+we simply had one estate reading the other's documents without noticing.
+
 ### ⚠️ The re-charter window: a derived `Last Used` is systematically LOW while a series moves
 
 **Found by SX_DW, 2026-09-02, and it is a hazard in `DT-33` before `DT-33` exists.**

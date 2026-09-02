@@ -847,6 +847,25 @@ test('[series] a freeze is enforced across EVERY planning surface, not just its 
 	assert.strictEqual(v[0].highest, 9);
 });
 
+test('[series] a `repo:slice` qualified reference can never be a mint', () => {
+	// `DT-1`..`DT-39` mean different slices in ewc3-docs-tools and in MedAR DevTools - 39
+	// overlapping IDs across two estates, and no hub re-charter resolves it because the estates
+	// have separate registries. A qualified reference disambiguates, and costs nothing to support:
+	// every declaring pattern is anchored and needs `-` immediately after the prefix token, while a
+	// qualifier puts `:` there instead.
+	const dir = roadmapRepo(`${OWNS_VS}`
+		+ '\n| ID | State | Slice |\n| --- | --- | --- |\n| VS-9 | done | a real mint |\n'
+		+ '| ewc3-docs-tools:DT-12 | note | qualified, in an ID cell |\n'
+		+ '\n### DevTools:DT-82 the other estate\n'
+		+ '\n1. `DevTools:DT-65` - qualified, in a list item\n'
+		+ '\n### SXDW:DW-1 an ALL-CAPS repo name, still not a mint\n');
+	const ids = declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...ids.keys()], ['VS-9'],
+		'only the bare ID declares; every qualified reference is a citation');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'and no qualified reference raises an undeclared-prefix failure');
+});
+
 test('[series] a `reference-only` row DOCUMENTS a prefix without CLAIMING it', () => {
 	// Asked by SX_DW, whose register states the prefixes it cites but does not own. Stating that
 	// is better than silence - but a row saying "not mine" must not then read as an ownership
