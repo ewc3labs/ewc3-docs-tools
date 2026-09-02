@@ -233,4 +233,5 @@ third declaring surface**, or the window widens again with nothing watching it.
    they stay unadopted, which is what the estate freeze is currently protecting.
 
 [one-template]: one-template-beats-three-parsers.md
+[one-thing]: one-thing-to-edit.md
 [slice-object]: the-slice-document-is-the-object.md
