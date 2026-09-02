@@ -21,6 +21,7 @@ const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
 	isLocalPrefix, roadmapFiles, declaredIds, frozenViolations, contestedPrefixes,
 	withoutFences, DEFAULT_ROADMAPS } = require('../lib/series');
 const frontmatter = require('../lib/frontmatter');
+const { renderIndex, detectWidth, detectWidths } = require('../lib/deliveryindex');
 
 let passed = 0, failed = 0;
 
@@ -1333,7 +1334,11 @@ function assertLossless(source, result) {
 	// Substring, not token equality. Markdown glues words to punctuation - a heading that becomes a
 	// link renders "Engine)](slices/..)" - so a token-set check reports loss that did not happen,
 	// and a checker that cries wolf is worse than no checker.
-	const missing = [...new Set(words(source))].filter((w) => !all.includes(w));
+	// Table cells escape pipes and prose does not, so `\|` legitimately becomes `|` on the way
+	// into a slice document - and back again when the Delivery Index is rendered from it. That
+	// is a change of NOTATION, not of content, so the comparison is made in one notation.
+	const plain = (t) => t.split('\\|').join('|');
+	const missing = [...new Set(words(plain(source)))].filter((w) => !plain(all).includes(w));
 	assert.deepStrictEqual(missing, [], `content lost: ${[...new Set(missing)].slice(0, 8).join(' | ')}`);
 }
 
@@ -1391,10 +1396,19 @@ test('[slices] a later section revisiting claimed slices is appended, never dele
 });
 
 test('[slices] a range heading claims every slice in the range', () => {
+	// Deliberate change: a range still claims every slice in it, but each one now gets its own
+	// document. Frontmatter is the declaration, and a document carrying two ids has no single
+	// `id:` to declare - so the Delivery Index could not be regenerated from it.
 	const r = extractSlices(ROADMAP);
-	const doc = r.docs.find((d) => d.file.startsWith('VS-00371_'));
-	assert.ok(doc.ids.includes('VS-00371') && doc.ids.includes('VS-00372'),
-		'VS-371 through VS-372 is two slices in one document');
+	const a = r.docs.find((d) => d.file.startsWith('VS-00371_'));
+	const b = r.docs.find((d) => d.file.startsWith('VS-00372_'));
+	assert.ok(a && b, 'VS-371 through VS-372 is two slices, so two documents');
+	assert.deepStrictEqual(a.ids, ['VS-00371']);
+	assert.deepStrictEqual(b.ids, ['VS-00372']);
+
+	// The narrative is NOT copied into both. One points at the other, because the same prose
+	// in two files is how two files start disagreeing.
+	assert.strictEqual(b.data.see, 'VS-00371');
 });
 
 test('[slices] evidence is gathered but never asserted as completion', () => {
@@ -1416,6 +1430,192 @@ test('[slices] the summary one-liner is NOT invented', () => {
 	}
 });
 
+
+// ---------------------------------------------------------------------------
+// The Delivery Index as a PROJECTION of the slice documents that declare its rows.
+//
+// Every one of these was found by running the round trip over the six real registers in the
+// estate rather than by reading the code, which is why they are phrased as properties of a
+// register rather than of a function.
+
+const HDC_SHAPE = [
+	'# Roadmap',
+	'',
+	'## Delivery Index',
+	'',
+	'| ID | Title | State | Notes |',
+	'| --- | --- | --- | --- |',
+	'| HDC-1 | the burster | **done** | See Slice Notes. |',
+	'| HDC-13 | the lookup that stopped every export | **deployed** | See Slice Notes. |',
+	'',
+	'## Slice Notes',
+	'',
+	'### HDC-13 — VS-413: the lookup that would have stopped every export',
+	'',
+	'Body.',
+	'',
+].join('\n');
+
+test('[slices] a column is found by its HEADER NAME, not its position', () => {
+	// Position was hardcoded as state=1, title=2 against the house style `| ID | State | Slice |`.
+	// HDCTranslators writes `| ID | Title | State |`, so every document generated for it was named
+	// after its STATE: HDC-00001_done.md, HDC-00002_done.md, all the way down. Nothing errored and
+	// the output looked plausible enough to sit on disk unnoticed.
+	const r = extractSlices(HDC_SHAPE, { width: 0 });
+	const doc = r.docs.find((d) => d.ids[0] === 'HDC-1');
+	assert.strictEqual(doc.data.title, 'the burster');
+	assert.strictEqual(doc.data.state, '**done**');
+	assert.ok(!/_done\.md$/.test(doc.file), 'the filename must come from the title, not the state');
+});
+
+test('[slices] a heading declares only its LEADING RUN of ids', () => {
+	// `### HDC-13 — VS-413: the lookup...` was declaring VS-413 too, which is an SX_Coder slice.
+	// Adopting that migration would have written a cross-repo mint into a second register - the
+	// same collision class that cost 26 ids when AIR and SX_Coder both owned VS-.
+	//
+	// A heading names its slice and then TALKS about it. Commas and range words join ids; an
+	// em-dash or a colon ends the declaration and begins the label.
+	const r = extractSlices(HDC_SHAPE, { width: 0 });
+	const doc = r.docs.find((d) => d.ids[0] === 'HDC-13');
+	assert.deepStrictEqual(doc.ids, ['HDC-13'], 'VS-413 is cited by that heading, not minted by it');
+	assert.ok(!r.docs.some((d) => d.ids[0].startsWith('VS-')));
+});
+
+test('[slices] every emitted document declares exactly ONE id, in frontmatter', () => {
+	// The whole design rests on this. A document carrying two ids has no single `id:` to declare,
+	// and the Delivery Index could not be regenerated from it.
+	const r = extractSlices(ROADMAP);
+	for (const d of r.docs) {
+		const { data } = frontmatter.read(d.content);
+		assert.ok(data.id, `${d.file} declares no id`);
+		assert.deepStrictEqual(d.ids, [data.id]);
+	}
+});
+
+test('[slices] a document CARRIES the reference definitions it uses', () => {
+	// A roadmap keeps its reference definitions in one block at the bottom. Moving a cell into a
+	// slice document moved the usage and left the definition behind, so every generated document
+	// linking to a design doc had a dead reference - `links` found nine the moment the preview was
+	// regenerated, and they would have followed the documents into docs/project/slices/ on adoption.
+	//
+	// This is pinned here rather than left to CI over the generated folder, because that folder is
+	// gitignored and excluded: the signal has to live somewhere permanent.
+	const src = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice | Doc |',
+		'| --- | --- | --- | --- |',
+		'| VS-1 | planned | one | [The design][d] |',
+		'| VS-2 | planned | two | none |',
+		'',
+		'[d]: ../design/thing.md',
+	].join('\n');
+	const r = extractSlices(src, { width: 0 });
+	const one = r.docs.find((d) => d.ids[0] === 'VS-1');
+	const two = r.docs.find((d) => d.ids[0] === 'VS-2');
+
+	// A slice document sits one directory deeper than the roadmap, so a relative target needs one
+	// more `../` to still mean the same file.
+	assert.ok(one.content.includes('[d]: ../../design/thing.md'),
+		'the definition must travel with the usage, re-pointed for the extra directory');
+
+	// Only what is used. Copying every definition into every document would have `links` reporting
+	// the unused ones instead.
+	assert.ok(!two.content.includes('[d]:'), 'a document that cites nothing carries nothing');
+});
+
+test('[index] a register regenerates from the documents it just produced', () => {
+	// The round trip, end to end: roadmap -> slice documents -> roadmap. Read back off the
+	// GENERATED text rather than the in-memory objects, so the serialise/parse leg is exercised
+	// instead of skipped.
+	const r = extractSlices(ROADMAP, { width: detectWidths(ROADMAP) });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	const res = renderIndex(ROADMAP, records);
+	assert.strictEqual(res.text, ROADMAP,
+		'a register that has just been migrated must regenerate to itself, byte for byte');
+});
+
+test('[index] rows keep the position their AUTHOR gave them', () => {
+	// Sorting by prefix then number looked canonical and was wrong: DevTools lists DT-030 before
+	// DT-029, and this repo lists DT-36 above DT-26. Those orders are decisions - rows get grouped
+	// and moved next to what they relate to - and reshuffling them produced a 555-row diff on
+	// SX_Coder that said nothing at all.
+	const src = HDC_SHAPE.replace('| HDC-1 | the burster', '| HDC-9 | the burster');
+	const r = extractSlices(src, { width: 0 });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	const rows = renderIndex(src, records).text.split('\n')
+		.filter((l) => /^\| HDC-/.test(l)).map((l) => l.split('|')[1].trim());
+	assert.deepStrictEqual(rows, ['HDC-9', 'HDC-13'], 'HDC-9 stays above HDC-13 because it was');
+});
+
+test('[index] a row with more cells than columns is REFUSED, not repaired', () => {
+	// `tables` already refuses this: given one pipe too many, no tool can tell a literal pipe from
+	// a forgotten column. The renderer was quietly escaping them, which is the same guess made
+	// silently - five rows across the estate would have shipped with invented escaping.
+	const src = HDC_SHAPE.replace('| HDC-1 | the burster | **done** | See Slice Notes. |',
+		'| HDC-1 | the burster | **done** | a | b | c |');
+	const r = extractSlices(src, { width: 0 });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	const res = renderIndex(src, records);
+	assert.deepStrictEqual(res.malformed, ['HDC-1']);
+	assert.ok(res.text.includes('| HDC-1 | the burster | **done** | a | b | c |'),
+		'the row is copied through byte-for-byte, not rewritten');
+});
+
+test('[index] a document claiming an unminted id is reported, never added', () => {
+	// Minting is a human act in a planning surface. A generator that can mint is a generator that
+	// can mint by accident.
+	const r = extractSlices(HDC_SHAPE, { width: 0 });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	records.push({ id: 'HDC-99', state: 'planned', title: 'never minted' });
+	const res = renderIndex(HDC_SHAPE, records);
+	assert.deepStrictEqual(res.unknown, ['HDC-99']);
+	assert.ok(!res.text.includes('HDC-99'), 'and it must not appear in the table');
+});
+
+test('[index] padding is a convention of a PREFIX, not of a file', () => {
+	// SX_Coder's own ids are two digits wide and its index also carries DW-024 and DW-025, which
+	// SX_DW pads to three. One width for the whole file renamed those two rows on every run.
+	const mixed = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice |',
+		'| --- | --- | --- |',
+		'| VS-01 | planned | one |',
+		'| VS-100 | planned | two |',
+		'| DW-024 | planned | three |',
+	].join('\n');
+	assert.deepStrictEqual(detectWidths(mixed), { VS: 2, DW: 3 });
+
+	// And the shortest id states the convention: requiring one uniform length read SX_Coder - 217
+	// two-digit ids and 349 three-digit - as unpadded, and would have renamed all 217.
+	const r = extractSlices(mixed, { width: detectWidths(mixed) });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	assert.deepStrictEqual(records.map((x) => x.id), ['VS-01', 'VS-100', 'DW-024']);
+});
+
+test('[index] alignment is read off the SEPARATOR row', () => {
+	// `format` leaves tables alone by design, so alignment is this renderer to keep. Asking
+	// whether cells had surrounding whitespace did not work - rowCells returns them WITH their
+	// padding, so every table looked aligned and DevTools reflowed all 82 rows.
+	const aligned = [
+		'## Delivery Index',
+		'',
+		'| ID     | State   | Slice        |',
+		'| ------ | ------- | ------------ |',
+		'| VS-001 | planned | one          |',
+	].join('\n');
+	const r = extractSlices(aligned, { width: detectWidths(aligned) });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	assert.strictEqual(renderIndex(aligned, records).text, aligned,
+		'an aligned register must come back aligned, to the widths its separator declares');
+});
+
+test('[index] detectWidth still answers for a single-series register', () => {
+	const one = ['## Delivery Index', '', '| ID | State | Slice |', '| --- | --- | --- |',
+		'| DT-000 | planned | x |', '| DT-082 | planned | y |'].join('\n');
+	assert.strictEqual(detectWidth(one), 3);
+});
 
 // ---------------------------------------------------------------------------
 // Unescaped pipes in table cells. Not carelessness - a generator keeps producing them, and Wilson

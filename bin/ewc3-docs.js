@@ -21,6 +21,8 @@ const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
+const frontmatter = require('../lib/frontmatter');
+const { renderIndex, detectWidths } = require('../lib/deliveryindex');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -80,7 +82,11 @@ function fail(message) {
 
 /** Files the format and values commands act on: config `include`, minus `exclude`. */
 function targetFiles(config, root, argv) {
-	const explicit = argv.filter(a => !a.startsWith('-'));
+	// Drop flag VALUES as well as flags. `--repo C:/x` used to leave the path behind as a file
+	// spec, which then matched nothing.
+	const FLAGS_WITH_VALUES = new Set(['--repo', '--config', '--slices', '--owner']);
+	const explicit = argv.filter((a, i) => !a.startsWith('-')
+		&& !FLAGS_WITH_VALUES.has(argv[i - 1]));
 	const specs = explicit.length ? explicit : (config.include || ['README.md', 'docs/**.md']);
 
 	const excluded = new Set(
@@ -400,7 +406,10 @@ function cmdMigrateProject(root, config, argv) {
 	// Pull the narrative out into slices/ before writing the roadmap, so the roadmap that lands is
 	// the thin one with its rows already pinned.
 	const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
+	// Padding is per PREFIX and is read off the register itself, so a migration does not renumber
+	// every id in the file on its first run. A fixed width of five did exactly that.
 	const extracted = extractSlices(result.text, {
+		width: detectWidths(result.text),
 		statusText: read(path.join(repo, 'config', 'STATUS.yaml')),
 		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
 		sourceName: path.basename(from),
@@ -447,6 +456,8 @@ function cmdMigrateProject(root, config, argv) {
 			'- Nothing here matches the roadmap glob, so tooling never sees two registers.',
 			'- Regenerate freely; the command is idempotent.',
 			'- To abandon it: `rm -rf docs/project_v2`. No revert needed.',
+			'- Add `docs/project_v2/` to .gitignore: it is regenerated, and a committed preview goes stale',
+			'  silently while still reading like a plan.',
 			'- To adopt it: replace `docs/project/` in one commit, once it reads right.',
 			'',
 			'Do not hand-edit anything in this folder — edits are overwritten on the next run.',
@@ -455,6 +466,115 @@ function cmdMigrateProject(root, config, argv) {
 		console.log('  wrote:  docs/project_v2/README.md');
 	}
 	return problems.length ? 1 : 0;
+}
+
+/**
+ * Regenerate a Delivery Index from the slice documents that declare its rows.
+ *
+ *   ewc3-docs index [--repo <dir>] [--slices <dir>] [--write]
+ *
+ * The return leg of the migration: slice documents are the authority and the table is a
+ * projection. Dry by default, because a command that rewrites a planning surface on a bare
+ * invocation is one typo away from a bad afternoon.
+ *
+ * It renders rows and it refuses everything else. A document claiming an id the roadmap never
+ * minted is reported, not added - minting is a human act in a planning surface. A row nothing
+ * claims is left exactly as it was. A row with more cells than its header has columns is left
+ * alone too, because given one pipe too many no tool can tell a literal from a missing column.
+ */
+function cmdIndex(root, config, argv) {
+	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null; };
+	const repo = path.resolve(flag('--repo') || root);
+	const write = argv.includes('--write');
+
+	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps);
+	if (!roadmaps.length) {
+		console.error('index: no roadmap found under docs/project/.');
+		console.error(`  looked in: ${repo}`);
+		return 2;
+	}
+
+	// Where the slice documents live. project_v2 is the migration staging area; project/slices is
+	// where they land once a repo has adopted the shape.
+	const given = flag('--slices');
+	const candidates = given ? [path.resolve(repo, given)]
+		: [path.join(repo, 'docs/project/slices'), path.join(repo, 'docs/project_v2/slices')];
+	const sliceDir = candidates.find((d) => fs.existsSync(d));
+	if (!sliceDir) {
+		console.error('index: no slice documents found.');
+		candidates.forEach((d) => console.error(`  looked in: ${d}`));
+		return 2;
+	}
+
+	const records = [];
+	const undeclared = [];
+	for (const name of fs.readdirSync(sliceDir).filter((n) => n.endsWith('.md'))) {
+		const { data } = frontmatter.read(fs.readFileSync(path.join(sliceDir, name), 'utf8'));
+		// A slice document with no `id:` declares nothing. Guessing one from the filename is exactly
+		// the kind of help that writes a wrong row and looks deliberate doing it.
+		if (!data || !data.id) { undeclared.push(name); continue; }
+		records.push(data);
+	}
+
+	console.log(`  reading: ${path.relative(repo, sliceDir).split(path.sep).join('/')}`
+		+ ` (${records.length} declaring, ${undeclared.length} without an id:)`);
+
+	// Nothing declared anything. Rendering zero rows over a live register and calling it
+	// "already current" is a pass about the wrong question - the table was never consulted.
+	if (!records.length) {
+		console.error('index: no slice document in that directory declares an id.');
+		if (!given && candidates.length > 1) {
+			console.error('  other candidates, in preference order:');
+			candidates.forEach((d) => console.error(`    ${d}${fs.existsSync(d) ? '' : '  (absent)'}`));
+			console.error('  pass --slices <dir> to choose one.');
+		}
+		return 2;
+	}
+
+	let code = 0;
+	for (const file of roadmaps) {
+		const rel = path.relative(repo, file).split(path.sep).join('/');
+		const text = fs.readFileSync(file, 'utf8');
+		const res = renderIndex(text, records);
+		if (!res.ok) {
+			console.log(`${rel}: no Delivery Index table to render into.`);
+			continue;
+		}
+
+		const changed = res.text !== text;
+		console.log(`${rel}`);
+		console.log(`  ${res.rendered} row(s) rendered from ${records.length} slice document(s)`
+			+ `${res.rendered && !changed ? ' - already current' : ''}`);
+
+		if (res.malformed.length) {
+			code = 1;
+			console.log(`  REFUSED ${res.malformed.length} row(s) with more cells than the header has `
+				+ 'columns - escape the stray pipe as \\| first:');
+			console.log(`    ${res.malformed.join(' ')}`);
+		}
+		if (res.unknown.length) {
+			code = 1;
+			console.log(`  ${res.unknown.length} document(s) claim an id this register never minted:`);
+			console.log(`    ${res.unknown.join(' ')}`);
+		}
+		if (res.missing.length) {
+			console.log(`  ${res.missing.length} row(s) no document claims, left untouched:`);
+			console.log(`    ${res.missing.slice(0, 20).join(' ')}`);
+		}
+
+		if (write && changed) {
+			fs.writeFileSync(file, res.text);
+			console.log('  written');
+		} else if (changed) {
+			console.log('  (dry run - pass --write to update the table)');
+		}
+	}
+
+	if (undeclared.length) {
+		console.log(`  skipped ${undeclared.length} document(s) with no id: in frontmatter: `
+			+ undeclared.slice(0, 10).join(' '));
+	}
+	return code;
 }
 
 /**
@@ -487,7 +607,13 @@ function cmdTables(root, config, argv) {
 // --- entry -----------------------------------------------------------------
 
 const [, , command, ...argv] = process.argv;
-const root = process.cwd();
+const repoFlag = process.argv.indexOf('--repo');
+// --repo used to be read by migrate-project alone. Every other command ignored it and
+// scanned the current directory instead, which meant `tables --repo <elsewhere>` examined
+// this repo and printed a pass. A flag that is quietly dropped is worse than one that errors.
+const root = repoFlag > -1 && process.argv[repoFlag + 1]
+	? path.resolve(process.argv[repoFlag + 1])
+	: process.cwd();
 const configFlag = process.argv.indexOf('--config');
 const config = loadConfig(root, configFlag > -1 ? process.argv[configFlag + 1] : null);
 
@@ -499,6 +625,7 @@ switch (command) {
 	case 'series': code = cmdSeries(root, config); break;
 	case 'migrate-project': code = cmdMigrateProject(root, config, argv); break;
 	case 'tables': code = cmdTables(root, config, argv); break;
+	case 'index': code = cmdIndex(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':

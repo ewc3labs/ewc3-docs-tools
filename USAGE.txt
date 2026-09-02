@@ -25,6 +25,17 @@ EWC3 Labs documentation tools
                                           register may own. Dry run without --write. Idempotent;
                                           to abandon it, delete the folder.
 
+  ewc3-docs index                         Regenerate the Delivery Index from the slice
+    [--repo <dir>]                        documents that declare its rows. The slice document
+    [--slices <dir>]                      is the authority; the table is a projection of it.
+    [--write]                             Renders rows and refuses everything else: a document
+                                          claiming an unminted ID is reported, never added; a
+                                          row nothing claims is left alone; a row with more
+                                          cells than its header has columns is refused, because
+                                          no tool can tell a literal pipe from a lost column.
+                                          Reads docs/project/slices/, else docs/project_v2/
+                                          slices/. Dry run without --write.
+
   ewc3-docs tables                        Table rows whose cell count does not match their header -
                                           almost always a pipe inside a cell that needs escaping
                                           as |. Reports; never rewrites, because a bare pipe is
