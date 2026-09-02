@@ -715,6 +715,43 @@ test('[series] a repo that declares NOWHERE is still reported', () => {
 	assert.ok(problems.length > 0, 'a repo declaring nowhere must still be reported');
 });
 
+test('[series] the REGISTER arbitrates an unseparated heading', () => {
+	// EPQE's guard alone was measured to cost real declarations: ALL 24 of SX_DW's slice headings
+	// are `### DW-001 Title` with no separator, and two of them exist ONLY as headings - exactly
+	// the IDs the heading position was added to catch. So the register decides: a heading naming a
+	// prefix this roadmap OWNS is naming the thing the section IS.
+	const owns = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| DW | global | x | DW-1 | slices |\n';
+	const dir = roadmapRepo(owns + '\n### DW-023 Queue flag Q + synthetic machine-status contract\n');
+	assert.strictEqual(lastNumber(dir, 'DW'), 23,
+		'a heading naming an OWNED prefix declares, separator or not');
+});
+
+test('[series] a heading naming a FOREIGN prefix cites, whatever its punctuation', () => {
+	const owns = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| DT | global | x | DT-1 | ours |\n';
+	const dir = roadmapRepo(owns + '\n| ID | Slice |\n| --- | --- |\n| DT-1 | a thing |\n\n## Notes\n\n### PQ-34 changed how the other repo publishes\n');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'a repo must never be told to declare a prefix it does not own');
+});
+
+test('[series] a heading that CITES a sibling slice does not declare it', () => {
+	// Found by EPQE. The list pattern required a trailing separator and the heading pattern did
+	// not, so a Notes section citing another repository's slice failed the repo with instructions
+	// to declare a prefix it does not own - the one remedy that must never be followed.
+	const cites = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-1 | a thing |\n`
+		+ '\n## Notes\n\n### PQ-34 changed how the other repo publishes\n');
+	assert.deepStrictEqual(undeclaredPrefixes(cites), [],
+		'a heading with no separator is prose, not a mint');
+});
+
+test('[series] a heading that DECLARES still counts, including runs and ranges', () => {
+	const one = roadmapRepo(`${OWNS_VS}\n### VS-23 — queue flag contract\n`);
+	assert.strictEqual(lastNumber(one, 'VS'), 23);
+	const run = roadmapRepo(`${OWNS_VS}\n### VS-24 / FIX-89 — the target model\n`);
+	assert.strictEqual(lastNumber(run, 'VS'), 24, 'a `/` run is still a declaring heading');
+	const range = roadmapRepo(`${OWNS_VS}\n### VS-25 through VS-26 — billing rules\n`);
+	assert.strictEqual(lastNumber(range, 'VS'), 25, 'a range heading declares from its anchor');
+});
+
 test('[series] a FENCED example is a mention, not a mint', () => {
 	// Found by codex. A roadmap that documents its own syntax pushed `lastId` to the number in
 	// the example, and a fenced table row for a foreign prefix produced a FALSE undeclared-prefix

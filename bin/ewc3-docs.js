@@ -268,9 +268,9 @@ function cmdSeries(root, config) {
 			// unique prefix - and flattening it to `global` discards the ownership the registry
 			// exists to record.
 			const spoken = written ? written.declared.replace(/[*`]/g, '').trim() : null;
-			const scope = written
-				? (written.frozen ? spoken.toUpperCase() : spoken)
-				: (isLocalPrefix(prefix) ? 'repo-local' : 'global');
+			// Print the scope the register WROTE, verbatim. Upper-casing a multi-word cell turned
+			// "global, frozen at 8" into shouting, and the freeze is already visible in the words.
+			const scope = written ? spoken : (isLocalPrefix(prefix) ? 'repo-local' : 'global');
 			// padEnd, not printf width specifiers - console.log supports %s but not %-11s, and prints
 			// the modifier literally.
 			const last = highest === undefined ? 'none yet' : `${prefix}-${highest}`;
