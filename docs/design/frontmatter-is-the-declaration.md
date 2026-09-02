@@ -125,6 +125,53 @@ Everything below exists only to disambiguate prose, and every line of it has pro
 undetectable because two surfaces can both declare; with one declaring position per document, a
 duplicate is two documents claiming one `id`, which is a set comparison rather than a heuristic.
 
+## Every ID gets a document, and most are five-line stubs
+
+**Costed by EPQE, who had the numbers: ~39 IDs and two slice documents.** `FIX-3` is a real ID that
+deserves a changelog line and nothing more, so "one document per ID" sounded heavy. Three ways out:
+
+| | | |
+| --- | --- | --- |
+| 1 | every ID gets a document | uniform, heavy for `FIX-3`'s kind |
+| 2 | rows for small work, documents for real slices | ⛔ **reintroduces two declaring surfaces** |
+| 3 | every ID gets a document, most are **five-line stubs** | ✅ |
+
+**Option 2 is the trap**, and it is the shape this whole document exists to remove: the moment small
+work lives in a row and real work lives in a document, there are two places a thing can be declared
+and the parser is back to guessing which.
+
+**A stub is cheaper than a row**, because a row carries the row *plus* the standing obligation to
+keep it in step with whatever it describes. And it keeps the rule uniform — *a rule with an
+exception is a rule somebody has to remember the exception to*, and the requirement here was that
+none of us can forget a step.
+
+### Which answers `DT-15`, parked since it was minted
+
+`DT-15` (`next <PREFIX>`) sits at *"not yet earned — derived Last Used already removed the state
+that could go stale; only the `+1` is manual."* Under this model the `+1` stops being read off a
+register cell at all:
+
+```bash
+ewc3-docs slice new VS "Two writers own MFM.Doctors"
+#   docs/project/slices/VS-00398_Two_Writers_Own_MFM_Doctors.md
+#   number is max(existing filenames) + 1
+```
+
+**One command, one edit, one `fix`.** Deriving the next ID from the files that already exist is the
+same move `Last Used` made, applied to the last input still read by hand — and a stub then costs one
+command rather than one act of remembering.
+
+### ⚠️ Sequencing: this model WIDENS `DT-30` before it closes it
+
+`DT-30` — a same-repo duplicate declaration is undetectable — is **still live, and the two-surface
+design makes it likelier.** Measured by EPQE and reproduced here: a `VS-7` Delivery Index row beside
+a `` 3. `VS-7` - a different thing `` backlog item in one repository reports *"Every prefix in use
+is declared"* and **exits 0**.
+
+Under frontmatter-as-declaration it closes **structurally** — two documents cannot carry the same
+`id:` without one file overwriting the other. **So `DT-35` should land before anything that adds a
+third declaring surface**, or the window widens again with nothing watching it.
+
 ## Open questions
 
 1. ✅ **SETTLED — the slice document is the authority.** *(Wilson, 2026-09-02; see [One thing to
