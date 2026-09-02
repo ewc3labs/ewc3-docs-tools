@@ -847,6 +847,47 @@ test('[series] a freeze is enforced across EVERY planning surface, not just its 
 	assert.strictEqual(v[0].highest, 9);
 });
 
+test('[series] a `reference-only` row DOCUMENTS a prefix without CLAIMING it', () => {
+	// Asked by SX_DW, whose register states the prefixes it cites but does not own. Stating that
+	// is better than silence - but a row saying "not mine" must not then read as an ownership
+	// claim, or the register contradicts itself and the estate scan reports a false collision.
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| DW | global | SX_DW | DW-24 | ours |\n'
+		+ '| VS | reference-only | SX_Coder | - | cited here, never minted here |\n';
+	const dir = roadmapRepo(reg + '\n| ID | Slice |\n| --- | --- |\n| DW-24 | a thing |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared].sort(), ['DW'],
+		'a reference-only prefix is not declared');
+	assert.strictEqual(read.scopes.get('VS').reference, true,
+		'but the row is kept, so it still documents');
+});
+
+test('[series] MINTING under a reference-only prefix still fails', () => {
+	// The point of dropping it from `declared`. If saying "I do not own VS" also silenced the
+	// undeclared-prefix check, the row would buy silence rather than safety.
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| DW | global | SX_DW | DW-24 | ours |\n'
+		+ '| VS | reference-only | SX_Coder | - | cited here, never minted here |\n';
+	const dir = roadmapRepo(reg + '\n| ID | Slice |\n| --- | --- |\n| VS-500 | minted where it must not be |\n');
+	const problems = undeclaredPrefixes(dir);
+	assert.ok(problems.some((p) => p.prefix === 'VS'),
+		'minting VS here must be reported, precisely because the register disclaims it');
+});
+
+test('[series] a reference-only row can ALSO carry a freeze', () => {
+	// SX_DW documents TS as frozen at TS-02 and owned by SX_Coder. Both halves must work: not a
+	// claim, and still a ceiling, so nobody mints TS-03 here.
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| DW | global | SX_DW | DW-1 | ours |\n'
+		+ '| TS | reference-only, frozen at 2 | SX_Coder | TS-02 | legacy; do not mint |\n';
+	const dir = roadmapRepo(reg + '\n| ID | Slice |\n| --- | --- |\n| TS-3 | minted past a retired series |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.strictEqual(read.scopes.get('TS').reference, true);
+	assert.strictEqual(read.scopes.get('TS').frozen, true);
+	const v = frozenViolations(dir);
+	assert.ok(v.some((x) => x.prefix === 'TS'), 'the freeze still bites on a documented series');
+});
+
 test('[series] a DECLARED repo-local prefix is not a global collision', () => {
 	// Found by codex. The parsed scope changed the DISPLAY but not the claimed-twice check,
 	// which still consulted the hardcoded set - so a register that spells out `repo-local` was
