@@ -245,6 +245,57 @@ question 6 was uneasy about.
    `_MedAR_ProjectSummary`, so a checker in one repo reads a file in another. That is a real
    coupling: what happens on a machine where that path does not exist, or in CI?
 
+## Answered by EPQE's review, 2026-09-02
+
+The repository that has been dogfooding this toolkit all week ran the branch rather than reading it,
+and settled four of the six. **Their answer to Q4 changes the plan, and reverses my instinct.**
+
+### ⚠️ Q4 — `series` and `migrate-project` must point in OPPOSITE directions
+
+I had guessed the migration gate belonged in `migrate-project`, since Wilson's rule is that no
+conversion runs against an unmigrated roadmap. **Backwards.**
+
+> *"`series` refuses — it is the everyday check and the gate, and that is what makes the migration
+> happen. But `migrate-project` must **accept** the non-conforming shape, because converting it is
+> the job. A converter that refuses what the checker refuses can never migrate anything."*
+
+Obvious once stated, and it **relocates the reverted work rather than deleting it.** The three-shape
+reading stripped out of `series` is exactly what a converter needs — and guessing is appropriate
+there, because a human reviews the emitted diff before adopting it. `DT-34`.
+
+| | `series` | `migrate-project` |
+| --- | --- | --- |
+| meets a non-conforming register | **refuses** — this is the gate | **reads it** — this is the job |
+| may guess at a shape | never | yes; a human reviews the diff |
+| where the reverted code belongs | — | ✅ here |
+
+### Q1 — derived `Last Used`: **config as an opt-out, never an entry fee**
+
+> *"The derivation is worth it; the requirement is the bug."*
+
+The README promises most repositories need no configuration at all, and charging eight repos a
+`.ewc3-docs.json` for a cell they already have contradicts it. **The register already declares its
+prefixes, so derive `Last Used` for every declared prefix with zero config**, and let configuration
+exist only to override. That removes the objection entirely.
+
+### Q2 — **shape only, not location**
+
+The glob already solved location, and this branch proved it by adding `docs/project/roadmap/`.
+Pinning location moves files and breaks inbound links for something no parser needs.
+
+### Q3 — **`frozen at N` stays parsed**, and it has already fired in anger
+
+Cosmetic complaint taken: the scope cell was being upper-cased when frozen, turning
+`global, frozen at 8` into shouting. Fixed — print what the register wrote.
+
+### Q5 — the reversal is right, and the reason is sharper than mine
+
+> *"It was not wrong because migration is cheap; it was wrong because the set of shapes is unbounded
+> and nobody can see the ones they have not met yet."*
+
+Three taught shapes, and a fourth — the unguarded heading — found by the first reviewer to run the
+branch, in a parser three lanes had already read.
+
 ## Open questions
 
 1. **`Last Used` requires a `values` config per repo.** Every prefix needs a `lastId` resolver and a
