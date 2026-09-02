@@ -20,6 +20,7 @@ const { checkTable } = require('../lib/tables');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
 	isLocalPrefix, roadmapFiles, declaredIds, frozenViolations, contestedPrefixes,
 	withoutFences, DEFAULT_ROADMAPS } = require('../lib/series');
+const frontmatter = require('../lib/frontmatter');
 
 let passed = 0, failed = 0;
 
@@ -731,6 +732,68 @@ test('[series] a heading naming a FOREIGN prefix cites, whatever its punctuation
 	const dir = roadmapRepo(owns + '\n| ID | Slice |\n| --- | --- |\n| DT-1 | a thing |\n\n## Notes\n\n### PQ-34 changed how the other repo publishes\n');
 	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
 		'a repo must never be told to declare a prefix it does not own');
+});
+
+test('[frontmatter] the restricted subset a slice document actually needs', () => {
+	const { data, body, had } = frontmatter.read('---\nid: VS-00397\ntitle: Two writers own MFM.Doctors\nstate: coded   # a judgement\nest: 4.0d\ndepends_on: [VS-00352, VS-00353]\nfollowers:\n  - VS-00398\nimplements:\n---\n\n# The narrative\n');
+	assert.strictEqual(had, true);
+	assert.strictEqual(data.id, 'VS-00397');
+	assert.strictEqual(data.title, 'Two writers own MFM.Doctors');
+	assert.strictEqual(data.state, 'coded', 'a trailing # comment is not part of the value');
+	assert.deepStrictEqual(data.depends_on, ['VS-00352', 'VS-00353']);
+	assert.deepStrictEqual(data.followers, ['VS-00398'], 'block list');
+	assert.strictEqual(data.implements, null, "an empty value is null, not the empty string");
+	assert.strictEqual(body, '# The narrative\n');
+});
+
+test('[frontmatter] a document with no frontmatter is not an error', () => {
+	const r = frontmatter.read('# Just a document\n');
+	assert.strictEqual(r.had, false);
+	assert.deepStrictEqual(r.data, {});
+});
+
+test('[frontmatter] ` #` ends a plain scalar, as YAML says - quote to keep it', () => {
+	// Checked against the spec rather than assumed: an unquoted scalar ENDS at a space-hash, so
+	// a title containing # must be quoted. My first version of this test asserted the opposite
+	// and the parser was right - silently truncating a slice title is exactly the kind of thing
+	// worth pinning.
+	assert.strictEqual(frontmatter.read('---\ntitle: Fix the #4 lookup\n---\n').data.title, 'Fix the',
+		'an unquoted value is truncated at ` #`');
+	assert.strictEqual(frontmatter.read('---\ntitle: "Fix the #4 lookup"\n---\n').data.title, 'Fix the #4 lookup',
+		'quoting keeps it');
+	assert.strictEqual(frontmatter.read('---\ntitle: C#\n---\n').data.title, 'C#',
+		'a hash with no space before it is just a character');
+});
+test('[frontmatter] REFUSES what it does not support, rather than guessing', () => {
+	// The whole grammar is flat key/value plus lists. A document needing more is doing too much,
+	// and this toolkit spent a week learning that a guess is not a check.
+	assert.throws(() => frontmatter.read('---\nowner:\n  name: nested\n---\n'), /nested keys/);
+	assert.throws(() => frontmatter.read('---\nbody: |\n  a block scalar\n---\n'), /block scalars/);
+	assert.throws(() => frontmatter.read('---\nnot a key value line\n---\n'), /not `key: value`/);
+	assert.throws(() => frontmatter.read('---\nid: VS-1\n'), /never closed/);
+});
+
+test('[frontmatter] write preserves the body and the line endings', () => {
+	const doc = '---\nid: VS-1\nstate: planned\n---\n\n# Title\n\nProse that must not move.\n';
+	const { data } = frontmatter.read(doc);
+	data.state = 'coded';
+	const out = frontmatter.write(doc, data);
+	assert.ok(out.includes('state: coded'));
+	assert.ok(out.endsWith('# Title\n\nProse that must not move.\n'));
+
+	const crlfDoc = doc.split('\n').join('\r\n');
+	const crlfOut = frontmatter.write(crlfDoc, frontmatter.read(crlfDoc).data);
+	assert.ok(crlfOut.includes('\r\n'), 'a CRLF document stays CRLF');
+});
+
+test('[frontmatter] rewriting an unchanged document is a no-op', () => {
+	// Idempotent, always - the canon rule. A fold that is not idempotent cannot run automatically,
+	// which returns it to a human, which is where we started.
+	const doc = '---\nid: VS-1\nstate: planned\ndepends_on: [VS-2]\nimplements:\n---\n\n# Title\n';
+	const once = frontmatter.write(doc, frontmatter.read(doc).data);
+	const twice = frontmatter.write(once, frontmatter.read(once).data);
+	assert.strictEqual(once, doc);
+	assert.strictEqual(twice, once);
 });
 
 test('[series] a heading that CITES a sibling slice does not declare it', () => {
