@@ -743,7 +743,8 @@ test('[frontmatter] the restricted subset a slice document actually needs', () =
 	assert.deepStrictEqual(data.depends_on, ['VS-00352', 'VS-00353']);
 	assert.deepStrictEqual(data.followers, ['VS-00398'], 'block list');
 	assert.strictEqual(data.implements, null, "an empty value is null, not the empty string");
-	assert.strictEqual(body, '# The narrative\n');
+	assert.strictEqual(body, '\n# The narrative\n',
+		'the body starts where it starts - read() consumes only the fence terminator');
 });
 
 test('[frontmatter] a document with no frontmatter is not an error', () => {
@@ -900,6 +901,44 @@ test('[series] a closing fence may be followed only by whitespace', () => {
 	const out = withoutFences(['a', '```', '```js', '| VS-888 | exposed |', '```', 'b'].join('\n'));
 	assert.ok(!out.includes('VS-888'), 'an info-string line is content, not a closing fence');
 	assert.strictEqual(out.split('\n').length, 6);
+});
+
+test('[frontmatter] a fold PATCHES the block - comments and blank lines survive', () => {
+	// Found by codex. Rebuilding the block from key/value pairs deleted every explanatory comment
+	// in the document, while the docstring promised unrelated fields were preserved.
+	const doc = ['---', '# which slice this is', 'id: VS-1', 'state: planned   # the human judgement',
+		'est: 4.0d', '---', '', '# body', ''].join('\n');
+	const d = frontmatter.read(doc).data;
+	d.state = 'coded';
+	const out = frontmatter.write(doc, d);
+	assert.ok(out.includes('# which slice this is'), 'a whole-line comment survives');
+	assert.ok(out.includes('# the human judgement'), 'and so does a trailing one, on a CHANGED field');
+	assert.ok(/state: coded\s+# the human judgement/.test(out), 'with its separating whitespace');
+	assert.ok(out.includes('est: 4.0d'), 'and an untouched field is verbatim');
+});
+
+test('[frontmatter] an explicit empty string stays a string, not null', () => {
+	// Found by codex: `title: ""` was emitted as `title:` and re-read as null - an unrelated fold
+	// changing a field's TYPE.
+	const doc = '---\nid: VS-1\ntitle: ""\n---\n\n# body\n';
+	const back = frontmatter.read(frontmatter.write(doc, frontmatter.read(doc).data)).data;
+	assert.strictEqual(back.title, '', 'still the empty STRING');
+});
+
+test('[frontmatter] the body is preserved byte-for-byte, blank lines included', () => {
+	// Found by codex. read() stripped every leading blank line and write() added back exactly one,
+	// so a state-only fold silently reflowed the document - against this function's own contract.
+	const doc = '---\nid: VS-1\n---\n\n\n\n# body after three blanks\n';
+	assert.strictEqual(frontmatter.write(doc, frontmatter.read(doc).data), doc,
+		'an unchanged rewrite is byte-identical');
+});
+
+test('[series] a closing fence indented four spaces is content, not a close', () => {
+	// Found by codex. Markdown allows a fence delimiter at most three spaces of indent; at four it
+	// is code. Trimming before classifying made an over-indented run look like a valid close and
+	// exposed the rows beneath it.
+	const out = withoutFences(['a', '```', '    ```', '| VS-777 | inside |', '```', 'b'].join('\n'));
+	assert.ok(!out.includes('VS-777'), 'a four-space-indented run does not close the fence');
 });
 
 test('[frontmatter] a value that would not survive plain is re-quoted on write', () => {
