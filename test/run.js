@@ -813,7 +813,8 @@ test('[series] a heading that DECLARES still counts, including runs and ranges',
 	const run = roadmapRepo(`${OWNS_VS}\n### VS-24 / FIX-89 — the target model\n`);
 	assert.strictEqual(lastNumber(run, 'VS'), 24, 'a `/` run is still a declaring heading');
 	const range = roadmapRepo(`${OWNS_VS}\n### VS-25 through VS-26 — billing rules\n`);
-	assert.strictEqual(lastNumber(range, 'VS'), 25, 'a range heading declares from its anchor');
+	assert.strictEqual(lastNumber(range, 'VS'), 26,
+		'a range declares EVERY id in it - this assertion expected 25 and PINNED the bug');
 });
 
 test('[series] a FENCED example is a mention, not a mint', () => {
@@ -901,6 +902,53 @@ test('[series] a closing fence may be followed only by whitespace', () => {
 	const out = withoutFences(['a', '```', '```js', '| VS-888 | exposed |', '```', 'b'].join('\n'));
 	assert.ok(!out.includes('VS-888'), 'an info-string line is content, not a closing fence');
 	assert.strictEqual(out.split('\n').length, 6);
+});
+
+test('[series] a ranged heading records EVERY id, not just the first', () => {
+	// Found by codex, which also noted that my own regression test CONFIRMED the defect rather
+	// than fixing it: `VS-25 through VS-26` asserted 25. Capturing only the leading ID meant a
+	// ranged heading declared one of five, so `lastNumber` could hand out a taken number and the
+	// collision check could not see the rest.
+	//
+	// Fixed by making slices.js parseHeading the single enumerator - it already expanded ranges.
+	// TWO heading parsers that disagreed is what produced this, and it was flagged twice before
+	// it cost anything.
+	const dir = roadmapRepo(`${OWNS_VS}\n### VS-371 through VS-375 — a family\n`);
+	const ids = [...declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md')).keys()];
+	assert.deepStrictEqual(ids, ['VS-371', 'VS-372', 'VS-373', 'VS-374', 'VS-375']);
+	assert.strictEqual(lastNumber(dir, 'VS'), 375, 'so the next mint cannot collide with 375');
+});
+
+test('[series] an HTML comment that opens AFTER prose still hides what follows', () => {
+	// Found by codex as fresh evidence against the earlier HTML-comment fix: `startsWith` missed
+	// `prose <!--`, so the rows beneath were scanned as real declarations.
+	const out = withoutFences('prose <!--\n| VS-999 | hidden |\n-->');
+	assert.ok(!out.includes('VS-999'), 'a mid-line opener still enters comment mode');
+	assert.ok(out.startsWith('prose'), 'and the text before it, which renders, is kept');
+});
+
+test('[series] a BACKTICKED comment delimiter is documentation, not markup', () => {
+	// Found while fixing the above, by investigating a real failure rather than a report - and it
+	// is the most on-theme defect of the branch. This repository's own roadmap row for DT-9
+	// DESCRIBES the wrapped-`<!--` hazard, in backticks. The first version of the comment fix read
+	// that row as an unterminated opener and swallowed every row beneath it, deleting FIX-1 from
+	// the series. The row documenting the trap sprang the trap.
+	//
+	// Same lesson as DT-10, which taught `values` to ignore markers inside code spans. It did not
+	// carry to the comment scanner either.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n`
+		+ '| VS-9 | a wrapped `<!--` becomes an HTML block the splitter freezes forever |\n'
+		+ '| VS-12 | a later row that must survive |\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 12,
+		'a backticked <!-- must not open a comment and swallow the rows beneath');
+});
+
+test('[frontmatter] a block list may start after a comment', () => {
+	// Found by codex. Examining only the immediate next line classified the field as null, and the
+	// item beneath then threw "list item with no list to belong to" - on syntax the subset
+	// advertises as supported.
+	const doc = '---\ndepends_on:\n  # waiting on API\n  - VS-1\n---\n\n# body\n';
+	assert.deepStrictEqual(frontmatter.read(doc).data.depends_on, ['VS-1']);
 });
 
 test('[frontmatter] a REMOVED list item cannot survive the fold', () => {
