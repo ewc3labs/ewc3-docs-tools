@@ -4,6 +4,18 @@
 > Supersedes the approach taken in `DT-25`/`DT-28`, and reverses a decision I made three days ago.
 > **This document exists because Wilson rejected the fix I built and proposed a better one.**
 
+> ### ⚠️ CORRECTED 2026-09-02, after the branch was pushed
+>
+> The first version of this document called the MedAR registers *"five registers in three
+> shapes"*, as though they were drift. **They are not.** `| Series | Last Num | Series
+> Description |` **is** the canonical MedAR template, and three repositories are conforming to
+> it. I proposed replacing a canon I had not read, which is the same defect this toolkit exists
+> to catch — a claim about the estate that nobody re-derived. Wilson caught it in one line.
+>
+> The template lives at `_MedAR_ProjectSummary/templates/docs/project/template_project_roadmap.md`
+> and is consumed by the `medar-project-roadmap` skill. **The choice below is therefore a
+> two-way convergence between two live canons, not a migration of stragglers onto one.**
+
 ---
 
 ## The decision that prompted it
@@ -127,25 +139,46 @@ branch merges:
 
 ---
 
-## The migration, measured
+## Two canons, and the one that is actually authoritative
 
-Every register in the estate today:
+**MedAR already has a canonical roadmap template**, and it is not the shape this document first
+proposed:
 
-| Repo | Today | Change |
+```text
+_MedAR_ProjectSummary/templates/docs/project/template_project_roadmap.md
+  ## Last Numbers
+    ### Number Series
+      | Series | Last Num | Series Description |
+```
+
+Consumed by the `medar-project-roadmap` skill when a planning folder is scaffolded. So the estate
+sorts as **conformance and drift**, not as three equal shapes:
+
+| Repo | Register | |
 | --- | --- | --- |
-| SX_Coder | `Series / Last Num / Series Description` | header + 3 rows |
-| DevTools | `Series / Last Num / Series Description` | header + 1 row |
-| MedAR_Service_Daemons | `Series / Last Num / Series Description` | header + rows |
-| MedAR_AI_Runtime | `Series / Scope / Meaning / Last Num / Next` | header + 3 rows; keep its `Scope` values |
-| HDCTranslators | `Series / Last used / Next` | header + rows |
-| SX_DW · MedAR_PyPackages · MedFM_Docs | **no register at all** | author one |
+| SX_Coder · DevTools · MedAR_Service_Daemons | `Series / Last Num / Series Description` | ✅ **conforms to MedAR canon** |
+| MedAR_AI_Runtime | `Series / Scope / Meaning / Last Num / Next` | drifted — and its `Scope` column is the best idea in the estate |
+| HDCTranslators | `Series / Last used / Next` | drifted |
+| SX_DW · MedAR_PyPackages · MedFM_Docs | none | never scaffolded |
+| **all four EWC3 Labs repos** | `Prefix / Scope / Owner / Last Used / Series` | ✅ **conforms to Labs canon** |
 
-**Five rewrites and three authorings.** The rewrites are minutes. The three authorings are not
-clerical — deciding what a repository owns is a judgement, and it is the judgement that would have
-prevented the 26 cross-repo collisions we spent a night resolving.
+**Two live canons, each internally consistent.** The decision is which one absorbs the other, and it
+was never a matter of dragging stragglers onto one shape.
 
-Each lane does its own. **This is not a sweep run centrally** — an owner declaring what they own is
-the entire point.
+### The template must change either way
+
+**Measured:** `cictl reposync --check` on HDCTranslators — whose register is drifted — reports
+`documentationChanged: false` and `documentationWritten: []`. It syncs repo metadata, STATUS,
+`AGENTS.md` and workflows. **It does not sync roadmaps.**
+
+So there is no mechanical propagation. Migration is:
+
+1. **edit the template** — or every newly scaffolded repo is born in the old shape, forever; and
+2. **each lane freshens its own roadmap** — minutes for the five that have one.
+
+The three with no register are not clerical. Deciding what a repository owns is a judgement, and it
+is the judgement that would have prevented the 26 cross-repo collisions. **Each lane does its own;
+this is not a central sweep** — an owner declaring what they own is the entire point.
 
 ---
 
@@ -163,3 +196,14 @@ the entire point.
 4. **What refuses a non-conforming register — `series`, or `migrate-project`?** Wilson's rule is
    that no conversion runs against an unmigrated roadmap. `migrate-project` is the conversion, so
    the gate probably belongs there rather than in the everyday check.
+5. **⚠️ WHICH CANON WINS — the question this document originally begged.** Labs' `Prefix` shape
+   carries `Owner` (the cross-repo arbiter the estate has never had) and a derived `Last Used`.
+   MedAR's shape is simpler, is already in a real template with a real consumer, and is what three
+   repositories and the scaffolding skill already produce. A third option is a merged shape — which
+   is what §"The canonical template" describes — but that costs a template edit *and* eight
+   roadmaps, and it should be chosen deliberately rather than inherited from whichever document got
+   written first.
+6. **Does `ewc3-docs` belong in this decision at all?** MedAR's template predates the toolkit
+   reading it. A public tool that dictates the register shape of a private estate is the tail
+   wagging the dog; a public tool that reads whatever the estate's own canon says is the position I
+   just spent a commit reverting. Neither is obviously right.
