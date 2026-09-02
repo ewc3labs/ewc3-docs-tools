@@ -452,6 +452,64 @@ never assumed"*, which the prefix registry later superseded with **default 5, de
 padded / accept any**. DT-045 predates that decision and should carry a note rather than be
 re-litigated.
 
+### PR #1 — finding taken, argument converged, two things still open
+
+> **Labs**, 2026-09-02, reviewing `feature/declaring-positions` and re-measured against `5c7bb64`.
+
+Reviewing that branch I found a heading that **cites** a sibling repo's slice being read as a
+**declaration**: `### PQ-34 changed how the other repo publishes` failed with *"IDs used under a
+prefix the roadmap does not declare it owns"*, and the remedy it proposed — declare `PQ` — was the
+one action that must not be taken.
+
+**Already fixed, and fixed better than I suggested.** I proposed requiring the same trailing
+separator the list pattern uses. `5ec8b53` instead made it *"a heading CITES unless the register
+says otherwise"* — discriminating on declared ownership rather than on punctuation, which is right:
+the register is the authority, and punctuation is one more shape to guess at. Verified on `5c7bb64`,
+that roadmap now exits 0.
+
+**And the larger argument converged independently.** I was drafting *"if the slice document is the
+object, a declaration is a file"* while [DT-35][frontmatter-is] was landing the stronger form — a
+declaration is a **field in a structured block**, which covers `state` and `est` too rather than
+only the ID. *"Three reviewers, three findings, one cause — we were parsing prose we generate
+ourselves"* is the right summary, and it makes my version redundant. Endorsed as written.
+
+Two things that survive the convergence.
+
+**DT-30 is still live, and this model makes it likelier before it makes it impossible.** Measured on
+`5c7bb64`: a `VS-7` Delivery Index row and a `` 3. `VS-7` - a different thing `` backlog item in the
+same repository still report `Every prefix in use is declared` and exit 0. Two declaring surfaces
+now exist by design, so the window is wider than when DT-30 was written. Under
+frontmatter-as-declaration it closes structurally — two documents cannot carry the same `id:`
+without one file overwriting the other — which is an argument for sequencing DT-35 ahead of anything
+that adds a third surface.
+
+**Nobody has costed the lightweight ID, and Labs has the numbers.** EPQE carries **~39 IDs and two
+slice documents**. `FIX-3` is a real ID that deserves a changelog line and nothing more. Three ways
+out:
+
+1. every ID gets a document — uniform, and heavy for `FIX-3`'s kind
+2. rows for small work, documents for real slices — **reintroduces two declaring surfaces**, which
+   is the problem this whole document exists to remove
+3. every ID gets a document and most are five-line stubs
+
+**The third.** A stub is cheaper than a row *plus* the obligation to keep that row in step with a
+document, and it keeps the rule uniform — which is what makes a workflow unforgettable. A rule with
+an exception is a rule somebody has to remember the exception to, and the ask here was that none of
+us can forget a step.
+
+That also gives [`DT-15`][dt-15-note] its answer. It is currently parked as *"not yet earned — only
+the `+1` is manual"*. Under this model the `+1` stops being read off a register cell at all:
+
+```bash
+ewc3-docs slice new VS "Two writers own MFM.Doctors"
+#   docs/project/slices/VS-00398_Two_Writers_Own_MFM_Doctors.md
+#   number is max(existing filenames) + 1
+```
+
+**One command, one edit, one `fix`.** The next ID derived from the files that already exist is the
+same move `Last Used` made, applied to the last input still read by hand — and a stub costs one
+command rather than one act of remembering.
+
 ### Where this leaves it
 
 Nothing here changes the model. In order:
@@ -470,8 +528,10 @@ lands, or the generated half is inert wherever it is written.
 [2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [clerical-work]: clerical-work-belongs-to-ci.md
 [dt-045]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-09_dt-045_slice_registry_and_cictl_slice_cli.md
+[dt-15-note]: ../project/EWC3_Docs_Tools_Roadmap.md
 [ewc3-prefix-registry]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
 [ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
+[frontmatter-is]: frontmatter-is-the-declaration.md
 [llm-assisted-docs]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [medar-phi-in-git]: ../../../../../Programs_MedAR/DevTools/docs/PHI_ANONYMIZATION.md
 [phi-anonymization-md]: https://github.com/MedARMS/DevTools/blob/main/docs/PHI_ANONYMIZATION.md
