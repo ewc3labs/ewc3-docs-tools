@@ -22,7 +22,8 @@ const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const {
-	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
+	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
+	frozenViolations: frozenSeriesViolations, contestedPrefixes
 } = require('../lib/series');
 
 // Where the config may live. A repository that keeps whole-repo configuration in one folder should
@@ -236,7 +237,9 @@ function cmdSeries(root, config) {
 	// A genuinely new roadmap declares its prefixes BEFORE it has any IDs, so `declared.size === 0` is
 	// not "empty and fine" - it is "this has not been told what it owns, or it is not a roadmap".
 	const undeclaredFiles = [];
-	const frozenViolations = [];
+	// Repo-scoped on both sides: the ceiling from whichever surface froze it, the highest ID from
+	// every surface. See lib/series.js.
+	const frozen = frozenSeriesViolations(root, specs);
 
 	// Declaration is repository-scoped: a backlog inherits the ownership table of the roadmap
 	// beside it. Only a repository that declares NOWHERE has told us nothing.
@@ -277,18 +280,14 @@ function cmdSeries(root, config) {
 			// this whole check exists to end. If a register says a series is retired, minting past
 			// its ceiling has to FAIL, or the freeze is worth exactly as much as the convention it
 			// replaced.
-			if (written && written.frozen && written.ceiling !== null
-				&& highest !== undefined && highest > written.ceiling) {
-				frozenViolations.push({ file, prefix, ceiling: written.ceiling, highest });
-			}
 		}
 	}
 
 	let code = 0;
 
-	if (frozenViolations.length) {
+	if (frozen.length) {
 		console.error('\nA RETIRED series has been minted into:\n');
-		for (const v of frozenViolations) {
+		for (const v of frozen) {
 			console.error(`  ${v.prefix} is frozen at ${v.prefix}-${v.ceiling}, but ${v.prefix}-${v.highest} exists in ${rel(v.file)}`);
 		}
 		console.error('\nMint this work under the series the register points to, or un-freeze it deliberately.');
@@ -306,8 +305,7 @@ function cmdSeries(root, config) {
 
 	// Two global roadmaps claiming the same prefix is a collision waiting to be discovered by
 	// somebody following a reference to the wrong document.
-	const contested = [...declaredOwnership(root, specs).entries()]
-		.filter(([prefix, claims]) => claims.length > 1 && !isLocalPrefix(prefix));
+	const contested = contestedPrefixes(root, specs);
 
 	if (contested.length) {
 		console.error('\nA global prefix is claimed by more than one roadmap:\n');

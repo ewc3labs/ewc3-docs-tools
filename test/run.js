@@ -18,7 +18,8 @@ const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
-	isLocalPrefix, roadmapFiles, declaredIds } = require('../lib/series');
+	isLocalPrefix, roadmapFiles, declaredIds, frozenViolations, contestedPrefixes,
+	withoutFences, DEFAULT_ROADMAPS } = require('../lib/series');
 
 let passed = 0, failed = 0;
 
@@ -712,6 +713,61 @@ test('[series] a repo that declares NOWHERE is still reported', () => {
 		'1. `VS-07` - also nothing\n');
 	const problems = undeclaredPrefixes(dir);
 	assert.ok(problems.length > 0, 'a repo declaring nowhere must still be reported');
+});
+
+test('[series] a FENCED example is a mention, not a mint', () => {
+	// Found by codex. A roadmap that documents its own syntax pushed `lastId` to the number in
+	// the example, and a fenced table row for a foreign prefix produced a FALSE undeclared-prefix
+	// failure. The toolkit already learned this once for `values` (DT-10) and the lesson did not
+	// carry to the ID scanners - which is the exact class the mention-is-not-a-mint rule names.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | the real highest |\n`
+		+ '\n```markdown\n1. `VS-99` - an example\n| DT-77 | planned | an example row |\n```\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 3, 'a fenced VS-99 must not move the series');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'and a fenced DT-77 must not be reported as an undeclared prefix');
+});
+
+test('[series] withoutFences keeps the line count, so reported lines stay true', () => {
+	const out = withoutFences('a\n```\nhidden\n```\nb');
+	assert.strictEqual(out.split('\n').length, 5);
+	assert.strictEqual(out.split('\n')[4], 'b');
+});
+
+test('[series] a freeze is enforced across EVERY planning surface, not just its own', () => {
+	// Found by codex. Declaration is repository-scoped, so enforcement has to be: a roadmap
+	// frozen at OPS-8 beside a backlog minting OPS-9 reported a clean repo, because the ceiling
+	// was only ever compared with the declaring file's own IDs.
+	const dir = backlogRepo(
+		'| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| OPS | frozen at 8 | x | OPS-8 | retired |\n',
+		'1. `OPS-9` - minted past the freeze, on the inheriting surface\n');
+	const v = frozenViolations(dir);
+	assert.strictEqual(v.length, 1, 'the backlog mint must be caught');
+	assert.strictEqual(v[0].prefix, 'OPS');
+	assert.strictEqual(v[0].ceiling, 8);
+	assert.strictEqual(v[0].highest, 9);
+});
+
+test('[series] a DECLARED repo-local prefix is not a global collision', () => {
+	// Found by codex. The parsed scope changed the DISPLAY but not the claimed-twice check,
+	// which still consulted the hardcoded set - so a register that spells out `repo-local` was
+	// overruled by a Set containing exactly `FIX`.
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| PQ | repo-local | x | PQ-1 | local fixes |\n';
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'A_Roadmap.md'), reg);
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'B_Roadmap.md'), reg);
+	assert.deepStrictEqual(contestedPrefixes(dir), [],
+		'two roadmaps declaring PQ repo-local is intended, not a collision');
+});
+
+test('[docs] the Reference lists every default planning-surface glob', () => {
+	// Found by codex: two globs were added to DEFAULT_ROADMAPS and the documented default was
+	// not updated, so a reader copying it would silently drop nested-roadmap coverage. Derived
+	// from the code rather than restated, so it cannot drift again.
+	const ref = fs.readFileSync(path.join(__dirname, '..', 'docs', 'Reference.md'), 'utf8');
+	for (const glob of DEFAULT_ROADMAPS) {
+		assert.ok(ref.includes(glob), `Reference.md does not document the default glob ${glob}`);
+	}
 });
 
 test('[series] a numbered backlog item DECLARES, and the roadmap glob reaches it', () => {

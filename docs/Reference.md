@@ -71,7 +71,7 @@ Declaring a default back to the tool reads, later, as deliberate divergence.
 | `format.labelMax` | `20` | a long reference label distorts the line just as the URL did |
 | `links.orphanRoot` | `"docs"` | directory whose documents must all be reachable |
 | `links.skipDirs` | see below | directory **names** never descended into, at any depth |
-| `series.roadmaps` | `["docs/project/*Roadmap.md", "docs/project/*ROADMAP.md", "docs/project/backlog/*Backlog.md", "docs/project/*Backlog.md"]` | the planning surfaces allowed to mint an ID |
+| `series.roadmaps` | `["docs/project/*Roadmap.md", "docs/project/*ROADMAP.md", "docs/project/roadmap/*Roadmap.md", "docs/project/roadmap/*ROADMAP.md", "docs/project/backlog/*Backlog.md", "docs/project/*Backlog.md"]` | the planning surfaces allowed to mint an ID |
 | `values` | `{}` | see [Resolvers](#resolvers) |
 
 Default `skipDirs`: `node_modules`, `.git`, `dist`, `out`, `.vscode-test`, `archive`, `scratch`,
