@@ -182,6 +182,69 @@ this is not a central sweep** — an owner declaring what they own is the entire
 
 ---
 
+## Resolved: both canons live, and the lookup path is configuration
+
+*(Wilson, 2026-09-02: "we could have templates in ewc3-docs-tools AND customized MedAR templates.
+Where to look for templates and where to fall back to should be configurable.")*
+
+**This answers questions 5 and 6 below by refusing the premise both share** — that one canon has to
+defeat the other. The toolkit ships templates; a consumer overrides them; resolution is an ordered
+list with the builtin at the end.
+
+```json
+{
+  "templates": {
+    "roots": [
+      "C:/Programs_MedAR/_MedAR_ProjectSummary/templates",
+      "<builtin>"
+    ]
+  }
+}
+```
+
+MedAR keeps its register, its `## Last Numbers` heading and its scaffolding skill. Labs keeps
+`Prefix / Scope / Owner / Last Used / Series`. A stranger who configures nothing gets the builtin,
+which is the toolkit's existing bar: *every field has a working default.*
+
+### ⚠️ Why this is NOT the thing that was just reverted
+
+It looks like it. Both let the checker cope with more than one register shape. **The difference is
+the only thing that matters here:**
+
+| | `DT-25`/`DT-28` (reverted) | templates as config |
+| --- | --- | --- |
+| how the shape is known | **SNIFFED** — try `Prefix`, else `Series`, else mine the `Last Num` cell | **DECLARED** — the repo names its template root |
+| shapes accepted per repo | any of three, whichever matched | exactly one |
+| an unanticipated fourth shape | silently half-accepted | **fails** |
+| where the shape is written down | in the parser | in a template file the humans already edit |
+
+> **DECLARED BEATS SNIFFED.** A checker that is told the shape can still refuse everything else,
+> which keeps *"refusing is a check, accommodating is a guess"* intact. A checker that guesses the
+> shape has already given that up. The reverted work was not wrong to want more than one shape — it
+> was wrong to **infer** which one it was looking at.
+
+**And it inverts the dependency.** Today the parser hardcodes a shape and the estate must conform to
+the tool. With template roots, the estate's own canon is the input and the tool conforms to it —
+which is the right direction for a public tool serving a private estate, and is exactly what
+question 6 was uneasy about.
+
+### What it opens, and none of it is free
+
+1. **The toolkit does not currently have a template concept at all.** It *validates*; it has never
+   *scaffolded*. This adds a noun — and a reason for the tool to read files that are not the
+   repository's own documentation.
+2. **How does the checker learn a column's MEANING, not just its name?** A header row says
+   `| Prefix | Scope | Owner | Last Used | Series |` but not which column is the ID, which carries
+   the ceiling, which is prose. Candidates: position (first cell declares), the `ewc3` markers
+   already in the template making `Last Used` self-identifying, or an explicit mapping beside the
+   template. **This is the real design work and it should not be hand-waved.**
+3. **Ordered roots are precedence, not ambiguity — say so.** This toolkit already holds that *two
+   config files is an error, not a preference*. A resolution ORDER is a deliberate declaration and
+   is fine; two templates of the same name in the same root is the ambiguity, and should fail.
+4. **A template is now a dependency across repository boundaries.** MedAR's roots would point at
+   `_MedAR_ProjectSummary`, so a checker in one repo reads a file in another. That is a real
+   coupling: what happens on a machine where that path does not exist, or in CI?
+
 ## Open questions
 
 1. **`Last Used` requires a `values` config per repo.** Every prefix needs a `lastId` resolver and a
