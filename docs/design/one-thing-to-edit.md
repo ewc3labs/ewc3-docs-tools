@@ -96,7 +96,19 @@ in each participating repo, each carrying its own state.** So:
 
 - every repo folds **its own** trailers into **its own** frontmatter — purely local, no cross-repo
   git access, works in a CI job that checked out one repository;
-- the owner's roll-up is a **projection over pins**, which is a document read, not a git walk.
+- the owner's roll-up is a **projection over pins** rather than a git walk.
+
+> ⚠️ **The second bullet overclaimed, and codex caught it.** Turning a git walk into a document read
+> does **not** remove the N-repository dependency — an owner's CI checkout cannot read a pin document
+> in another repository any more than it can read that repository's log. What is genuinely dissolved
+> is the **fold**: state derivation becomes local, which was the actual objection. The **roll-up**
+> still needs the other repos.
+>
+> **So it must refuse rather than under-report.** A roll-up that can see 2 of 5 participating
+> repositories says so, loudly, and does not present a partial state as a complete one — a slice
+> shown as `coded` because the three repositories where it is blocked were unreadable is worse than
+> no roll-up at all. Publishing pin states as an HQ artifact is the fix that would make it complete;
+> until that exists, the refusal is the honest behaviour.
 
 That also makes per-repo state *representable*, which it currently is not — coded in one repo,
 deployed in another, untouched in a third is the normal case and today has nowhere to live.
@@ -131,9 +143,29 @@ The lesson of this week is that a guess is not a check. Each of these fails loud
 | `State:` outside the legend | a typo silently becomes a new state otherwise |
 | a fold that would overwrite `state_source: human` | names the conflict rather than picking |
 | a slice-doc commit carrying **no** `Slice:` trailer | warns — adoption is the whole risk, see below |
+| a **code-only** commit the tool cannot associate with a slice | warns, and says which sources it tried |
 
 **`fix` folds and emits; `check` verifies the fold is current and never writes.** That is the
 existing split, unchanged: *CI refuses, it does not repair.*
+
+### ⚠️ Code-only commits are the normal case, and the warning above misses them
+
+**Found by codex, and it is the hole that would have made this fail quietly.** Implementation work
+advances a slice *without touching its slice document* — that is the ordinary shape of a commit, and
+a rule that only inspects changed slice-doc paths never fires on it. The measured adoption failure
+this design exists to prevent would have survived it intact.
+
+**So the commit tool derives the slice from the first of these that answers, and SAYS WHICH:**
+
+| | Source | Why it is first |
+| --- | --- | --- |
+| 1 | a **staged slice document** | you edited the thing; nothing to infer |
+| 2 | the **branch name** — `feature/DT-036-fold-trailers` | already MedAR practice: `feature/DT-066-provision-secrets-multifield` |
+| 3 | an explicit `--slice DT-036` | the escape hatch, not the path |
+| — | none of them | **warn, naming all three sources it tried** |
+
+Branch-name inference is the load-bearing one, because it costs the author nothing and the estate
+already does it. Typing an ID is the failure mode we are removing, so it must not be step 1.
 
 ## Honest limits
 

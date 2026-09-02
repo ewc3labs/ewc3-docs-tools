@@ -57,11 +57,18 @@ est: 4.0d
 priority: high
 lane: MedFM / Gateway / Caches
 depends_on: [VS-00352]
-followers: [VS-00398]
 implements:
 parent:
 ---
 ```
+
+> **`followers:` is NOT in that block, and that is a correction** *(codex)*. Every field here is by
+> definition a declaration, so including `followers` would make **both halves of one edge
+> independently authored** — `A.depends_on: [B]` could then disagree with `B.followers: [A]`, which
+> corrupts exactly the Ready/Blocked projections the graph is for. The companion design already
+> requires edge symmetry to be **derived**: *"Do not make a human write both halves — that is the
+> same fact stored twice, which this document exists to abolish."* One direction is authored;
+> the reverse is generated.
 
 **Use the existing structure.** It is delimited by `---`, it is typed, it holds lists, every static
 site generator understands it, and it is not something this estate has to invent or defend.
@@ -120,11 +127,15 @@ duplicate is two documents claiming one `id`, which is a set comparison rather t
 
 ## Open questions
 
-1. **⚠️ WHICH DOCUMENT IS AUTHORITATIVE — and this proposal does not settle it.** [The slice
-   document is the object][slice-object] says the slice doc is authored and the Delivery Index row
-   is *generated*. Today it is the reverse: the roadmap is authored and slice docs are emitted.
-   **The prescribed structure works in either direction**, but which block is *the* declaration and
-   which is a projection depends entirely on that answer. It belongs to that proposal, not this one.
+1. ✅ **SETTLED — the slice document is the authority.** *(Wilson, 2026-09-02; see [One thing to
+   edit][one-thing].)* The Delivery Index is emitted from slice frontmatter.
+
+   **Codex was right that deferring this made the rule unimplementable, not merely undecided.** When
+   both a roadmap row and a slice's frontmatter carry the same ID, structure alone cannot say which
+   is the declaration: scanning both reports every projected slice as a duplicate, and excluding
+   either hard-codes the direction anyway. "Works in either direction" was true of the *structure*
+   and false of the *checker* — a distinction I collapsed. It is a prerequisite for `DT-35`, and it
+   now has an answer.
 2. **Does the roadmap's Delivery Index still declare IDs?** If slice docs become authoritative, the
    register declares *prefixes* and the Delivery Index becomes a view. If the roadmap stays
    authoritative, its Index is the declaring position and slice-doc frontmatter is the projection.
@@ -134,7 +145,15 @@ duplicate is two documents claiming one `id`, which is a set comparison rather t
    believed to render it as a table for `.md` files in a repository. **Unverified here — check
    before relying on it**, because if it does not, we lose the visibility that `**State** validated`
    currently provides.
-4. **Migration cost for the 400 already-emitted slice documents.** They are gitignored previews and
+4. ⚠️ **TWO DOCUMENTS IN THIS BRANCH DISAGREE ABOUT WHETHER THE EMITTED SLICES ARE COMMITTED**, and
+   the tree settles it. [The slice document is the object][slice-object] states at `:295` and `:461`
+   that *"383 slice documents are already committed"*. **Measured on SX_Coder today:
+   `git ls-files docs/project_v2` returns 0, and `git check-ignore` exits 0 — untracked and
+   ignored.** Same result across all five repositories holding a preview, measured twice a week
+   apart. So the migration below is a regeneration, and the companion doc's claim is stale rather
+   than this one being optimistic. Raised by codex, who reasonably trusted the document over the
+   tree — which is its own argument for deriving claims about build state (`DT-22`).
+5. **Migration cost for the 400 already-emitted slice documents.** They are gitignored previews and
    the emitter is ours, so this is a regeneration rather than an edit — but it is only free while
    they stay unadopted, which is what the estate freeze is currently protecting.
 

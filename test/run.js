@@ -847,6 +847,47 @@ test('[series] a freeze is enforced across EVERY planning surface, not just its 
 	assert.strictEqual(v[0].highest, 9);
 });
 
+test('[frontmatter] a value that would not survive plain is re-quoted on write', () => {
+	// Found by codex, and it is the nastiest kind of bug: a fold updating only `state` would
+	// silently truncate an unrelated TITLE. `title: "Fix the #4 lookup"` written back unquoted
+	// re-reads as 'Fix the'. The round-trip IS the test, so the rule cannot drift from the parser.
+	const doc = '---\ntitle: "Fix the #4 lookup"\nstate: planned\n---\n\n# body\n';
+	const data = frontmatter.read(doc).data;
+	data.state = 'coded';
+	const out = frontmatter.write(doc, data);
+	assert.strictEqual(frontmatter.read(out).data.title, 'Fix the #4 lookup',
+		'the title must survive a write that was not about the title');
+
+	const listDoc = '---\ntags: []\n---\n';
+	const d2 = frontmatter.read(listDoc).data;
+	d2.tags = ['plain', 'has # hash'];
+	assert.deepStrictEqual(frontmatter.read(frontmatter.write(listDoc, d2)).data.tags,
+		['plain', 'has # hash'], 'list items are quoted on the same rule');
+});
+
+test('[series] a longer fence is not closed by a shorter one inside it', () => {
+	// Found by codex. A four-backtick block documenting a three-backtick example was closed by the
+	// inner fence, so whatever followed leaked out and could be scanned as a mint - in a document
+	// whose entire purpose is explaining fenced examples.
+	const out = withoutFences(['a', '````', '```', '| VS-999 | inner |', '````', 'b'].join('\n'));
+	assert.ok(!out.includes('VS-999'), 'the inner fence must not close the outer block');
+	assert.strictEqual(out.split('\n').length, 6, 'and the line count is still preserved');
+	assert.strictEqual(out.split('\n')[5], 'b');
+});
+
+test('[series] a freeze violation names the surface that MINTED, not the one that froze', () => {
+	// Found by codex. Reporting the file that declared the freeze sends the reader to a document
+	// that does not contain the offending ID - the wrong half of a two-file problem, with a message
+	// asserting otherwise.
+	const dir = backlogRepo(
+		'| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| OPS | frozen at 8 | x | OPS-8 | retired |\n',
+		'1. `OPS-9` - minted past the freeze, in the BACKLOG\n');
+	const v = frozenViolations(dir);
+	assert.strictEqual(v.length, 1);
+	assert.ok(v[0].file.includes('Backlog'), 'file must be where the mint is');
+	assert.ok(v[0].declaredIn.includes('Roadmap'), 'and the freeze is still attributed');
+});
+
 test('[series] a `repo:slice` qualified reference can never be a mint', () => {
 	// `DT-1`..`DT-39` mean different slices in ewc3-docs-tools and in MedAR DevTools - 39
 	// overlapping IDs across two estates, and no hub re-charter resolves it because the estates
