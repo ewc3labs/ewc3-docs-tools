@@ -187,11 +187,39 @@ third declaring surface**, or the window widens again with nothing watching it.
    register declares *prefixes* and the Delivery Index becomes a view. If the roadmap stays
    authoritative, its Index is the declaring position and slice-doc frontmatter is the projection.
    Same fork as 1, stated where it bites.
-3. **Does GitHub still render frontmatter as a table?** The `values` doctrine holds that a reader
-   with no tooling must see the value. Frontmatter is invisible in most renderers; GitHub is
-   believed to render it as a table for `.md` files in a repository. **Unverified here — check
-   before relying on it**, because if it does not, we lose the visibility that `**State** validated`
-   currently provides.
+3. ✅ **ANSWERED — GitHub renders frontmatter as a visible key/value table.** *(Labs, 2026-09-02;
+   independently re-measured here on a second specimen.)* The `values` doctrine holds and this
+   proposal survives.
+
+   Measured against GitHub's own renderer, which is authoritative because it *is* the renderer:
+
+   ```bash
+   gh api repos/github/docs/contents/content/get-started/index.md \
+     -H "Accept: application/vnd.github.html"
+   ```
+
+   The **first** element inside `markdown-body` is the frontmatter, as a table:
+
+   ```html
+   <markdown-accessiblity-table><table>
+     <tr><th>title</th><td>Get started with GitHub documentation</td></tr>
+     <tr><th>shortTitle</th><td>Get started</td></tr>
+     <tr><th>redirect_from</th><td><table>…nested…</table></td></tr>
+   ```
+
+   So a reader with no tooling sees every key and value **above the prose** — exactly what
+   `**State** validated · runtime` gives today. A list such as `depends_on: [VS-00352]` renders as a
+   nested one-row sub-table: visible, if slightly ceremonious.
+
+   > ⚠️ **METHOD WARNING, and it is the more useful half.** Labs asked two page-fetches first and
+   > **both reported that frontmatter is hidden and the document begins at the first heading. Both
+   > were wrong.** A fetch-and-summarize layer describes the article's *prose* and discards the table
+   > as chrome — an instrument answering truthfully about the wrong property, which is the shape this
+   > entire review round has been about. Go to `Accept: application/vnd.github.html`.
+   >
+   > Also: do **not** test with `.github/ISSUE_TEMPLATE/*.md`. GitHub special-cases those elsewhere
+   > in its UI, so they are not a fair specimen even though they happen to render correctly. The
+   > verification above deliberately used an ordinary content file instead.
 4. ⚠️ **TWO DOCUMENTS IN THIS BRANCH DISAGREE ABOUT WHETHER THE EMITTED SLICES ARE COMMITTED**, and
    the tree settles it. [The slice document is the object][slice-object] states at `:295` and `:461`
    that *"383 slice documents are already committed"*. **Measured on SX_Coder today:
