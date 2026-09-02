@@ -622,39 +622,27 @@ test('[series] declared ownership names the file that claims each prefix', () =>
 	assert.match(owners.get('VS')[0], /X_Development_Roadmap\.md$/);
 });
 
-test(`[series] the MedAR "Series / Last Num" register is READ, and flagged as legacy`, () => {
-	// SUPERSEDES an earlier contract, deliberately, and the reversal is worth stating.
-	//
-	// This register was previously read as declaring NOTHING, so that an unmigrated repository
-	// could not appear to pass - the refusal WAS the migration trigger. That made the estate's
-	// most carefully maintained registers indistinguishable from its absent ones, and left the
-	// cross-repo collision check blind to every repository that had not migrated yet: which is
-	// the only place a collision can be hiding. An auditor that presupposes the shape it audits
-	// for goes blind exactly where compliance failed.
-	//
-	// So: READ it, and NAME it. The migration signal survives as a notice rather than a refusal.
+test('[series] a human-named first cell declares nothing, even beside a Last Used column', () => {
+	// "Vertical Slices" is a label, not a prefix. Mining the prefix out of the neighbouring cell
+	// instead is how a checker ends up knowing three register shapes; the register is brought to
+	// the template rather than the parser to the register.
 	const dir = roadmapRepo(
 		'| Series | Last Num | Series Description |\n| --- | --- | --- |\n| Vertical Slices | VS-390 | x |\n' +
 		'\n| ID | Slice |\n| --- | --- |\n| VS-390 | a slice |\n');
 	const file = path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md');
-	const read = readSeries(file);
-	assert.ok(read.declared.has('VS'), 'the Last Num column declares the series');
-	assert.strictEqual(read.legacyShape, true, 'and it is flagged as the shape migrate-project normalises');
-	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
-		'so a maintained legacy register is not reported as owning nothing');
+	assert.strictEqual(readSeries(file).declared.size, 0);
+	assert.strictEqual(undeclaredPrefixes(dir).length, 1);
 });
-
-test('[series] the Series Description column does NOT declare, only Last Num does', () => {
-	// SX_Coder's cross-project row names `AIR`, `DW` and `DT` in its DESCRIPTION while owning none
-	// of them. A row-wide scan would have the hub re-declare exactly the series it has handed away.
-	// A mention is not a mint, in a register too.
+test('[series] a prefix named in a neighbouring cell is a mention, not a mint', () => {
+	// SX_Coder's cross-project row names `AIR`, `DW` and `DT` in prose while owning none of them.
+	// Only the first cell of the ownership table declares, so that row claims nothing.
 	const dir = roadmapRepo(
-		'| Series | Last Num | Series Description |\n| --- | --- | --- |\n| Cross-Project | TS-02 | mint `AIR-01`=Runtime, `DW-01`=Warehouse for new |\n');
+		'| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n' +
+		'| TS | global | x | TS-2 | mint `AIR-01`=Runtime, `DW-01`=Warehouse for new |\n');
 	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
 	assert.deepStrictEqual([...read.declared].sort(), ['TS'],
-		'only the Last Num cell declares; prefixes named in prose beside it do not');
+		'only the first cell declares; prefixes named beside it do not');
 });
-
 function backlogRepo(roadmapBody, backlogBody) {
 	const dir = tmpdir();
 	fs.mkdirSync(path.join(dir, 'docs', 'project', 'backlog'), { recursive: true });
@@ -666,32 +654,37 @@ function backlogRepo(roadmapBody, backlogBody) {
 test('[series] a DECLARED scope beats the hardcoded prefix guess', () => {
 	// `isLocalPrefix` knows about FIX and nothing else, which is right for this toolkit and cannot
 	// be right for every register. A repository that has written down what it means is believed.
-	const dir = roadmapRepo('| Series | Scope | Last Num |\n| --- | --- | --- |\n| `PQ-NN` | repo-local | PQ-7 |\n');
+	const dir = roadmapRepo('| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| PQ | repo-local | x | PQ-7 | slices |\n');
 	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
 	assert.strictEqual(read.scopes.get('PQ').local, true, 'the register said repo-local, so PQ is repo-local');
 	assert.strictEqual(isLocalPrefix('PQ'), false, 'even though the hardcoded fallback would not say so');
 });
-
 test('[series] a FROZEN series records its ceiling, so minting past it is detectable', () => {
 	// A freeze expressed only in prose is a convention, not a control - the exact failure this
 	// toolkit exists to end. Measured: MedAR_AI_Runtime retired OPS at 08 and every checker in the
 	// estate would still have accepted OPS-09 as the next mint.
-	const dir = roadmapRepo('| Series | Scope | Last Num | Next |\n| --- | --- | --- | --- |\n| `OPS-NN` | **FROZEN at 08** | 08 | — (do not mint) |\n');
+	const dir = roadmapRepo('| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| OPS | frozen at 8 | x | OPS-8 | retired; mint AIR |\n');
 	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
 	const ops = read.scopes.get('OPS');
 	assert.strictEqual(ops.frozen, true, 'the register retired this series');
 	assert.strictEqual(ops.ceiling, 8, 'and named the number it stops at');
 });
-
-test('[series] the MedAR register shape declares, via `Series` and a mint template', () => {
-	// The canonical MedAR template ships `| Series | Scope | Meaning | Last Num | Next |` with a
-	// first cell like `` `AIR-NN` ``. Read only for `Prefix` and every carefully maintained MedAR
-	// register looked exactly like a repository that had declared nothing at all.
+test('[series] a `Series`-headed register declares NOTHING - one template, not N parsers', () => {
+	// SUPERSEDES the version of this test written 2026-08-30, and restores the contract that one
+	// replaced. The detour is worth recording: the checker was taught to read a `Series` header, a
+	// mint template in the first cell, and a prefix hiding in a `Last Num` cell - three register
+	// shapes met in one estate. Each shape a checker learns is a shape it will half-accept a
+	// FOURTH version of, silently, and a guess is not a check.
+	//
+	// The premise that justified it was that migrating the estate is expensive. It is a header
+	// row. See docs/design/one-template-beats-three-parsers.md.
 	const dir = roadmapRepo('| Series | Scope | Meaning | Last Num | Next |\n| --- | --- | --- | --- | --- |\n| `AIR-NN` | repo-owned | value slices | 28 | **AIR-29** |\n\n| ID | Slice |\n| --- | --- |\n| AIR-28 | a thing |\n');
-	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
-	assert.strictEqual(lastNumber(dir, 'AIR'), 28);
+	const file = path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md');
+	assert.strictEqual(readSeries(file).declared.size, 0,
+		'a Series-headed register is not an ownership table');
+	assert.strictEqual(undeclaredPrefixes(dir).length, 1,
+		'so the guard fires, and the repo is told to bring its register to the template');
 });
-
 test('[series] an ACTUAL id in the first cell does not declare a series', () => {
 	// `AIR-NN` is a mint template and declares; `AIR-28` is an ID and declares nothing. Without
 	// that discrimination a Delivery Index row would be read as an ownership row, and every

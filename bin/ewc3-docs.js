@@ -254,12 +254,6 @@ function cmdSeries(root, config) {
 			console.log('  (inherits the ownership table declared elsewhere in this repository)');
 		}
 
-		// A legacy register is READ rather than refused - a checker that cannot see an unmigrated
-		// estate cannot audit the only place drift lives. But it is named every time, because the
-		// alternative to refusing is not silence: `migrate-project` still has work to do here.
-		if (readSeries(file).legacyShape) {
-			console.log('  (legacy register: prefixes read from the `Last Num` column; `migrate-project` normalises this)');
-		}
 		const scopes = readSeries(file).scopes;
 		for (const prefix of [...declared].sort()) {
 			const highest = used.get(prefix);

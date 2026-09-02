@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-31<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-32<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -51,6 +51,7 @@ is never referenced from outside the repository it fixes.
 | DT-23 | ⬜ planned | Cross-repo collision check: a mention is not a mint | M | — | an ID is minted where it appears in a **declaring** position and merely cited everywhere else; three false positives in one night came from a survey doc and a skill example that quote IDs while describing them, and a slice-document burst multiplies citations per repo by a hundredfold. `DT-24` built the position list this stands on |
 | DT-30 | ⬜ planned | Report an ID declared TWICE inside one repository | S | — | `declaredIds` keys by prefix and number and keeps the first hit, so a second declaration of the same ID is silently discarded; measured on SX_DW, where 10 IDs are declared in both the roadmap and the backlog and the reconcile still reported a clean repo |
 | DT-31 | ⬜ planned | Report a backlog that DECLARES an ID rather than citing one | S | — | a backlog item is intake, not a commitment, so a minted ID in its leading position is a convention violation; today it is silently legal because the backlog inherits its roadmap's ownership table — measured on SX_DW (4 squatters) and MedAR_AI_Runtime (4 that hid cross-repo collisions) |
+| DT-32 | ⬜ planned | One canonical register template, and refuse anything else | M | [One template beats three parsers][one-template-beats] | five MedAR registers in three shapes and three repos with none; the checker learned all three rather than the estate adopting one, which is backwards and does not scale to a fourth |
 | DT-26 | ⬜ planned | `migrate-project` emits from ONE source, so extra planning surfaces are dropped | M | — | measured on MedAR_AI_Runtime: 41 declared IDs, 34 emitted slice documents, and the 7 lost are exactly its backlog's — a burst that looks complete and silently discards whatever the roadmap glob did not select |
 | DT-27 | ⬜ planned | Refuse an ID cell that ALMOST parses, instead of dropping it | S | — | `AIR-19 (was VS-19)` in a declaring position makes the ID vanish from every check rather than fail one; a rename convention that is right in prose silently unmakes the slice in an ID cell |
 
@@ -73,8 +74,8 @@ is never referenced from outside the repository it fixes.
 | DT-19 | ✅ done | `migrate-project`: emit a migrated planning surface beside the live one | — | [Reference](../Reference.md) | **backfilled** — writes only `docs/project_v2/`, dry-run without `--write`, and leaves a GLOBAL prefix unclaimed rather than self-awarding it |
 | DT-20 | ✅ done | `slices`: one document per slice, extracted from the index | — | [Reference](../Reference.md) | **backfilled** — evidence is gathered and never asserted as completion, which a test enforces in the emitted prose |
 | DT-24 | ✅ done | Declaring positions: see IDs outside the first table column | S | [Reference](../Reference.md) | a backlog written as a numbered list of backticked IDs was invisible to every extractor in the estate, hiding four real cross-repo collisions; the separator after the ID is what keeps a citing bullet from minting |
-| DT-25 | ✅ done | `series` reads the MedAR register shape | S | [Reference](../Reference.md) | it required a **Prefix** column while the canonical MedAR template ships **Series**, so every carefully maintained register read as declaring nothing; a backlog now inherits its roadmap's table rather than needing a second one |
-| DT-28 | ✅ done | Read a legacy register instead of refusing it — **supersedes a prior contract** | S | [Reference](../Reference.md) | a `Last Num` column now declares, so 8 MedAR registers stopped reading as owning nothing; the old refusal WAS the migration trigger, and replacing it with a notice keeps that signal without blinding the collision check to every unmigrated repo — **please ratify or revert** |
+| DT-25 | ↩️ reverted | `series` reads the MedAR register shape | S | [Reference](../Reference.md) | **reverted 2026-09-02** — the register is brought to the template, not the parser to the register. The backlog-inherits-its-roadmap half was kept |
+| DT-28 | ↩️ reverted | Read a legacy register instead of refusing it | S | [Reference](../Reference.md) | **reverted 2026-09-02.** I argued a checker must read the estate as it is; that assumed migrating was expensive, and it is a header row. Each shape a parser learns is one it will half-accept a fourth version of, silently |
 | DT-29 | ✅ done | A declared `Scope` column, and a freeze that actually holds | M | [Reference](../Reference.md) | scope was guessed from the prefix string against a hardcoded set of one; a register saying a series is **retired** now records a ceiling and minting past it fails, instead of the retirement living in prose no parser reads |
 | FIX-1 | ✅ done | `Overview.md` said "nothing built" of two partly-built proposals | — | [Overview](../Overview.md) | found while orienting; the sentence outlived the fact by several shipped commands, which is what `DT-22` is for |
 
@@ -93,5 +94,6 @@ for adding another one: it has to have already gone wrong somewhere, quietly, in
 caught.
 
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
+[one-template-beats]: ../design/one-template-beats-three-parsers.md
 [prefix-registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
 [recall-tape]: https://github.com/ewc3labs/ewc3-recall-tape
