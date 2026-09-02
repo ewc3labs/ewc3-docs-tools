@@ -165,6 +165,31 @@ sorts as **conformance and drift**, not as three equal shapes:
 **Two live canons, each internally consistent.** The decision is which one absorbs the other, and it
 was never a matter of dragging stragglers onto one shape.
 
+### ⚠️ The re-charter window: a derived `Last Used` is systematically LOW while a series moves
+
+**Found by SX_DW, 2026-09-02, and it is a hazard in `DT-33` before `DT-33` exists.**
+
+`Last Used` derives from the rows **in this repository**. During a re-charter the series spans two
+repositories by definition — the hub still holds rows it minted before ownership moved. So for that
+window the derived value is **too low**, and low is the dangerous direction: *it hands out a number
+that is already taken.*
+
+Measured on the live case. SX_DW's register was authored with `Last Used: DW-25`; the checker
+derived `DW-24`, because `DW-025` was a hub row. Correcting the register **down** to match the
+derivation would have written a collision into the register **as an instruction** — `DW-025` was
+issued on 2026-08-20 for the Borg IsProcessed slice, so the next free number was `DW-026` by neither
+route the checker could see.
+
+> **THE RULE, and it is SX_DW's: on a re-charter, MIRROR THE OUTSTANDING HUB ROWS FIRST, then let
+> the checker derive.** Never reconcile a register downward to match a derivation taken over half a
+> series.
+
+They did exactly that — `DW-025` moved into SX_DW's Delivery Index where the re-charter puts it —
+and derived and declared now agree at `DW-25`.
+
+**Every repository migrated after this one has the same window**, so the order is part of the
+migration, not a footnote to it.
+
 ### The template must change either way
 
 **Measured:** `cictl reposync --check` on HDCTranslators — whose register is drifted — reports
