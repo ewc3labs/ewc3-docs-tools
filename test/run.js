@@ -847,6 +847,61 @@ test('[series] a freeze is enforced across EVERY planning surface, not just its 
 	assert.strictEqual(v[0].highest, 9);
 });
 
+test('[frontmatter] the round-trip is checked through PARSE, not through scalar()', () => {
+	// The previous version of this rule tested candidates against `scalar()` and called that "the
+	// round-trip, so it cannot drift from the parser". It could, because `scalar` IS NOT the parser.
+	// Codex found three ways past it in one round, all parse-level behaviour scalar never sees.
+	// `write` is a fold rewriting frontmatter it did not author, so each one corrupts a field
+	// nobody was editing.
+	const cases = [
+		['*important', 'an anchor sigil - re-read THREW'],
+		['[draft]', 'bracket text - silently retyped as a one-element list'],
+		['Say "go" #4', 'quote plus comment-hash - escapes were not decoded back'],
+		['|', 'a bare block-scalar marker'],
+		['# leading hash', 'reads as a comment line'],
+	];
+	for (const [value, why] of cases) {
+		const doc = '---\nid: VS-1\nstate: planned\n---\n\n# body\n';
+		const data = frontmatter.read(doc).data;
+		data.title = value;
+		data.state = 'coded';
+		const back = frontmatter.read(frontmatter.write(doc, data)).data;
+		assert.strictEqual(back.title, value, `title corrupted (${why})`);
+		assert.strictEqual(back.state, 'coded', 'and the field being edited still lands');
+	}
+});
+
+test('[frontmatter] a comma inside a list element does not change cardinality', () => {
+	// Found by codex: `[alpha,beta]` re-read as TWO elements, so an unrelated frontmatter update
+	// silently changed the size of a dependency list.
+	const doc = '---\ntags: []\n---\n';
+	const d = frontmatter.read(doc).data;
+	d.tags = ['alpha,beta', 'gamma'];
+	const back = frontmatter.read(frontmatter.write(doc, d)).data;
+	assert.deepStrictEqual(back.tags, ['alpha,beta', 'gamma']);
+});
+
+test('[frontmatter] a value the subset cannot represent is REFUSED, not mangled', () => {
+	// Silently mangling is the one outcome worse than failing.
+	assert.throws(() => frontmatter.field('title', 'a\nnewline'), /cannot represent/);
+});
+
+test('[series] an HTML-commented row does not declare', () => {
+	// Found by codex. A commented-out table row is invisible in rendered markdown, so it is not a
+	// mint - but it read as one, and could advance the derived next ID.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | real |\n`
+		+ '\n<!--\n| VS-999 | disabled, commented out |\n-->\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 3, 'a commented row must not move the series');
+});
+
+test('[series] a closing fence may be followed only by whitespace', () => {
+	// Found by codex. ```js inside a block is an info string on a nested example, not a close -
+	// and closing on it exposed the rows beneath to the declaration scanner.
+	const out = withoutFences(['a', '```', '```js', '| VS-888 | exposed |', '```', 'b'].join('\n'));
+	assert.ok(!out.includes('VS-888'), 'an info-string line is content, not a closing fence');
+	assert.strictEqual(out.split('\n').length, 6);
+});
+
 test('[frontmatter] a value that would not survive plain is re-quoted on write', () => {
 	// Found by codex, and it is the nastiest kind of bug: a fold updating only `state` would
 	// silently truncate an unrelated TITLE. `title: "Fix the #4 lookup"` written back unquoted
