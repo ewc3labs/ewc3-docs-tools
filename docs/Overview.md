@@ -30,6 +30,9 @@ this toolkit says should be derived rather than written.
   Names the authority the canon calls for. **Partly built**: `migrate-project` extracts one document
   per slice into `docs/project_v2/slices`. Frontmatter, the typed graph, the trailers and the
   Ready/Blocked views are not.
+- [Frontmatter is the declaration][frontmatter-is]: one structured block at the head of each
+  document is the ONLY place anything declares anything. Deletes four parsers that each shipped a
+  defect.
 - [One template beats three parsers][one-template]: the register shape is DECIDED and every roadmap
   is brought to it, rather than the checker learning each shape it meets. Reverses DT-25/DT-28.
 - [Clerical work belongs to CI][clerical-work]: the canon these proposals serve - what is
@@ -49,6 +52,7 @@ much smaller job than it sounds, and it is the only version of this that survive
 busy month.
 
 [clerical-work]: design/clerical-work-belongs-to-ci.md
+[frontmatter-is]: design/frontmatter-is-the-declaration.md
 [one-template]: design/one-template-beats-three-parsers.md
 [prefix-registry-and]: design/prefix-registry-and-repo-hq.md
 [roadmap]: project/EWC3_Docs_Tools_Roadmap.md

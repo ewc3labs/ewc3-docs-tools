@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-34<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-35<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -51,6 +51,7 @@ is never referenced from outside the repository it fixes.
 | DT-23 | ⬜ planned | Cross-repo collision check: a mention is not a mint | M | — | an ID is minted where it appears in a **declaring** position and merely cited everywhere else; three false positives in one night came from a survey doc and a skill example that quote IDs while describing them, and a slice-document burst multiplies citations per repo by a hundredfold. `DT-24` built the position list this stands on |
 | DT-30 | ⬜ planned | Report an ID declared TWICE inside one repository | S | — | `declaredIds` keys by prefix and number and keeps the first hit, so a second declaration of the same ID is silently discarded; measured on SX_DW, where 10 IDs are declared in both the roadmap and the backlog and the reconcile still reported a clean repo |
 | DT-31 | ⬜ planned | Report a backlog that DECLARES an ID rather than citing one | S | — | a backlog item is intake, not a commitment, so a minted ID in its leading position is a convention violation; today it is silently legal because the backlog inherits its roadmap's ownership table — measured on SX_DW (4 squatters) and MedAR_AI_Runtime (4 that hid cross-repo collisions) |
+| DT-35 | ⬜ planned | Frontmatter is the ONLY declaring position in a slice or module doc | L | [Frontmatter is the declaration][frontmatter-is-the] | replaces the heading, list and arbiter rules with one delimited block, each of which shipped a defect this week; needs a ~40-line restricted-YAML reader because the toolkit has no dependencies and will not grow one |
 | DT-34 | ⬜ planned | `migrate-project` ACCEPTS the shapes `series` refuses | M | [One template beats three parsers][one-template-beats] | a converter that refuses what the checker refuses can never migrate anything, so the register-shape reading reverted out of `series` belongs here, where guessing is appropriate because a human reviews the emitted diff |
 | DT-33 | ⬜ planned | Configurable template roots, with the builtin as the fallback | M | [One template beats three parsers][one-template-beats] | lets a consumer keep its own canon instead of adopting the toolkit's, and the shape becomes DECLARED rather than sniffed — which is what separates it from the reverted `DT-25`/`DT-28` |
 | DT-32 | ⬜ planned | One canonical register template, and refuse anything else | M | [One template beats three parsers][one-template-beats] | five MedAR registers in three shapes and three repos with none; the checker learned all three rather than the estate adopting one, which is backwards and does not scale to a fourth |
@@ -96,6 +97,7 @@ for adding another one: it has to have already gone wrong somewhere, quietly, in
 caught.
 
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
+[frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
 [prefix-registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
 [recall-tape]: https://github.com/ewc3labs/ewc3-recall-tape
