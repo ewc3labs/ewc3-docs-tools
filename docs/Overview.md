@@ -30,6 +30,8 @@ this toolkit says should be derived rather than written.
   Names the authority the canon calls for. **Partly built**: `migrate-project` extracts one document
   per slice into `docs/project_v2/slices`. Frontmatter, the typed graph, the trailers and the
   Ready/Blocked views are not.
+- [One thing to edit][one-thing]: the slice doc is the authority, the roadmap Delivery Index is
+  emitted from it, and git trailers are the event log that yields current AND historical state.
 - [Frontmatter is the declaration][frontmatter-is]: one structured block at the head of each
   document is the ONLY place anything declares anything. Deletes four parsers that each shipped a
   defect.
@@ -54,6 +56,7 @@ busy month.
 [clerical-work]: design/clerical-work-belongs-to-ci.md
 [frontmatter-is]: design/frontmatter-is-the-declaration.md
 [one-template]: design/one-template-beats-three-parsers.md
+[one-thing]: design/one-thing-to-edit.md
 [prefix-registry-and]: design/prefix-registry-and-repo-hq.md
 [roadmap]: project/EWC3_Docs_Tools_Roadmap.md
 [slice-object]: design/the-slice-document-is-the-object.md
