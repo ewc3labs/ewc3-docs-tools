@@ -121,9 +121,18 @@ Everything below exists only to disambiguate prose, and every line of it has pro
 
 `withoutFences` stays — cheap, and a fenced example must never be read as content regardless.
 
-**`DT-30` is also dissolved rather than fixed.** A same-repo duplicate declaration is currently
-undetectable because two surfaces can both declare; with one declaring position per document, a
-duplicate is two documents claiming one `id`, which is a set comparison rather than a heuristic.
+**`DT-30` becomes CHEAP, not automatic** — and the first version of this paragraph overclaimed.
+
+It said a duplicate *"cannot happen without one file overwriting the other."* **False, and codex
+caught it:** the filename carries a title slug as well as the ID, so `VS-00001_First.md` and
+`VS-00001_Second.md` coexist happily and the generated Delivery Index then holds two competing
+objects for one identity.
+
+What the model actually buys is that a duplicate becomes **a set comparison over frontmatter `id:`
+fields** instead of a heuristic over prose. That is a real improvement and it is not the same as
+being structural. **So duplicate-ID validation is a REQUIRED part of `DT-35`, not a consequence of
+it** — uniqueness that nothing checks is a convention, which is the thing this whole effort exists
+to stop.
 
 ## Every ID gets a document, and most are five-line stubs
 

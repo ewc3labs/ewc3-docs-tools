@@ -157,12 +157,22 @@ this design exists to prevent would have survived it intact.
 
 **So the commit tool derives the slice from the first of these that answers, and SAYS WHICH:**
 
-| | Source | Why it is first |
+| | Source | Why it is where it is |
 | --- | --- | --- |
-| 1 | a **staged slice document** | you edited the thing; nothing to infer |
-| 2 | the **branch name** — `feature/DT-036-fold-trailers` | already MedAR practice: `feature/DT-066-provision-secrets-multifield` |
-| 3 | an explicit `--slice DT-036` | the escape hatch, not the path |
+| 1 | an explicit `--slice DT-036` | ⭐ **explicit beats inferred, always** |
+| 2 | a **staged slice document** | you edited the thing; nothing to infer |
+| 3 | the **branch name** — `feature/DT-036-fold-trailers` | already MedAR practice: `feature/DT-066-provision-secrets-multifield` |
 | — | none of them | **warn, naming all three sources it tried** |
+
+> ⚠️ **`--slice` was last in the first version of this table, and codex was right that it made the
+> escape hatch useless.** On `feature/DT-036-…`, `--slice DT-040` would still have associated the
+> commit with DT-036 — writing the event into the wrong slice's history, silently, precisely when a
+> human had noticed the inference was wrong and said so.
+>
+> **An override that cannot override is worse than no override**, because it looks like a correction
+> and behaves like a no-op. Explicit input wins; and when it disagrees with what would have been
+> inferred, the tool SAYS which it used and what it overrode, because a silent override is the same
+> defect facing the other way.
 
 Branch-name inference is the load-bearing one, because it costs the author nothing and the estate
 already does it. Typing an ID is the failure mode we are removing, so it must not be step 1.

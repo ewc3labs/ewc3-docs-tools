@@ -903,6 +903,31 @@ test('[series] a closing fence may be followed only by whitespace', () => {
 	assert.strictEqual(out.split('\n').length, 6);
 });
 
+test('[frontmatter] a REMOVED list item cannot survive the fold', () => {
+	// Found by codex, and the nastiest one yet: gathering a block list stopped at the first
+	// non-item line, so a comment BETWEEN items truncated the region. Changing the field emitted
+	// the new value and left the later items in place - [a, b] set to [x] read back as [x, b].
+	// A dependency that will not die is the one failure a dependency graph cannot tolerate.
+	const doc = ['---', 'tags:', '  - alpha', '  # a note between items', '  - beta', '---', '', '# body', ''].join('\n');
+	const d = frontmatter.read(doc).data;
+	assert.deepStrictEqual(d.tags, ['alpha', 'beta'], 'both items are read across the comment');
+	d.tags = ['xray'];
+	const back = frontmatter.read(frontmatter.write(doc, d)).data;
+	assert.deepStrictEqual(back.tags, ['xray'], 'and beta is GONE');
+});
+
+test('[frontmatter] the closing fence must be a whole line, not a prefix', () => {
+	// Found by codex: searching for the first `\n---` matched `---not-a-fence`, closed the block
+	// early, and dropped the fields beneath into the body - where a rewrite re-fenced them in the
+	// wrong place. Refusing is the correct outcome; silently re-shaping the document is not.
+	const doc = '---\nid: VS-1\n---not-a-fence\nstate: planned\n---\n\n# body\n';
+	assert.throws(() => frontmatter.read(doc), /not `key: value`/,
+		'a malformed delimiter is refused, not treated as the close');
+
+	const ok = '---\nid: VS-1\nstate: planned\n---\n\n# body\n';
+	assert.strictEqual(frontmatter.read(ok).data.state, 'planned', 'a real fence still closes');
+});
+
 test('[frontmatter] a fold PATCHES the block - comments and blank lines survive', () => {
 	// Found by codex. Rebuilding the block from key/value pairs deleted every explanatory comment
 	// in the document, while the docstring promised unrelated fields were preserved.
