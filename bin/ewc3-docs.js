@@ -21,8 +21,11 @@ const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
+const frontmatter = require('../lib/frontmatter');
+const { renderIndex, detectWidths } = require('../lib/deliveryindex');
 const {
-	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS
+	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
+	frozenViolations: frozenSeriesViolations, contestedPrefixes
 } = require('../lib/series');
 
 // Where the config may live. A repository that keeps whole-repo configuration in one folder should
@@ -79,7 +82,11 @@ function fail(message) {
 
 /** Files the format and values commands act on: config `include`, minus `exclude`. */
 function targetFiles(config, root, argv) {
-	const explicit = argv.filter(a => !a.startsWith('-'));
+	// Drop flag VALUES as well as flags. `--repo C:/x` used to leave the path behind as a file
+	// spec, which then matched nothing.
+	const FLAGS_WITH_VALUES = new Set(['--repo', '--config', '--slices', '--owner']);
+	const explicit = argv.filter((a, i) => !a.startsWith('-')
+		&& !FLAGS_WITH_VALUES.has(argv[i - 1]));
 	const specs = explicit.length ? explicit : (config.include || ['README.md', 'docs/**.md']);
 
 	const excluded = new Set(
@@ -202,6 +209,25 @@ function cmdSeries(root, config) {
 	const rel = f => path.relative(root, f).split(path.sep).join('/');
 
 	if (!files.length) {
+		// A repository with no planning surface at all is fine and common - most repositories have
+		// nothing to check here. But a repository that HAS a docs/project folder and still matched
+		// nothing is the dangerous case: the glob missed, and silence is indistinguishable from a
+		// clean bill. Measured on MedAR_AI_Runtime, whose roadmap sits one directory deeper.
+		const planningDir = path.join(root, 'docs', 'project');
+		let stranded = [];
+		try {
+			stranded = fs.readdirSync(planningDir, { recursive: true, encoding: 'utf8' })
+				.filter((p) => /\.md$/i.test(p) && /roadmap|backlog/i.test(p));
+		} catch { /* no docs/project at all - genuinely nothing to check */ }
+
+		if (stranded.length) {
+			console.error('No roadmaps matched, but docs/project holds files that look like planning surfaces:\n');
+			for (const p of stranded) { console.error('  docs/project/' + p.split('\\').join('/')); }
+			console.error('\nLooked for: ' + (specs || DEFAULT_ROADMAPS).join(', '));
+			console.error('Add a matching pattern to `series.roadmaps`, or move the file.');
+			return 1;
+		}
+
 		console.log('No roadmaps found. Looked for: ' + (specs || DEFAULT_ROADMAPS).join(', '));
 		return 0;
 	}
@@ -217,27 +243,62 @@ function cmdSeries(root, config) {
 	// A genuinely new roadmap declares its prefixes BEFORE it has any IDs, so `declared.size === 0` is
 	// not "empty and fine" - it is "this has not been told what it owns, or it is not a roadmap".
 	const undeclaredFiles = [];
+	// Repo-scoped on both sides: the ceiling from whichever surface froze it, the highest ID from
+	// every surface. See lib/series.js.
+	const frozen = frozenSeriesViolations(root, specs);
+
+	// Declaration is repository-scoped: a backlog inherits the ownership table of the roadmap
+	// beside it. Only a repository that declares NOWHERE has told us nothing.
+	const declaresAnywhere = files.some((f) => readSeries(f).declared.size > 0);
 
 	for (const file of files) {
 		const { declared, used } = readSeries(file);
 		console.log(rel(file));
-		if (!declared.size) {
+		if (!declared.size && !declaresAnywhere) {
 			undeclaredFiles.push({ file, usesIds: used.size > 0 });
 			console.log(used.size
-				? '  (no Prefix table, but IDs are in use - declare what this roadmap owns)'
-				: '  (no Prefix table and no IDs - is this a roadmap? the glob may be too wide)');
+				? '  (no ownership table, but IDs are in use - declare what this roadmap owns)'
+				: '  (no ownership table and no IDs - is this a roadmap? the glob may be too wide)');
+		} else if (!declared.size && used.size) {
+			console.log('  (inherits the ownership table declared elsewhere in this repository)');
 		}
+
+		const scopes = readSeries(file).scopes;
 		for (const prefix of [...declared].sort()) {
 			const highest = used.get(prefix);
-			const scope = isLocalPrefix(prefix) ? 'repo-local' : 'global';
+			const written = scopes.get(prefix);
+			// A DECLARED scope beats a guess from the prefix string. `isLocalPrefix` is the fallback
+			// for a register that has not said, never an override of one that has.
+			// Print the scope the register WROTE, not the nearest of two words this tool knows.
+			// `repo-owned` is a real and useful third answer - one repository owns a globally
+			// unique prefix - and flattening it to `global` discards the ownership the registry
+			// exists to record.
+			const spoken = written ? written.declared.replace(/[*`]/g, '').trim() : null;
+			// Print the scope the register WROTE, verbatim. Upper-casing a multi-word cell turned
+			// "global, frozen at 8" into shouting, and the freeze is already visible in the words.
+			const scope = written ? spoken : (isLocalPrefix(prefix) ? 'repo-local' : 'global');
 			// padEnd, not printf width specifiers - console.log supports %s but not %-11s, and prints
 			// the modifier literally.
 			const last = highest === undefined ? 'none yet' : `${prefix}-${highest}`;
 			console.log(`  ${prefix.padEnd(8)} ${scope.padEnd(11)} last used: ${last}`);
+
+			// A freeze that nothing enforces is a note, not a control - which is the failure mode
+			// this whole check exists to end. If a register says a series is retired, minting past
+			// its ceiling has to FAIL, or the freeze is worth exactly as much as the convention it
+			// replaced.
 		}
 	}
 
 	let code = 0;
+
+	if (frozen.length) {
+		console.error('\nA RETIRED series has been minted into:\n');
+		for (const v of frozen) {
+			console.error(`  ${v.prefix} is frozen at ${v.prefix}-${v.ceiling}, but ${v.prefix}-${v.highest} exists in ${rel(v.file)}`);
+		}
+		console.error('\nMint this work under the series the register points to, or un-freeze it deliberately.');
+		code = 1;
+	}
 
 	if (undeclaredFiles.length) {
 		console.error('\nRoadmap(s) that declare no prefixes, so nothing was checked:\n');
@@ -250,8 +311,7 @@ function cmdSeries(root, config) {
 
 	// Two global roadmaps claiming the same prefix is a collision waiting to be discovered by
 	// somebody following a reference to the wrong document.
-	const contested = [...declaredOwnership(root, specs).entries()]
-		.filter(([prefix, claims]) => claims.length > 1 && !isLocalPrefix(prefix));
+	const contested = contestedPrefixes(root, specs);
 
 	if (contested.length) {
 		console.error('\nA global prefix is claimed by more than one roadmap:\n');
@@ -346,7 +406,10 @@ function cmdMigrateProject(root, config, argv) {
 	// Pull the narrative out into slices/ before writing the roadmap, so the roadmap that lands is
 	// the thin one with its rows already pinned.
 	const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
+	// Padding is per PREFIX and is read off the register itself, so a migration does not renumber
+	// every id in the file on its first run. A fixed width of five did exactly that.
 	const extracted = extractSlices(result.text, {
+		width: detectWidths(result.text),
 		statusText: read(path.join(repo, 'config', 'STATUS.yaml')),
 		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
 		sourceName: path.basename(from),
@@ -393,6 +456,8 @@ function cmdMigrateProject(root, config, argv) {
 			'- Nothing here matches the roadmap glob, so tooling never sees two registers.',
 			'- Regenerate freely; the command is idempotent.',
 			'- To abandon it: `rm -rf docs/project_v2`. No revert needed.',
+			'- Add `docs/project_v2/` to .gitignore: it is regenerated, and a committed preview goes stale',
+			'  silently while still reading like a plan.',
 			'- To adopt it: replace `docs/project/` in one commit, once it reads right.',
 			'',
 			'Do not hand-edit anything in this folder — edits are overwritten on the next run.',
@@ -401,6 +466,115 @@ function cmdMigrateProject(root, config, argv) {
 		console.log('  wrote:  docs/project_v2/README.md');
 	}
 	return problems.length ? 1 : 0;
+}
+
+/**
+ * Regenerate a Delivery Index from the slice documents that declare its rows.
+ *
+ *   ewc3-docs index [--repo <dir>] [--slices <dir>] [--write]
+ *
+ * The return leg of the migration: slice documents are the authority and the table is a
+ * projection. Dry by default, because a command that rewrites a planning surface on a bare
+ * invocation is one typo away from a bad afternoon.
+ *
+ * It renders rows and it refuses everything else. A document claiming an id the roadmap never
+ * minted is reported, not added - minting is a human act in a planning surface. A row nothing
+ * claims is left exactly as it was. A row with more cells than its header has columns is left
+ * alone too, because given one pipe too many no tool can tell a literal from a missing column.
+ */
+function cmdIndex(root, config, argv) {
+	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null; };
+	const repo = path.resolve(flag('--repo') || root);
+	const write = argv.includes('--write');
+
+	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps);
+	if (!roadmaps.length) {
+		console.error('index: no roadmap found under docs/project/.');
+		console.error(`  looked in: ${repo}`);
+		return 2;
+	}
+
+	// Where the slice documents live. project_v2 is the migration staging area; project/slices is
+	// where they land once a repo has adopted the shape.
+	const given = flag('--slices');
+	const candidates = given ? [path.resolve(repo, given)]
+		: [path.join(repo, 'docs/project/slices'), path.join(repo, 'docs/project_v2/slices')];
+	const sliceDir = candidates.find((d) => fs.existsSync(d));
+	if (!sliceDir) {
+		console.error('index: no slice documents found.');
+		candidates.forEach((d) => console.error(`  looked in: ${d}`));
+		return 2;
+	}
+
+	const records = [];
+	const undeclared = [];
+	for (const name of fs.readdirSync(sliceDir).filter((n) => n.endsWith('.md'))) {
+		const { data } = frontmatter.read(fs.readFileSync(path.join(sliceDir, name), 'utf8'));
+		// A slice document with no `id:` declares nothing. Guessing one from the filename is exactly
+		// the kind of help that writes a wrong row and looks deliberate doing it.
+		if (!data || !data.id) { undeclared.push(name); continue; }
+		records.push(data);
+	}
+
+	console.log(`  reading: ${path.relative(repo, sliceDir).split(path.sep).join('/')}`
+		+ ` (${records.length} declaring, ${undeclared.length} without an id:)`);
+
+	// Nothing declared anything. Rendering zero rows over a live register and calling it
+	// "already current" is a pass about the wrong question - the table was never consulted.
+	if (!records.length) {
+		console.error('index: no slice document in that directory declares an id.');
+		if (!given && candidates.length > 1) {
+			console.error('  other candidates, in preference order:');
+			candidates.forEach((d) => console.error(`    ${d}${fs.existsSync(d) ? '' : '  (absent)'}`));
+			console.error('  pass --slices <dir> to choose one.');
+		}
+		return 2;
+	}
+
+	let code = 0;
+	for (const file of roadmaps) {
+		const rel = path.relative(repo, file).split(path.sep).join('/');
+		const text = fs.readFileSync(file, 'utf8');
+		const res = renderIndex(text, records);
+		if (!res.ok) {
+			console.log(`${rel}: no Delivery Index table to render into.`);
+			continue;
+		}
+
+		const changed = res.text !== text;
+		console.log(`${rel}`);
+		console.log(`  ${res.rendered} row(s) rendered from ${records.length} slice document(s)`
+			+ `${res.rendered && !changed ? ' - already current' : ''}`);
+
+		if (res.malformed.length) {
+			code = 1;
+			console.log(`  REFUSED ${res.malformed.length} row(s) with more cells than the header has `
+				+ 'columns - escape the stray pipe as \\| first:');
+			console.log(`    ${res.malformed.join(' ')}`);
+		}
+		if (res.unknown.length) {
+			code = 1;
+			console.log(`  ${res.unknown.length} document(s) claim an id this register never minted:`);
+			console.log(`    ${res.unknown.join(' ')}`);
+		}
+		if (res.missing.length) {
+			console.log(`  ${res.missing.length} row(s) no document claims, left untouched:`);
+			console.log(`    ${res.missing.slice(0, 20).join(' ')}`);
+		}
+
+		if (write && changed) {
+			fs.writeFileSync(file, res.text);
+			console.log('  written');
+		} else if (changed) {
+			console.log('  (dry run - pass --write to update the table)');
+		}
+	}
+
+	if (undeclared.length) {
+		console.log(`  skipped ${undeclared.length} document(s) with no id: in frontmatter: `
+			+ undeclared.slice(0, 10).join(' '));
+	}
+	return code;
 }
 
 /**
@@ -433,7 +607,13 @@ function cmdTables(root, config, argv) {
 // --- entry -----------------------------------------------------------------
 
 const [, , command, ...argv] = process.argv;
-const root = process.cwd();
+const repoFlag = process.argv.indexOf('--repo');
+// --repo used to be read by migrate-project alone. Every other command ignored it and
+// scanned the current directory instead, which meant `tables --repo <elsewhere>` examined
+// this repo and printed a pass. A flag that is quietly dropped is worse than one that errors.
+const root = repoFlag > -1 && process.argv[repoFlag + 1]
+	? path.resolve(process.argv[repoFlag + 1])
+	: process.cwd();
 const configFlag = process.argv.indexOf('--config');
 const config = loadConfig(root, configFlag > -1 ? process.argv[configFlag + 1] : null);
 
@@ -445,6 +625,7 @@ switch (command) {
 	case 'series': code = cmdSeries(root, config); break;
 	case 'migrate-project': code = cmdMigrateProject(root, config, argv); break;
 	case 'tables': code = cmdTables(root, config, argv); break;
+	case 'index': code = cmdIndex(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':
