@@ -15,7 +15,7 @@ const { checkLinks } = require('../lib/links');
 const { applyToText, resolveValues } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
-const { extractSlices } = require('../lib/slices');
+const { extractSlices, parseIndex, padId } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
 	isLocalPrefix, roadmapFiles, declaredIds, frozenViolations, contestedPrefixes,
@@ -1455,6 +1455,72 @@ const HDC_SHAPE = [
 	'Body.',
 	'',
 ].join('\n');
+
+test('[slices] a LOWERCASE suffix is a distinct id, not a decoration', () => {
+	// The id regex captured `[A-Z]?`, so `VS-203a` did not match and the ROW WAS SILENTLY DROPPED.
+	// Eleven authored rows in SX_Coder were invisible to every check in this toolkit: the collision
+	// check could not see them, `declaredIds` folded VS-203a/b/c into VS-203, and migrate-project
+	// emitted ONE document for four separate commitments.
+	//
+	// They are ids rather than annotations, and the proof is that they carry INDEPENDENT STATES -
+	// VS-203c is planned while VS-203a and VS-203b are coded. A revision-of shares its parent state.
+	const src = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice |',
+		'| --- | --- | --- |',
+		'| VS-203 | coded | the wheel |',
+		'| VS-203a | coded | wire check_demo_match |',
+		'| VS-203c | planned | activate DemoWait routing |',
+	].join('\n');
+	const rows = parseIndex(src.split('\n'));
+	assert.deepStrictEqual(rows.map((r) => r.id), ['VS-203', 'VS-203a', 'VS-203c']);
+	assert.strictEqual(rows[2].state, 'planned', 'and it keeps its own state, which is why it is an id');
+});
+
+test('[slices] a -R<n> revision is a distinct id too', () => {
+	// FIX-09-R1 is smoked while FIX-09 is coded. Different titles, different lifecycles, separately
+	// committed - so the grammar has to admit it or the register loses a commitment.
+	const src = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice |',
+		'| --- | --- | --- |',
+		'| FIX-09 | coded | dirty save guard |',
+		'| FIX-09-R1 | smoked | guard expansion across all paths |',
+	].join('\n');
+	const rows = parseIndex(src.split('\n'));
+	assert.deepStrictEqual(rows.map((r) => r.id), ['FIX-09', 'FIX-09-R1']);
+	assert.strictEqual(rows[1].suffix, '-R1');
+});
+
+test('[slices] canonical padding applies to the NUMBER only; the suffix appends', () => {
+	// `VS-09a` is canonical at a minimum of two, not `VS-9a` and not `VS-009a`. Padding is a
+	// rendering rule for the numeric part and must never reach the suffix.
+	assert.strictEqual(padId('VS', 9, 'a', 2), 'VS-09a');
+	assert.strictEqual(padId('VS', 203, 'a', 2), 'VS-203a');
+	assert.strictEqual(padId('FIX', 9, '-R1', 2), 'FIX-09-R1');
+	assert.strictEqual(padId('DW', 24, '', 3), 'DW-024');
+});
+
+test('[slices] the suffix grammar is defined ONCE', () => {
+	// It was spelled out in 18 places across four files in four different forms, and it had already
+	// drifted - this suite uses `VS-33A`, so the grammar decided suffixes were uppercase while the
+	// estate writes them lowercase. A key assembled from parts in N places drifts silently; the fix
+	// is ONE builder, not N correct copies.
+	const slices = require('../lib/slices');
+	assert.strictEqual(typeof slices.ID_SUFFIX, 'string');
+	assert.ok(slices.idPattern('^', '$', '').test('VS-203a'));
+	assert.ok(slices.idPattern('^', '$', '').test('FIX-09-R1'));
+	assert.ok(slices.idPattern('^', '$', '').test('VS-33A'), 'the uppercase form still works');
+	assert.ok(!slices.idPattern('^', '$', '').test('VS-203abc'), 'but not arbitrary trailing text');
+
+	// The grammar reaches the OTHER modules rather than being re-spelled in them.
+	const di = require('../lib/deliveryindex');
+	const rendered = di.renderRow(['ID', 'State', 'Slice'], { id: 0, state: 1, title: 2 },
+		{ id: 'VS-203a', state: 'coded', title: 'x' }, null);
+	assert.ok(rendered.includes('VS-203a'));
+});
 
 test('[slices] a column is found by its HEADER NAME, not its position', () => {
 	// Position was hardcoded as state=1, title=2 against the house style `| ID | State | Slice |`.
