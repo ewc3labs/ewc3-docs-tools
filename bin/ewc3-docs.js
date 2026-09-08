@@ -487,12 +487,6 @@ function cmdIndex(root, config, argv) {
 	const repo = path.resolve(flag('--repo') || root);
 	const write = argv.includes('--write');
 
-	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps);
-	if (!roadmaps.length) {
-		console.error('index: no roadmap found under docs/project/.');
-		console.error(`  looked in: ${repo}`);
-		return 2;
-	}
 
 	// Where the slice documents live. project_v2 is the migration staging area; project/slices is
 	// where they land once a repo has adopted the shape.
@@ -506,14 +500,67 @@ function cmdIndex(root, config, argv) {
 		return 2;
 	}
 
+	// THE SLICES AND THE ROADMAP THEY RENDER INTO MUST COME FROM THE SAME TREE.
+	//
+	// Without this, a repo in the normal pre-adoption state - no docs/project/slices yet, a
+	// migrate-project preview sitting in docs/project_v2 - would take the staged slices and
+	// render them into the LIVE register. The documented command, on the documented state,
+	// overwriting the authoritative file with generated ones.
+	const tree = path.dirname(sliceDir);
+	const inTree = (file) => {
+		const rel = path.relative(tree, file);
+		return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+	};
+	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps).filter(inTree);
+	if (!roadmaps.length) {
+		// A staging tree carries its own copy of the roadmap, written beside the slices.
+		const rel = path.relative(repo, tree).split(path.sep).join('/');
+		for (const spec of [rel + '/*Roadmap.md', rel + '/*ROADMAP.md', rel + '/roadmap/*Roadmap.md']) {
+			roadmaps.push(...expand(spec, repo));
+		}
+	}
+	if (!roadmaps.length) {
+		console.error('index: no roadmap in the same tree as those slice documents.');
+		console.error(`  slices:  ${sliceDir}`);
+		console.error(`  tree:    ${tree}`);
+		console.error('  A staged preview renders into its OWN roadmap copy, never the live one.');
+		return 2;
+	}
+
 	const records = [];
 	const undeclared = [];
+	const byFile = new Map();
 	for (const name of fs.readdirSync(sliceDir).filter((n) => n.endsWith('.md'))) {
 		const { data } = frontmatter.read(fs.readFileSync(path.join(sliceDir, name), 'utf8'));
 		// A slice document with no `id:` declares nothing. Guessing one from the filename is exactly
 		// the kind of help that writes a wrong row and looks deliberate doing it.
 		if (!data || !data.id) { undeclared.push(name); continue; }
 		records.push(data);
+		byFile.set(name, String(data.id).trim());
+	}
+
+	// TWO DOCUMENTS MAY DECLARE THE SAME ID, because the filename carries a title slug as well:
+	// VS-00001_First.md and VS-00001_Second.md coexist happily. Keying them into a Map silently
+	// keeps whichever was read last, so one commitment renders and the other vanishes without a
+	// word. Refuse instead - which of two documents owns an id is not a tool decision.
+	const byId = new Map();
+	const duplicated = new Map();
+	for (const [file, id] of byFile) {
+		const key = id.toUpperCase();
+		if (byId.has(key)) {
+			if (!duplicated.has(key)) { duplicated.set(key, [byId.get(key)]); }
+			duplicated.get(key).push(file);
+			continue;
+		}
+		byId.set(key, file);
+	}
+	if (duplicated.size) {
+		console.error(`index: ${duplicated.size} id(s) declared by more than one document.`);
+		for (const [id, files] of duplicated) {
+			console.error(`  ${id}: ${files.join('  ')}`);
+		}
+		console.error('  Two documents cannot own one id. Resolve it before rendering.');
+		return 2;
 	}
 
 	console.log(`  reading: ${path.relative(repo, sliceDir).split(path.sep).join('/')}`
@@ -532,6 +579,7 @@ function cmdIndex(root, config, argv) {
 	}
 
 	let code = 0;
+	let anyIndex = false;
 	for (const file of roadmaps) {
 		const rel = path.relative(repo, file).split(path.sep).join('/');
 		const text = fs.readFileSync(file, 'utf8');
@@ -540,6 +588,7 @@ function cmdIndex(root, config, argv) {
 			console.log(`${rel}: no Delivery Index table to render into.`);
 			continue;
 		}
+		anyIndex = true;
 
 		const changed = res.text !== text;
 		console.log(`${rel}`);
@@ -568,6 +617,16 @@ function cmdIndex(root, config, argv) {
 		} else if (changed) {
 			console.log('  (dry run - pass --write to update the table)');
 		}
+	}
+
+	// A run in which no roadmap carried a recognised Delivery Index examined nothing, and
+	// returning 0 for it is a pass about the wrong question - a misspelled heading, an overly
+	// broad glob or a backlog-only repo all produce a confident success. Same shape as the
+	// zero-declaring-documents case already guarded above.
+	if (!anyIndex) {
+		console.error('index: no roadmap in that tree carries a recognised Delivery Index.');
+		roadmaps.forEach((r) => console.error(`  looked at: ${path.relative(repo, r).split(path.sep).join('/')}`));
+		return 2;
 	}
 
 	if (undeclared.length) {

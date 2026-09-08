@@ -1456,6 +1456,98 @@ const HDC_SHAPE = [
 	'',
 ].join('\n');
 
+// ---------------------------------------------------------------------------
+// Four findings codex left on the round-trip commit that went UNREAD FOR SIX DAYS while this
+// lane reported the branch "settled" and "clean". The position was current; the REVIEW was not.
+//
+// Three of them live in bin/, which the suite could not reach - so the most dangerous logic in
+// the toolkit was also the least testable. These drive the real CLI.
+
+/** Run the CLI against a throwaway repo and return { code, out }. */
+function cli(args, repo) {
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), ...args, '--repo', repo],
+		{ encoding: 'utf8' });
+	return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+function stagedRepo() {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-'));
+	const index = ['# R', '', '## Delivery Index', '', '| ID | State | Slice | Status |',
+		'| --- | --- | --- | --- |', '| VS-1 | planned | first | x |', ''].join('\n');
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	fs.mkdirSync(path.join(dir, 'docs', 'project_v2', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), index);
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), index);
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-1_first.md'),
+		'---\nid: VS-1\nstate: coded\ntitle: CHANGED\n---\n\n# VS-1\n');
+	return dir;
+}
+
+test('[index] STAGED slices never write the LIVE roadmap', () => {
+	// P1. The slice directory fell back to docs/project_v2/slices while the roadmap target stayed
+	// the live docs/project tree - so the DOCUMENTED command, in the NORMAL pre-adoption state of
+	// every repo in the estate, would have rewritten an authoritative register from generated
+	// previews. Two of six repos were exposed; the other four were saved by a README happening to
+	// sit in docs/project/slices, which is not a design.
+	//
+	// The rule that removes the class: the slices and the roadmap they render into come from the
+	// SAME TREE.
+	const dir = stagedRepo();
+	const live = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	const before = fs.readFileSync(live, 'utf8');
+
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(fs.readFileSync(live, 'utf8'), before,
+		'the live register must not be touched by a staged preview');
+	assert.ok(r.out.includes('project_v2'), 'and the staged copy is what it renders into');
+	assert.ok(fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8')
+		.includes('CHANGED'), 'which it did write');
+});
+
+test('[index] two documents declaring one id is REFUSED', () => {
+	// P1. `byId` as a Map silently keeps whichever document was read last, and VS-1_First.md and
+	// VS-1_Second.md coexist because the filename carries a title slug too. One commitment renders,
+	// the other vanishes without a word. Which of two documents owns an id is not a tool decision.
+	const dir = stagedRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-1_second.md'),
+		'---\nid: VS-1\nstate: planned\ntitle: OTHER\n---\n\n# VS-1\n');
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2);
+	assert.ok(/declared by more than one document/.test(r.out));
+	assert.ok(r.out.includes('VS-1_first.md') && r.out.includes('VS-1_second.md'),
+		'both documents are named, because the human has to pick');
+});
+
+test('[index] rendering NO Delivery Index at all is not a success', () => {
+	// A misspelled heading, an overly broad glob or a backlog-only repo all produced exit 0 - a
+	// confident pass over nothing examined. Same shape as `tables` reporting success across 0 files.
+	const dir = stagedRepo();
+	const staged = path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md');
+	fs.writeFileSync(staged, fs.readFileSync(staged, 'utf8').replace('## Delivery Index', '## Deliverry Index'));
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2);
+	assert.ok(/no roadmap in that tree carries a recognised Delivery Index/.test(r.out));
+});
+
+test('[slices] a row links to its OWN document, not the anchor\'s', () => {
+	// P2. Every member of a group gets its own document, but the row rewrite used the anchor-only
+	// `g.file` for all of them - so a follower row pointed at the anchor and that follower own
+	// document had no row pointing at it, making its frontmatter and history unreachable from the
+	// index that exists to be a projection of exactly those documents.
+	const src = [
+		'## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| VS-1 | coded | first | x |', '| VS-2 | planned | second | y |', '',
+		'## Slice Notes', '', '### VS-1, VS-2 — one narrative', '', 'Body.', '',
+	].join('\n');
+	const r = extractSlices(src, { width: 0 });
+	const rows = r.text.split('\n').filter((l) => /^\| VS-/.test(l));
+	assert.ok(rows[0].includes('slices/VS-1_first.md'));
+	assert.ok(rows[1].includes('slices/VS-2_second.md'),
+		'the follower row must point at ITS document, not the anchor');
+});
+
 test('[slices] a LOWERCASE suffix is a distinct id, not a decoration', () => {
 	// The id regex captured `[A-Z]?`, so `VS-203a` did not match and the ROW WAS SILENTLY DROPPED.
 	// Eleven authored rows in SX_Coder were invisible to every check in this toolkit: the collision
