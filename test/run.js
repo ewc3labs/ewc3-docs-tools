@@ -1639,6 +1639,36 @@ test('[slices] a heading declares only its LEADING RUN of ids', () => {
 	assert.ok(!r.docs.some((d) => d.ids[0].startsWith('VS-')));
 });
 
+test('[slices] an AUTHORED document is never regenerated, and the row points at it', () => {
+	// Migration is a one-time import, but a repo part-way through adoption has both kinds: rows
+	// nobody has written up, and documents somebody HAS. Regenerating the second kind overwrites
+	// human prose with a projection of the row that prose replaced - and on the second run, with no
+	// diff to notice, because the generated text is stable.
+	//
+	// The name is taken from the existing file rather than derived from the row: deriving it would
+	// emit a SECOND document for the same id under a different slug, which is two declaring
+	// surfaces for one commitment - the exact defect this model removes, built by the tool that
+	// implements it.
+	const first = extractSlices(ROADMAP, { width: detectWidths(ROADMAP) });
+	const one = first.docs[0];
+	const id = frontmatter.read(one.content).data.id;
+	const held = `${id}_AUTHORED_BY_A_HUMAN.md`;
+
+	const guarded = extractSlices(ROADMAP, {
+		width: detectWidths(ROADMAP),
+		existing: new Map([[id, held]]),
+	});
+
+	assert.ok(!guarded.docs.some((d) => frontmatter.read(d.content).data.id === id),
+		'the authored id must not be regenerated');
+	assert.deepStrictEqual(guarded.kept, [id], 'and it is REPORTED as kept, not silently skipped');
+	assert.strictEqual(guarded.docs.length, first.docs.length - 1, 'every other row still emits');
+	assert.ok(guarded.text.includes(held),
+		'the register points at the authored filename, not a freshly derived one');
+	assert.ok(!guarded.text.includes(one.file),
+		'and never at a name derived from the row it replaced');
+});
+
 test('[slices] every emitted document declares exactly ONE id, in frontmatter', () => {
 	// The whole design rests on this. A document carrying two ids has no single `id:` to declare,
 	// and the Delivery Index could not be regenerated from it.

@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-53<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-54<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -75,6 +75,7 @@ is never referenced from outside the repository it fixes.
 | DT-51 | ⬜ planned | Cross-repo relative links cannot resolve in a single-repo checkout | M | [DT-51][dt-51] | CI red for 8 runs; 9 of the 10 failures are the relative half of a twin link, the 10th has no twin and is genuinely dead |
 | DT-52 | ⬜ planned | The document modules do not know frontmatter exists, and `format` destroys it | S | [DT-52][dt-52] | ⛔ blocks the slice-document model — `fix` destroys frontmatter, a five-line stub corrupts SILENTLY, and `links` reports frontmatter values as dead links |
 | DT-53 | 🟦 coded | `migrate-project` output fed to `index` restores every row it just moved out | S | [DT-53][dt-53] | CODED - the narrative moves to the body and `status:` is emitted empty, so a migrated register survives its own `index --write`; measured 341 to 341, and the round-trip test now asserts idempotence rather than the identity that encoded the defect |
+| DT-54 | 🟦 coded | `migrate-project` must never regenerate a slice document a human already authored | S | slices/DT-54_Migration_never_regenerates_an_authored_slice.md | CODED - authored documents are matched by frontmatter id, kept, and REPORTED; the register points at the existing filename rather than one derived from the row |
 
 ## Done
 

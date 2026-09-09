@@ -408,11 +408,38 @@ function cmdMigrateProject(root, config, argv) {
 	const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
 	// Padding is per PREFIX and is read off the register itself, so a migration does not renumber
 	// every id in the file on its first run. A fixed width of five did exactly that.
+	// SLICE DOCUMENTS THAT ALREADY EXIST ARE AUTHORED, AND MIGRATION IS A ONE-TIME IMPORT.
+	//
+	// A repo part-way through adoption has both: rows nobody has written up yet, and documents
+	// somebody has. Regenerating the second kind would overwrite human prose with a projection of
+	// the row that prose was written to replace - and on a second run, silently. The id is read from
+	// frontmatter rather than the filename, because the filename carries a title slug that is free
+	// to change while the id is the commitment.
+	// Only the LIVE tree counts. `docs/project_v2/slices` is this command's own output, and reading
+	// it back would let a first run's generated documents look authored to the second - freezing the
+	// migration at whatever it happened to emit, and doing it silently.
+	const authored = new Map();
+	for (const dir of [path.join(repo, 'docs/project/slices')]) {
+		if (!fs.existsSync(dir)) { continue; }
+		for (const f of fs.readdirSync(dir)) {
+			if (!f.endsWith('.md')) { continue; }
+			let data;
+			// A document too malformed to declare an id cannot be matched to a row, so it is left
+			// alone AND not counted as covering one. Refusing the whole migration over one bad file
+			// would be worse; claiming to have covered a row it cannot read would be worse still.
+			try { data = frontmatter.read(fs.readFileSync(path.join(dir, f), 'utf8')).data; }
+			catch { continue; }
+			const id = data && data.id && String(data.id).trim();
+			if (id && !authored.has(id)) { authored.set(id, f); }
+		}
+	}
+
 	const extracted = extractSlices(result.text, {
 		width: detectWidths(result.text),
 		statusText: read(path.join(repo, 'config', 'STATUS.yaml')),
 		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
 		sourceName: path.basename(from),
+		existing: authored,
 	});
 
 	const outFile = path.join(outDir, path.basename(from));
@@ -442,6 +469,13 @@ function cmdMigrateProject(root, config, argv) {
 		for (const d of extracted.docs) { fs.writeFileSync(path.join(sliceDir, d.file), d.content); }
 		console.log(`  wrote:  docs/project_v2/slices/  (${extracted.docs.length} documents from `
 			+ `${extracted.rowCount} rows and ${extracted.noteCount} narrative sections)`);
+	}
+
+	// Said even when nothing was written, because "every row already has a document" and "the
+	// migration did nothing" look identical in an empty output and mean opposite things.
+	if (extracted.kept && extracted.kept.length) {
+		console.log(`  kept:   ${extracted.kept.length} authored document(s), not regenerated`);
+		console.log(`          ${extracted.kept.join(' ')}`);
 	}
 
 	// A migration nobody can undo in one move is not a safe migration.
