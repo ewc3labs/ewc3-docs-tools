@@ -1,10 +1,10 @@
 ---
 id: DT-53
-state: ⬜ planned
+state: 🟦 coded
 title: '`migrate-project` output fed to `index` restores every row it just moved out'
 est: S
 doc: '[DT-53][dt-53]'
-status: 'the migration writes a one-line register but carries the whole row into `status:`, so `index --write` - its own documented next step - puts all 34 monsters back; measured 341 to 5961 chars'
+status: 'CODED - the narrative moves to the body and `status:` is emitted empty, so a migrated register survives its own `index --write`; measured 341 to 341, and the round-trip test now asserts idempotence rather than the identity that encoded the defect'
 priority: high
 lane: migrate
 ---
@@ -73,3 +73,58 @@ currently be followed by the command that regenerates registers.
 
 Related: `DT-26` (`migrate-project` emits from ONE source) and `DT-34` (`migrate-project` accepts
 shapes `series` refuses) are both about this command being trusted further than it has been tested.
+
+## Fixed 2026-09-08
+
+`lib/slices.js` — the cell that becomes the body narrative is no longer also declared in
+frontmatter. Emptied rather than deleted, and only when it actually reached the body, so a family
+member whose row was never rendered into a narrative keeps its own.
+
+```
+before   migrate 341 -> index 5961      the migration undone
+after    migrate 341 -> index 341       stable
+```
+
+All 35 emitted documents carry `status: ""`; every body retains its paragraph.
+
+**The pointer moved to `Doc`, which is the column that means it.** Emptying the Status cell would
+otherwise have taken `See [slice notes](...)` with it, leaving a register that could not reach its
+own documents. It is written as a **plain path**, not a markdown link, because `links` reads
+frontmatter as prose and reports a link in a field value as an undefined reference — `DT-52`. It is
+greppable today and becomes a link when that lands. An authored `Doc` value is never replaced:
+`DT-5` keeps `[Adopting](../Adopting.md)`.
+
+### The test that had to change, and why that is not test-fitting
+
+`[index] a register regenerates from the documents it just produced` asserted:
+
+```js
+assert.strictEqual(res.text, ROADMAP,
+  'a register that has just been migrated must regenerate to itself, byte for byte');
+```
+
+**That invariant is the defect, written down as a requirement.** Byte-for-byte identity after a
+migration means the paragraph is still declared in frontmatter — which is exactly why `index
+--write` restored all 34 rows. A test asserting the register comes back unchanged is a test
+asserting the migration did nothing.
+
+Replaced with the two properties that were actually wanted, and it is strictly stronger than what
+it replaces because it now checks both halves:
+
+1. **Idempotence from the second pass** — an *already migrated* register regenerates to itself,
+   byte for byte. Migration is a deliberate one-time relocation; everything after it is stable.
+2. **Losslessness** — the narrative is asserted present in a document body and absent from the
+   register row. Checked on a named cell rather than a count, so a regression that empties the
+   body as well as the row cannot pass.
+
+154 passing, 0 failing.
+
+### Next, and deliberately not done here
+
+An empty `status:` is the seam a summariser writes into — MedAR is standing up a local LLM endpoint
+for exactly this, and an empty cell is an honest *"a one-line summary is owed"* marker that a
+generated placeholder would hide. Options, Wilson’s call: dogfood a local endpoint in this repo, or
+coordinate with **DT** and **AIR** to use the `cictl` tooling on the MedAR network.
+
+Until then the four monster rows in this register — `DT-49`, `DT-48`, `DT-27`, `DT-50`, 17,101
+characters between them — can be migrated whenever wanted; the summaries are the human half.

@@ -1682,15 +1682,38 @@ test('[slices] a document CARRIES the reference definitions it uses', () => {
 	assert.ok(!two.content.includes('[d]:'), 'a document that cites nothing carries nothing');
 });
 
-test('[index] a register regenerates from the documents it just produced', () => {
+test('[index] a MIGRATED register is stable, and the narrative it moved is not lost', () => {
 	// The round trip, end to end: roadmap -> slice documents -> roadmap. Read back off the
 	// GENERATED text rather than the in-memory objects, so the serialise/parse leg is exercised
 	// instead of skipped.
-	const r = extractSlices(ROADMAP, { width: detectWidths(ROADMAP) });
-	const records = r.docs.map((d) => frontmatter.read(d.content).data);
-	const res = renderIndex(ROADMAP, records);
-	assert.strictEqual(res.text, ROADMAP,
-		'a register that has just been migrated must regenerate to itself, byte for byte');
+	//
+	// THIS USED TO ASSERT `res.text === ROADMAP` - that a freshly migrated register regenerates its
+	// ORIGINAL rows byte for byte - and that is the one thing it must not do. Byte-for-byte identity
+	// here means the narrative cell is still DECLARED in frontmatter, so `index --write`, the step
+	// documented to follow a migration, writes every paragraph straight back into the register the
+	// migration just emptied. Measured on this repo (DT-53): longest row 341 chars after migrating,
+	// 5961 after re-indexing. The invariant was encoding the defect as a requirement.
+	//
+	// Migration is a deliberate, one-time relocation: the narrative leaves the cell and lands in the
+	// document body. So what must hold is IDEMPOTENCE FROM THE SECOND PASS, plus losslessness.
+	const first = extractSlices(ROADMAP, { width: detectWidths(ROADMAP) });
+	const recs1 = first.docs.map((d) => frontmatter.read(d.content).data);
+	const once = renderIndex(ROADMAP, recs1).text;
+
+	const second = extractSlices(once, { width: detectWidths(once) });
+	const recs2 = second.docs.map((d) => frontmatter.read(d.content).data);
+	const twice = renderIndex(once, recs2).text;
+
+	assert.strictEqual(twice, once,
+		'an already-migrated register must regenerate to itself, byte for byte');
+
+	// Losslessness: the paragraph is RELOCATED, never dropped. Checked on a specific cell rather
+	// than a count, so a regression that empties the body as well as the row cannot pass.
+	const moved = 'Added 2026-08-08. Wilson said so.';
+	const bodies = first.docs.map((d) => frontmatter.read(d.content).body).join('\n');
+	assert.ok(ROADMAP.includes(moved), 'fixture still carries the narrative cell this test tracks');
+	assert.ok(bodies.includes(moved), 'the narrative moved into a document body');
+	assert.ok(!once.includes(moved), 'and it no longer sits in the register row');
 });
 
 test('[index] rows keep the position their AUTHOR gave them', () => {
