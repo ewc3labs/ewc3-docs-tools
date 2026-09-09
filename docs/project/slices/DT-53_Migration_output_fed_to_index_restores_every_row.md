@@ -4,7 +4,7 @@ state: 🟦 coded
 title: '`migrate-project` output fed to `index` restores every row it just moved out'
 est: S
 doc: '[DT-53][dt-53]'
-status: 'CODED - the narrative moves to the body and `status:` is emitted empty, so a migrated register survives its own `index --write`; measured 341 to 341, and the round-trip test now asserts idempotence rather than the identity that encoded the defect'
+status: 'CODED - migrated documents no longer declare the paragraph they moved to the body, so a register survives its own `index --write`; measured 341 to 341'
 priority: high
 lane: migrate
 ---
