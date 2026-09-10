@@ -141,3 +141,39 @@ So the correct action on that branch is **none**, until adoption lands and the r
 the document. Anyone who finds the fat row and tidies it is manufacturing the duplicate-authoring
 defect that `DT-30`, `DT-48` and this slice are all circling — and doing it while believing they are
 cleaning up.
+
+## Correction — the claim was "byte for byte" and it decayed
+
+PMO fetched `497a9ea`, read the DT-49 body against their own `23d2937` register cell, and found the
+claim above overstated:
+
+```
+their status cell                    9,952 chars
+words of theirs absent from the doc  0
+corrections intact                   the DT-01 strike, RULED 09-09, MEASURED 09-09 — all present
+byte-for-byte                        NO — diverges at char 97
+
+  theirs  "Prefix (a backticked pattern, unambiguous)"
+  ours    "Prefix (a backticked\npattern, unambiguous)"
+```
+
+**`format` wrapped the line** — doing precisely its documented job, *wrap prose so a source line is
+as wide as it renders, never change a word.* Nothing was lost. The honest wording is **word-for-word
+after a documented reflow**, and `byte for byte` is retired.
+
+⭐ **And the sharper version, which neither of us said first: the claim was TRUE WHEN MADE.** It was
+measured at `dd6273d`, before `DT-52`'s fix existed. `497a9ea` then ran `format` across all 40 slice
+documents — the very fix that made running it safe — and reflowed this body. **A verified
+measurement decayed because a later, correct, documented operation changed the thing measured.**
+
+That is the same shape this estate spent two days on, arriving in the verification rather than the
+defect: a review is not a value that stays true, and a number is only a fact about the commit it was
+taken on. **Quote the commit with the number, or the number outlives its truth.**
+
+`9,952 chars, 0 words lost, reflowed by format` survives being repeated. `byte for byte` would have
+been quoted for a year and been wrong.
+
+⚠️ PMO also caught their own instrument mid-probe: a case-sensitive predicate reported this document
+missing *"one row invalidated"*, which it carries in capitals. They did not send it — **a single NO
+among YESes is more likely the instrument than the file.** Fourth naive-predicate false positive in
+the estate in two days.
