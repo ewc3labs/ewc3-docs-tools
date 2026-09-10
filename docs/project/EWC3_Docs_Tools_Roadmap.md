@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-59<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-60<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -81,6 +81,7 @@ is never referenced from outside the repository it fixes.
 | DT-57 | ⬜ planned | A register with no Doc column loses every pointer to its slices, and any warning its rows carried | M | [DT-57][dt-57] | BLOCKS DevTools adoption: their header has no Doc column, so after `index --write` every row renders with an empty Status and no link at all - including the row whose entire purpose is a DO-NOT-RE-SPELL warning |
 | DT-58 | ⬜ planned | One narrow id re-spells every other id in the register, and `index --write` applies it | M | [DT-58][dt-58] | measured on the real DevTools shape: DT-090 and DT-092 become DT-90 and DT-92 because DT-01 sets the derived width to 2; migrate leaves the register clean and the documented next step applies the damage |
 | DT-59 | ⬜ planned | `format` and `index --write` disagree about the register, stably and forever | S | [DT-59][dt-59] | each undoes the other on every run, so whether `check` passes depends on which command ran last - measured stable across three rounds |
+| DT-60 | ⬜ planned | Both register readers are blind to the other shape, and one comment claims otherwise | M | [DT-60][dt-60] | found by Copilot on PR #2: `readSeries` documents accepting `Prefix` OR `Series` and matches only `Prefix`, which is why 4 of 6 estate registers read as declaring nothing |
 
 ## Done
 
@@ -161,6 +162,7 @@ caught.
 [dt-57]: slices/DT-57_A_register_with_no_Doc_column_loses_every_pointer.md
 [dt-58]: slices/DT-58_One_narrow_id_re_spells_the_whole_register.md
 [dt-59]: slices/DT-59_Format_and_index_disagree_about_the_register_forever.md
+[dt-60]: slices/DT-60_Both_register_readers_are_blind_to_the_other_shape.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
