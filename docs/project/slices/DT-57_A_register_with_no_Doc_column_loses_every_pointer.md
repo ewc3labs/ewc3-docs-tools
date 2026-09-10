@@ -16,7 +16,9 @@ is the column that means it. **That reasoning assumed every register has one.** 
 
 ## Measured against the real DevTools shape, reported by DT
 
-Their Delivery Index header is `| ID | State | Slice | Est | Status |` — five columns, no `Doc`.
+Their Delivery Index header is `| ID | State | Slice | Est | Priority | Lane | Status |` — seven
+columns, no `Doc`. (My first fixture used five; DT corrected it. The conclusion is unchanged —
+there is still no `Doc` column — but the worked example now reproduces against their real file.)
 Run the documented sequence on it:
 
 ```
@@ -78,3 +80,30 @@ and unnavigable, and the one row in it that most needs its explanation would los
 
 Their Series column has no Owner, so a migration would still reshape that table — worth their
 review before running it, but it is a reshape rather than a duplication.
+
+## The twin, confirmed by measurement — a column with no field
+
+DT raised the mirror of this slice: *a frontmatter field with no column is silently dropped* **and**
+*a column with no frontmatter field is silently blanked.* Both are real, and the scope needed one
+correction:
+
+```
+migrated document      priority: Medium / lane: Publish safety   CARRIED, and renders back
+hand-authored document without those fields:
+  | DT-90 | ⬜ planned | A normal three-digit row | S |  |  |  |     <- Priority and Lane BLANK
+```
+
+So migration does **not** lose DevTools’ 92 rows of triage data — `migrate-project` carries every
+non-id column into frontmatter, exactly as its comment claims. The twin bites the **hand-authored**
+document instead: anyone writing a slice by hand omits fields they never knew were columns, and the
+register silently blanks that row’s Priority and Lane on the next render.
+
+> **The mapping is total in neither direction and reports in neither.** A projection that silently
+> accepts a mismatch either way is not a projection — it is a lossy copy that looks authoritative.
+
+DT’s doctrine fix, which costs nothing because both sides are already computed at that moment:
+**`index --write` should REPORT a cell it is about to overwrite that differs from what it will
+write** — *"the Status cell for DT-01 was edited by hand; that edit is being DISCARDED. It belongs
+in docs/project/slices/<id>.md."* Not refuse, report. **The sensor exists; only the alarm is
+missing.** That also makes the summarizer safe: it writes the document, and if anyone wires it to
+the register instead, the next run says so rather than eating it.

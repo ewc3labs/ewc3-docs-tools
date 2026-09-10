@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-57<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-58<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -79,6 +79,7 @@ is never referenced from outside the repository it fixes.
 | DT-55 | ⬜ planned | `migrate-project` synthesises a SECOND prefix register, because it cannot read the one this repo has | M | slices/DT-55_Migrate_bootstraps_a_second_register_it_cannot_read.md | BLOCKS adopting a migrated register: `migrate` cannot read the `Prefix`-first table `series` reads, so it bootstraps a duplicate that unclaims the owner and re-pads DT-54 to DT-00054 |
 | DT-56 | ⬜ planned | After adoption, editing a Delivery Index row is silently discarded by the next `index --write` | M | slices/DT-56_After_adoption_editing_the_register_is_silently_futile.md | the register becomes generated and nothing says so, so a row edited by hand is overwritten with no warning and exit 0; PMO had 9952 characters of live reasoning standing in exactly that position |
 | DT-57 | ⬜ planned | A register with no Doc column loses every pointer to its slices, and any warning its rows carried | M | slices/DT-57_A_register_with_no_Doc_column_loses_every_pointer.md | BLOCKS DevTools adoption: their header has no Doc column, so after `index --write` every row renders with an empty Status and no link at all - including the row whose entire purpose is a DO-NOT-RE-SPELL warning |
+| DT-58 | ⬜ planned | One narrow id re-spells every other id in the register, and `index --write` applies it | M | slices/DT-58_One_narrow_id_re_spells_the_whole_register.md | measured on the real DevTools shape: DT-090 and DT-092 become DT-90 and DT-92 because DT-01 sets the derived width to 2; migrate leaves the register clean and the documented next step applies the damage |
 
 ## Done
 
