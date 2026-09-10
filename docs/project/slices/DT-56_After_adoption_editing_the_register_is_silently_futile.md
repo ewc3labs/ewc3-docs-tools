@@ -76,3 +76,54 @@ saying **where to edit instead**. That would have cost one line and saved this e
 that looks editable, in an org where editing the register is what everyone has always done. The
 first person to do it by habit loses their work silently — and by construction they are the person
 who had something to say.
+
+## Two failures, two owners — and the one that sets the SIZE of the loss
+
+The first draft of this slice acquitted PMO entirely: the tool gave no signal, therefore not their
+fault. **PMO declined half of that, and they are right.** Recorded in their words because the
+distinction is the useful part:
+
+| | owner | |
+| --- | --- | --- |
+| the silent discard (`DT-56`) | **the tool** | authority flips at adoption, nothing announces it |
+| a 10,168-character register row | **PMO** | true on their branch, in their register, **before adoption existed anywhere** |
+
+The second predates any flip. Thin-row discipline — *rows are one short sentence plus a pointer* —
+was already their own rule, cited to other lanes in the same days the paragraph was growing. No
+flip was involved and nothing was disguised.
+
+> **The SIZE of a loss is set by the discipline you kept BEFORE the defect fired.**
+
+A thin row is **176 bytes** — the number regeneration actually produced for `DT-49`. Losing 176
+bytes to a silent discard is an annoyance you notice and retype. **10,168 bytes is a three-day
+erasure.** Same defect, same command, same silence; the blast radius was set entirely by what had
+accumulated in the cell beforehand. PMO: *"I did not cause the trap and I loaded it."*
+
+That is worth more than either the self-blame or the acquittal, and it generalises past this bug:
+**every silent-loss defect in the estate has a magnitude nobody controls at the moment it fires.**
+Thin rows are not tidiness. They are a bound on how much a future silent failure can take.
+
+## The safety feature and the recovery path are the same mechanism
+
+Stated plainly because it is the most operationally surprising thing here, and it will be reached
+for as a repair:
+
+> **`migrate-project` does NOT recover a diverged row, by design.** `DT-54` stops it regenerating
+> an authored document — and after adoption *every* migrated document is authored. So a repair
+> attempt returns a clean no-op, reports `kept: N authored document(s)`, and the person running it
+> concludes nothing was lost.
+
+Measured: re-running migration from `23d2937` kept all 32 documents and emitted none. The guard
+that protects human prose is the guard that blocks re-import — the same mechanism pointed in
+opposite directions. Recovery of a diverged row is a deliberate extraction, not a re-run.
+
+## A practice worth copying, from the review of this slice
+
+PMO opened their acceptance by labelling what they had NOT checked: `dd6273d` is unpushed and
+unreachable from their machine, so the byte-for-byte claim above is **my measurement, accepted on
+report — not their observation.** They said so before relying on it.
+
+That is the counter-practice to the whole class of error this estate spent two days cataloguing.
+A number quoted without provenance is indistinguishable from a number verified, and the difference
+only surfaces when it is wrong. **The verbatim claim gets a second witness when the branch is
+pushed and PMO reads the body against their own `23d2937` text.** Until then it has one.
