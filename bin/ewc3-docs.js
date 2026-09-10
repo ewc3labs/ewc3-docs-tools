@@ -435,7 +435,14 @@ function cmdMigrateProject(root, config, argv) {
 	}
 
 	const extracted = extractSlices(result.text, {
-		width: detectWidths(result.text),
+		// A DECLARED width beats a detected one, and only a declared one is safe to WRITE with.
+		//
+		// `detectWidths` reads the register, which is right for round-tripping a file whose
+		// convention nobody has stated - but as an instruction to a renamer it is circular. One
+		// deliberate narrow id restates the convention for the series: `DOCS-058`, where `DT-01`
+		// dragged 92 three-digit ids to two. `series.widths` is the same map `resolveValues` reads,
+		// so the filename and the register marker cannot disagree about how wide an id is.
+		width: { ...detectWidths(result.text), ...((config.series || {}).widths || {}) },
 		statusText: read(path.join(repo, 'config', 'STATUS.yaml')),
 		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
 		sourceName: path.basename(from),

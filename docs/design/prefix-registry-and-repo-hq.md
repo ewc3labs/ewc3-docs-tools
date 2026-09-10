@@ -304,7 +304,7 @@ already owns `DT`:
 Both marked `global`. Both correct. Nothing breaks, because they are different registries — which
 means **`global` is scoped to one HQ namespace, not to the universe.** Worth saying out loud in the
 schema docs, because "global" invites the other reading, and someone will eventually try to reason
-about a `DOCS-12` across both orgs.
+about a `DOCS-012` across both orgs.
 
 It is also a second argument for the registry carrying its own identity: it names whose "global"
 this is.
@@ -565,8 +565,8 @@ the pullup chain all stand as decided.
 | a roadmap **uses** a prefix it does not own (`undeclaredPrefixes`) | **still fully reachable** |
 
 Generation controls the *declaration table*. It does not control the **ID tables**, which stay
-hand-written — that is the whole point of them. Nothing stops someone typing `| DOCS-5 |` into an ID
-row of a repo that was never granted `DT`.
+hand-written — that is the whole point of them. Nothing stops someone typing `| DOCS-005 |` into an
+ID row of a repo that was never granted `DT`.
 
 So the distinction to hold is between *declaring* a prefix you do not own — which generation does
 make unreachable, caught by `values --check` — and *using* one, which it does not touch at all.
@@ -771,7 +771,7 @@ Measured across **all** commit history in six repositories:
 
 ```text
 distinct (prefix, number) pairs   340
-written more than one way           1     DOCS-1  as  DT-001  and  DT-01
+written more than one way           1     DOCS-001  as  DT-001  and  DT-01
 ```
 
 History is 99.7% single-form. Each repository has been internally consistent; the one mixed pair
