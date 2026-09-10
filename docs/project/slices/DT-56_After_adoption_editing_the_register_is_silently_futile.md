@@ -127,3 +127,18 @@ That is the counter-practice to the whole class of error this estate spent two d
 A number quoted without provenance is indistinguishable from a number verified, and the difference
 only surfaces when it is wrong. **The verbatim claim gets a second witness when the branch is
 pushed and PMO reads the body against their own `23d2937` text.** Until then it has one.
+
+## Why `feature/declaring-positions` still carries the fat row — do not "fix" it
+
+PMO's branch still holds `DT-49` at 10,168 characters, and it is **deliberately frozen there**, not
+overlooked. Their reasoning, which is a design rule rather than deference:
+
+> Thinning it there would produce a second, independently-authored thin version of a row this branch
+> has already thinned — **one fact, two places, hand-made twice.** *The fix for a row existing in two
+> forms is not to fix it in both.*
+
+So the correct action on that branch is **none**, until adoption lands and the row regenerates from
+the document. Anyone who finds the fat row and tidies it is manufacturing the duplicate-authoring
+defect that `DT-30`, `DT-48` and this slice are all circling — and doing it while believing they are
+cleaning up.
+
