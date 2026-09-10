@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-55<!--/ewc3:lastDT--> | toolkit features and fixes |
+| DT | global | ewc3-docs-tools | <!--ewc3:lastDT-->DT-56<!--/ewc3:lastDT--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -77,6 +77,7 @@ is never referenced from outside the repository it fixes.
 | DT-53 | 🟦 coded | `migrate-project` output fed to `index` restores every row it just moved out | S | [DT-53][dt-53] | CODED - migrated documents no longer declare the paragraph they moved to the body, so a register survives its own `index --write`; measured 341 to 341 |
 | DT-54 | 🟦 coded | `migrate-project` must never regenerate a slice document a human already authored | S | slices/DT-54_Migration_never_regenerates_an_authored_slice.md | CODED - authored documents are matched by frontmatter id, kept, and REPORTED; the register points at the existing filename rather than one derived from the row |
 | DT-55 | ⬜ planned | `migrate-project` synthesises a SECOND prefix register, because it cannot read the one this repo has | M | slices/DT-55_Migrate_bootstraps_a_second_register_it_cannot_read.md | BLOCKS adopting a migrated register: `migrate` cannot read the `Prefix`-first table `series` reads, so it bootstraps a duplicate that unclaims the owner and re-pads DT-54 to DT-00054 |
+| DT-56 | ⬜ planned | After adoption, editing a Delivery Index row is silently discarded by the next `index --write` | M | slices/DT-56_After_adoption_editing_the_register_is_silently_futile.md | the register becomes generated and nothing says so, so a row edited by hand is overwritten with no warning and exit 0; PMO had 9952 characters of live reasoning standing in exactly that position |
 
 ## Done
 
