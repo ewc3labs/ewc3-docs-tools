@@ -3,7 +3,7 @@ id: DT-47
 state: 🟦 coded
 title: `check` must refuse to report a PASS over zero files
 est: S
-doc: slices/DT-47_check_must_refuse_to_report_a_PASS_over_zero_files.md
+doc: '[DT-47](slices/DT-47_check_must_refuse_to_report_a_PASS_over_zero_files.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,10 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-`index` now says which directory it read and how many documents declared an ID, and exits 2 when none do — found because four of six repos have a `docs/project/slices/` holding only a README, and the first version preferred it silently and reported "0 rows rendered - already current". The same guard belongs in `format`, `values`, `links` and `tables` ✅ Done for `index` 2026-09-08: it now refuses when no roadmap in the tree carried a recognised Delivery Index, so a misspelled heading or a backlog-only repo can no longer produce a confident exit 0. Still open for `format`, `values`, `links` and `tables`
-
+`index` now says which directory it read and how many documents declared an ID, and exits 2 when
+none do — found because four of six repos have a `docs/project/slices/` holding only a README, and
+the first version preferred it silently and reported "0 rows rendered - already current". The same
+guard belongs in `format`, `values`, `links` and `tables` ✅ Done for `index` 2026-09-08: it now
+refuses when no roadmap in the tree carried a recognised Delivery Index, so a misspelled heading or
+a backlog-only repo can no longer produce a confident exit 0. Still open for `format`, `values`,
+`links` and `tables`

@@ -3,7 +3,7 @@ id: DT-23
 state: ⬜ planned
 title: Cross-repo collision check: a mention is not a mint
 est: M
-doc: slices/DT-23_Cross_repo_collision_check_a_mention_is_not_a_mint.md
+doc: '[DT-23](slices/DT-23_Cross_repo_collision_check_a_mention_is_not_a_mint.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-an ID is minted where it appears in a **declaring** position and merely cited everywhere else; three false positives in one night came from a survey doc and a skill example that quote IDs while describing them, and a slice-document burst multiplies citations per repo by a hundredfold. `DT-24` built the position list this stands on
-
+an ID is minted where it appears in a **declaring** position and merely cited everywhere else; three
+false positives in one night came from a survey doc and a skill example that quote IDs while
+describing them, and a slice-document burst multiplies citations per repo by a hundredfold. `DT-24`
+built the position list this stands on

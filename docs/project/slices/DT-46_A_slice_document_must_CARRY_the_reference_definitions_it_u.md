@@ -3,7 +3,7 @@ id: DT-46
 state: 🟦 coded
 title: A slice document must CARRY the reference definitions it uses
 est: S
-doc: slices/DT-46_A_slice_document_must_CARRY_the_reference_definitions_it_u.md
+doc: '[DT-46](slices/DT-46_A_slice_document_must_CARRY_the_reference_definitions_it_u.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-a roadmap keeps `[label]: target` in one block at the bottom; moving a cell into a slice document moved the usage and left the definition. `links` found 9 dead references the moment the preview was regenerated, and they would have followed the documents into `docs/project/slices/` on adoption. Targets are re-pointed for the extra directory depth
-
+a roadmap keeps `[label]: target` in one block at the bottom; moving a cell into a slice document
+moved the usage and left the definition. `links` found 9 dead references the moment the preview was
+regenerated, and they would have followed the documents into `docs/project/slices/` on adoption.
+Targets are re-pointed for the extra directory depth

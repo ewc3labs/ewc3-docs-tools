@@ -3,7 +3,7 @@ id: DT-54
 state: 🟦 coded
 title: '`migrate-project` must never regenerate a slice document a human already authored'
 est: S
-doc: slices/DT-54_Migration_never_regenerates_an_authored_slice.md
+doc: '[DT-54](slices/DT-54_Migration_never_regenerates_an_authored_slice.md)'
 status: 'CODED - authored documents are matched by frontmatter id, kept, and REPORTED; the register points at the existing filename rather than one derived from the row'
 priority: high
 lane: migrate
@@ -15,9 +15,9 @@ Migration is a **one-time import**, but adoption is not instantaneous. A repo pa
 both kinds of row: ones nobody has written up yet, and ones somebody has. Regenerating the second
 kind overwrites authored prose with a projection of the row that prose was written to replace.
 
-Called for in [the slice-document design](../../design/the-slice-document-is-the-object.md) §9 Q2 —
-*"say migration is a one-time import; add the has-frontmatter guard"* — and needed now, because
-this repo is the first with authored slice documents and MedAR repos are next.
+Called for in [the slice-document design][the-slice-document] §9 Q2 — *"say migration is a one-time
+import; add the has-frontmatter guard"* — and needed now, because this repo is the first with
+authored slice documents and MedAR repos are next.
 
 ## Why it would have been silent
 
@@ -36,12 +36,11 @@ kept:   3 authored document(s), not regenerated
 - **Matched on frontmatter `id`, not filename.** The filename carries a title slug that is free to
   change; the id is the commitment.
 - **The existing filename is reused**, never re-derived from the row. Deriving it would emit a
-  second document for one id under a different slug — **two declaring surfaces for one
-  commitment**, which is the defect this model exists to remove, manufactured by the tool that
-  implements it.
-- **Reported, never silent.** *"32 of 35, 3 already authored"* and *"34 of 34"* are different
-  facts, and a migration that quietly declines to write is indistinguishable from one that quietly
-  failed to.
+  second document for one id under a different slug — **two declaring surfaces for one commitment**,
+  which is the defect this model exists to remove, manufactured by the tool that implements it.
+- **Reported, never silent.** *"32 of 35, 3 already authored"* and *"34 of 34"* are different facts,
+  and a migration that quietly declines to write is indistinguishable from one that quietly failed
+  to.
 - **A document too malformed to declare an id is left alone and not counted as covering a row.**
   Refusing the whole migration over one bad file would be worse; claiming to have covered a row it
   could not read would be worse still.
@@ -53,5 +52,7 @@ the migration at whatever it first emitted, silently. Caught while writing the s
 ## Verified
 
 Two consecutive runs on this repo emit `32 documents / 3 kept` both times: idempotent, and not
-frozen. `DT-51`, `DT-52` and `DT-53` keep their authored prose, and their register rows point at
-the real filenames. 155 passing, 0 failing.
+frozen. `DT-51`, `DT-52` and `DT-53` keep their authored prose, and their register rows point at the
+real filenames. 155 passing, 0 failing.
+
+[the-slice-document]: ../../design/the-slice-document-is-the-object.md

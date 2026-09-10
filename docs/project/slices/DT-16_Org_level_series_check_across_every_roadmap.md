@@ -3,7 +3,7 @@ id: DT-16
 state: ⬜ planned
 title: Org-level series check across every roadmap
 est: M
-doc: slices/DT-16_Org_level_series_check_across_every_roadmap.md
+doc: '[DT-16](slices/DT-16_Org_level_series_check_across_every_roadmap.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,5 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-`series` sees only its own repository, so cross-repo uniqueness rests on the HQ registry by convention. An HQ job could scan all roadmaps and validate it mechanically
-
+`series` sees only its own repository, so cross-repo uniqueness rests on the HQ registry by
+convention. An HQ job could scan all roadmaps and validate it mechanically

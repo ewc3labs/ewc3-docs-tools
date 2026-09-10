@@ -3,7 +3,7 @@ id: DT-33
 state: ⬜ planned
 title: Configurable template roots, with the builtin as the fallback
 est: M
-doc: "[One template beats three parsers][one-template-beats]"
+doc: '[DT-33](slices/DT-33_Configurable_template_roots_with_the_builtin_as_the_fallba.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-lets a consumer keep its own canon instead of adopting the toolkit's, and the shape becomes DECLARED rather than sniffed — which is what separates it from the reverted `DT-25`/`DT-28`
-
+lets a consumer keep its own canon instead of adopting the toolkit's, and the shape becomes DECLARED
+rather than sniffed — which is what separates it from the reverted `DT-25`/`DT-28`
 
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md

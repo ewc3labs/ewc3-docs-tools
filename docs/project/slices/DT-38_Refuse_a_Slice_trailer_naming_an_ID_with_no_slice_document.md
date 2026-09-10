@@ -3,7 +3,7 @@ id: DT-38
 state: ⬜ planned
 title: Refuse a Slice: trailer naming an ID with no slice document
 est: S
-doc: "[One thing to edit][one-thing-to-edit]"
+doc: '[DT-38](slices/DT-38_Refuse_a_Slice_trailer_naming_an_ID_with_no_slice_document.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-measured: a commit tagged [VS-24] for VS-08 work was caught only because a human noticed, and a wrong pointer fails louder than a missing one
-
+measured: a commit tagged [VS-24] for VS-08 work was caught only because a human noticed, and a
+wrong pointer fails louder than a missing one
 
 [one-thing-to-edit]: ../../design/one-thing-to-edit.md

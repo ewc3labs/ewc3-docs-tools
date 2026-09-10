@@ -3,7 +3,7 @@ id: DT-30
 state: ⬜ planned
 title: Report an ID declared TWICE inside one repository
 est: S
-doc: slices/DT-30_Report_an_ID_declared_TWICE_inside_one_repository.md
+doc: '[DT-30](slices/DT-30_Report_an_ID_declared_TWICE_inside_one_repository.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,6 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-`declaredIds` keys by prefix and number and keeps the first hit, so a second declaration of the same ID is silently discarded; measured on SX_DW, where 10 IDs are declared in both the roadmap and the backlog and the reconcile still reported a clean repo
-
+`declaredIds` keys by prefix and number and keeps the first hit, so a second declaration of the same
+ID is silently discarded; measured on SX_DW, where 10 IDs are declared in both the roadmap and the
+backlog and the reconcile still reported a clean repo

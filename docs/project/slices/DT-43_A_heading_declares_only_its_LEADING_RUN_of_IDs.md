@@ -3,7 +3,7 @@ id: DT-43
 state: 🟦 coded
 title: A heading declares only its LEADING RUN of IDs
 est: S
-doc: slices/DT-43_A_heading_declares_only_its_LEADING_RUN_of_IDs.md
+doc: '[DT-43](slices/DT-43_A_heading_declares_only_its_LEADING_RUN_of_IDs.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-`### HDC-13 — VS-413: the lookup...` had HDCTranslators declaring VS-413, an SX_Coder slice. Adopting that migration would have written a cross-repo mint into a second register — the same class that cost 26 IDs when AIR and SX_Coder both owned `VS-`. Commas and range words JOIN IDs; an em-dash or colon ends the declaration and begins the label. A mention is not a mint
-
+`### HDC-13 — VS-413: the lookup...` had HDCTranslators declaring VS-413, an SX_Coder slice.
+Adopting that migration would have written a cross-repo mint into a second register — the same class
+that cost 26 IDs when AIR and SX_Coder both owned `VS-`. Commas and range words JOIN IDs; an em-dash
+or colon ends the declaration and begins the label. A mention is not a mint

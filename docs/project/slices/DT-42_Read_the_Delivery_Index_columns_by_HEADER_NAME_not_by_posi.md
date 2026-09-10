@@ -3,7 +3,7 @@ id: DT-42
 state: 🟦 coded
 title: Read the Delivery Index columns by HEADER NAME, not by position
 est: S
-doc: slices/DT-42_Read_the_Delivery_Index_columns_by_HEADER_NAME_not_by_posi.md
+doc: '[DT-42](slices/DT-42_Read_the_Delivery_Index_columns_by_HEADER_NAME_not_by_posi.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,12 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-position was hardcoded as `state=1, title=2` against the house style `| ID | State | Slice |`. HDCTranslators writes `| ID | Title | State |`, so every document generated for it was named after its state — `HDC-00001_done.md`, all the way down — and nothing errored. Five registers in this estate have five different column layouts. **HDC, on being asked whether to converge on the house layout:** standardising makes TODAY'S registers agree; reading by name makes TOMORROW'S register safe, including one written by someone who never saw the convention. So this is not a bridge to convergence and does not become optional once the layouts line up — the estate is meant to generalise past MedAR, and a stranger's register is exactly the case a convention they never read cannot fix
-
+position was hardcoded as `state=1, title=2` against the house style `| ID | State | Slice |`.
+HDCTranslators writes `| ID | Title | State |`, so every document generated for it was named after
+its state — `HDC-00001_done.md`, all the way down — and nothing errored. Five registers in this
+estate have five different column layouts. **HDC, on being asked whether to converge on the house
+layout:** standardising makes TODAY'S registers agree; reading by name makes TOMORROW'S register
+safe, including one written by someone who never saw the convention. So this is not a bridge to
+convergence and does not become optional once the layouts line up — the estate is meant to
+generalise past MedAR, and a stranger's register is exactly the case a convention they never read
+cannot fix

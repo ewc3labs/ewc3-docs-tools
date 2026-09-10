@@ -3,7 +3,7 @@ id: DT-15
 state: ⬜ planned
 title: `next <PREFIX>`: print the next free ID
 est: S
-doc: slices/DT-15_next_PREFIX_print_the_next_free_ID.md
+doc: '[DT-15](slices/DT-15_next_PREFIX_print_the_next_free_ID.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,5 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-**superseded in shape by `DT-41`** — EPQE: under one-document-per-ID the `+1` is not read off a register cell at all, it is `max(existing filenames) + 1`
-
+**superseded in shape by `DT-41`** — EPQE: under one-document-per-ID the `+1` is not read off a
+register cell at all, it is `max(existing filenames) + 1`

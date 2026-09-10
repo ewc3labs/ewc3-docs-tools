@@ -3,7 +3,7 @@ id: DT-53
 state: 🟦 coded
 title: '`migrate-project` output fed to `index` restores every row it just moved out'
 est: S
-doc: '[DT-53][dt-53]'
+doc: '[DT-53](slices/DT-53_Migration_output_fed_to_index_restores_every_row.md)'
 status: 'CODED - migrated documents no longer declare the paragraph they moved to the body, so a register survives its own `index --write`; measured 341 to 341'
 priority: high
 lane: migrate
@@ -35,8 +35,8 @@ ewc3-docs index --slices docs/project_v2/slices --write
 ```
 
 but writes the slice document’s `status:` frontmatter as **the original row, verbatim** — all 5961
-characters of it. Under the slice-document model the frontmatter is the authority, so `index` is
-not misbehaving: it renders what the document declares. **The document declares the monster.**
+characters of it. Under the slice-document model the frontmatter is the authority, so `index` is not
+misbehaving: it renders what the document declares. **The document declares the monster.**
 
 The blob is also duplicated — once in `status:`, once again as the body narrative — so the emitted
 document states the same 5961 characters twice.
@@ -104,18 +104,18 @@ assert.strictEqual(res.text, ROADMAP,
 ```
 
 **That invariant is the defect, written down as a requirement.** Byte-for-byte identity after a
-migration means the paragraph is still declared in frontmatter — which is exactly why `index
---write` restored all 34 rows. A test asserting the register comes back unchanged is a test
+migration means the paragraph is still declared in frontmatter — which is exactly why
+`index --write` restored all 34 rows. A test asserting the register comes back unchanged is a test
 asserting the migration did nothing.
 
-Replaced with the two properties that were actually wanted, and it is strictly stronger than what
-it replaces because it now checks both halves:
+Replaced with the two properties that were actually wanted, and it is strictly stronger than what it
+replaces because it now checks both halves:
 
-1. **Idempotence from the second pass** — an *already migrated* register regenerates to itself,
-   byte for byte. Migration is a deliberate one-time relocation; everything after it is stable.
+1. **Idempotence from the second pass** — an *already migrated* register regenerates to itself, byte
+   for byte. Migration is a deliberate one-time relocation; everything after it is stable.
 2. **Losslessness** — the narrative is asserted present in a document body and absent from the
-   register row. Checked on a named cell rather than a count, so a regression that empties the
-   body as well as the row cannot pass.
+   register row. Checked on a named cell rather than a count, so a regression that empties the body
+   as well as the row cannot pass.
 
 154 passing, 0 failing.
 

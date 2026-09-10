@@ -3,7 +3,7 @@ id: DT-35
 state: ⬜ planned
 title: Frontmatter is the ONLY declaring position in a slice or module doc
 est: L
-doc: "[Frontmatter is the declaration][frontmatter-is-the]"
+doc: '[DT-35](slices/DT-35_Frontmatter_is_the_ONLY_declaring_position_in_a_slice_or_m.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,8 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-replaces the heading, list and arbiter rules with one delimited block, each of which shipped a defect this week; needs a ~40-line restricted-YAML reader because the toolkit has no dependencies and will not grow one
-
+replaces the heading, list and arbiter rules with one delimited block, each of which shipped a
+defect this week; needs a ~40-line restricted-YAML reader because the toolkit has no dependencies
+and will not grow one
 
 [frontmatter-is-the]: ../../design/frontmatter-is-the-declaration.md

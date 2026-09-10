@@ -3,7 +3,7 @@ id: DT-40
 state: ⬜ planned
 title: epo:slice qualified references, and a Registry column
 est: M
-doc: "[One template beats three parsers][one-template-beats]"
+doc: '[DT-40](slices/DT-40_epo_slice_qualified_references_and_a_Registry_column.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,8 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-DT-1..DT-39 mean different slices in ewc3-docs-tools and MedAR DevTools — 39 overlapping IDs across two estates; a qualifier cannot be mistaken for a mint because every declaring pattern needs - where a qualifier puts :
-
+DT-1..DT-39 mean different slices in ewc3-docs-tools and MedAR DevTools — 39 overlapping IDs across
+two estates; a qualifier cannot be mistaken for a mint because every declaring pattern needs - where
+a qualifier puts :
 
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md

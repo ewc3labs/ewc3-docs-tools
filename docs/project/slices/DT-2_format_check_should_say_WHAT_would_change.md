@@ -3,7 +3,7 @@ id: DT-2
 state: ⬜ planned
 title: `format --check` should say WHAT would change
 est: S
-doc: slices/DT-2_format_check_should_say_WHAT_would_change.md
+doc: '[DT-2](slices/DT-2_format_check_should_say_WHAT_would_change.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -16,4 +16,3 @@ source: EWC3_Docs_Tools_Roadmap.md
 > is about, and whether it is finished, is judgement.
 
 it names the file and not the reason, so the fix is "run the tool and read the diff"
-

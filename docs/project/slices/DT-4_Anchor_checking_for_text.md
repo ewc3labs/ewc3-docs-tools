@@ -3,7 +3,7 @@ id: DT-4
 state: ⬜ planned
 title: Anchor checking for `[text](file.md#heading)`
 est: M
-doc: slices/DT-4_Anchor_checking_for_text.md
+doc: '[DT-4](slices/DT-4_Anchor_checking_for_text.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -16,4 +16,3 @@ source: EWC3_Docs_Tools_Roadmap.md
 > is about, and whether it is finished, is judgement.
 
 the file is verified, the heading is not, so a renamed heading breaks silently
-

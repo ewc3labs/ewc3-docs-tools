@@ -3,7 +3,7 @@ id: DT-1
 state: ⬜ planned
 title: Read values from TOML, for Python repos
 est: S
-doc: slices/DT-1_Read_values_from_TOML_for_Python_repos.md
+doc: '[DT-1](slices/DT-1_Read_values_from_TOML_for_Python_repos.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,5 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-`fromJson` cannot read `pyproject.toml`; the workaround is writing JSON from a build step, which is not always available
-
+`fromJson` cannot read `pyproject.toml`; the workaround is writing JSON from a build step, which is
+not always available

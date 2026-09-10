@@ -3,7 +3,7 @@ id: DT-56
 state: ⬜ planned
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
-doc: slices/DT-56_After_adoption_editing_the_register_is_silently_futile.md
+doc: '[DT-56](slices/DT-56_After_adoption_editing_the_register_is_silently_futile.md)'
 status: 'the register becomes generated and nothing says so, so a row edited by hand is overwritten with no warning and exit 0; PMO had 9952 characters of live reasoning standing in exactly that position'
 priority: high
 lane: index
@@ -39,10 +39,10 @@ and no refusal.
 
 ## It nearly cost three days, and the near-miss is the argument
 
-While this branch was adopting the shape, **PMO spent three days hand-editing one Delivery Index
-row until it reached 9,952 characters** — `49b71eb`, `f9d68a1`, `23d2937`, all `DT-49`, the last
-landing at 19:23 the night before. Those commits were live, correct, and standing in precisely the
-position this defect deletes.
+While this branch was adopting the shape, **PMO spent three days hand-editing one Delivery Index row
+until it reached 9,952 characters** — `49b71eb`, `f9d68a1`, `23d2937`, all `DT-49`, the last landing
+at 19:23 the night before. Those commits were live, correct, and standing in precisely the position
+this defect deletes.
 
 They survived **only because the two branches had not merged yet**. Had adoption landed first, the
 next `index --write` by anyone would have erased all three, reported success, and left a clean
@@ -89,8 +89,8 @@ distinction is the useful part:
 | a 10,168-character register row | **PMO** | true on their branch, in their register, **before adoption existed anywhere** |
 
 The second predates any flip. Thin-row discipline — *rows are one short sentence plus a pointer* —
-was already their own rule, cited to other lanes in the same days the paragraph was growing. No
-flip was involved and nothing was disguised.
+was already their own rule, cited to other lanes in the same days the paragraph was growing. No flip
+was involved and nothing was disguised.
 
 > **The SIZE of a loss is set by the discipline you kept BEFORE the defect fired.**
 
@@ -113,9 +113,9 @@ for as a repair:
 > attempt returns a clean no-op, reports `kept: N authored document(s)`, and the person running it
 > concludes nothing was lost.
 
-Measured: re-running migration from `23d2937` kept all 32 documents and emitted none. The guard
-that protects human prose is the guard that blocks re-import — the same mechanism pointed in
-opposite directions. Recovery of a diverged row is a deliberate extraction, not a re-run.
+Measured: re-running migration from `23d2937` kept all 32 documents and emitted none. The guard that
+protects human prose is the guard that blocks re-import — the same mechanism pointed in opposite
+directions. Recovery of a diverged row is a deliberate extraction, not a re-run.
 
 ## A practice worth copying, from the review of this slice
 
@@ -123,10 +123,10 @@ PMO opened their acceptance by labelling what they had NOT checked: `dd6273d` is
 unreachable from their machine, so the byte-for-byte claim above is **my measurement, accepted on
 report — not their observation.** They said so before relying on it.
 
-That is the counter-practice to the whole class of error this estate spent two days cataloguing.
-A number quoted without provenance is indistinguishable from a number verified, and the difference
-only surfaces when it is wrong. **The verbatim claim gets a second witness when the branch is
-pushed and PMO reads the body against their own `23d2937` text.** Until then it has one.
+That is the counter-practice to the whole class of error this estate spent two days cataloguing. A
+number quoted without provenance is indistinguishable from a number verified, and the difference
+only surfaces when it is wrong. **The verbatim claim gets a second witness when the branch is pushed
+and PMO reads the body against their own `23d2937` text.** Until then it has one.
 
 ## Why `feature/declaring-positions` still carries the fat row — do not "fix" it
 
@@ -141,4 +141,3 @@ So the correct action on that branch is **none**, until adoption lands and the r
 the document. Anyone who finds the fat row and tidies it is manufacturing the duplicate-authoring
 defect that `DT-30`, `DT-48` and this slice are all circling — and doing it while believing they are
 cleaning up.
-

@@ -3,7 +3,7 @@ id: DT-51
 state: ⬜ planned
 title: Cross-repo relative links cannot resolve in a single-repo checkout
 est: M
-doc: '[DT-51][dt-51]'
+doc: '[DT-51](slices/DT-51_Cross_repo_links_do_not_resolve_in_a_single_repo_checkout.md)'
 status: 'CI red for 8 runs; 9 of the 10 failures are the relative half of a twin link, the 10th has no twin and is genuinely dead'
 priority: high
 lane: links
@@ -37,12 +37,12 @@ The first version of this slice proposed: when a relative target fails and the c
 worktree, retry from the main worktree root. **Two independent reviews killed it, for two different
 reasons, and both are sufficient on their own.**
 
-**1. It does not fix CI** (LabsHQ). In CI there is no linked worktree *and* no sibling repo, so there
-is nothing to fall back to. The fallback would make a dev box green while CI stayed red — **worse
-than both being red, because it trains people to ignore CI.**
+**1. It does not fix CI** (LabsHQ). In CI there is no linked worktree *and* no sibling repo, so
+there is nothing to fall back to. The fallback would make a dev box green while CI stayed red —
+**worse than both being red, because it trains people to ignore CI.**
 
-**2. It answers the wrong question** (EQPE). `--git-common-dir` points at the main checkout's working
-tree, and that tree is **on another branch**:
+**2. It answers the wrong question** (EQPE). `--git-common-dir` points at the main checkout's
+working tree, and that tree is **on another branch**:
 
 > Every fallback resolution answers *"does this exist in the main checkout right now?"* The question
 > is *"does this exist for a reader of this branch?"* The fallback is structurally incapable of
@@ -64,8 +64,6 @@ Measured across the three failing documents: **of the 10 failing cross-repo targ
 relative half of a TWIN LINK whose GitHub half sits in the same reference block.** One is not.
 
 ```
-[ewc3-prefix-registry]:   ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md   <- checked, unverifiable here
-[ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/...          <- skipped by isExternal
 ```
 
 This is deliberate and documented: *"the relative one resolves for an agent reading the filesystem
@@ -111,8 +109,6 @@ outcomes and belongs behind `--online` or a scheduled job that can be red withou
 EQPE’s proposal, and it is the cheapest verification in this whole exchange:
 
 ```
-[x]:   ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
-[x-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
                               ^^^^^^^^^^^ repo   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ path
 ```
 
@@ -156,11 +152,11 @@ to find exactly that.
 
 ### HQ-2, de-scoped
 
-LabsHQ has de-scoped HQ-2 on this measurement, and the reasoning belongs here because it bounds
-what this slice must do. HQ-2 was justified as *"nothing checks a link that leaves its own
-repository."* The rule above checks the thing that is checkable — **the twin’s presence** — turning
-nine unverifiables into counted non-events and one genuine break into a failure. That is HQ-2’s
-value at a fraction of its cost, and it lives here rather than in HQ.
+LabsHQ has de-scoped HQ-2 on this measurement, and the reasoning belongs here because it bounds what
+this slice must do. HQ-2 was justified as *"nothing checks a link that leaves its own repository."*
+The rule above checks the thing that is checkable — **the twin’s presence** — turning nine
+unverifiables into counted non-events and one genuine break into a failure. That is HQ-2’s value at
+a fraction of its cost, and it lives here rather than in HQ.
 
 One distinction of theirs survives EQPE’s objection and is worth keeping, because it says when a
 name map *would* earn itself:
@@ -193,8 +189,8 @@ EQPE’s own *"a name is not an identity"* argument arriving inside the check bu
 
 ## Direction — decide once, estate-wide
 
-LabsHQ's widening: **resolve a cross-repo link by repository NAME rather than by relative path.** The
-worktree and CI cases both fall out for free, because neither depends on a sibling existing at a
+LabsHQ's widening: **resolve a cross-repo link by repository NAME rather than by relative path.**
+The worktree and CI cases both fall out for free, because neither depends on a sibling existing at a
 computed depth. This overlaps their **HQ-2** and is a convention question for the estate, not a
 parser question for this repo — **flagged, not claimed.** It wants deciding once rather than twice.
 
@@ -215,7 +211,8 @@ Both are satisfied by stating it as fact, not alarm:
 Checked 63 relative links; 10 resolved via the main checkout, not this branch.
 ```
 
-Countable, visible, no alarm fatigue — and it makes the reliance measurable, which a warning does not.
+Countable, visible, no alarm fatigue — and it makes the reliance measurable, which a warning does
+not.
 
 And it must be guarded twice, both established by review rather than argued:
 
@@ -224,13 +221,14 @@ path can **re-enter the same repository** — `../../ewc3labs-hq/docs/X.md` from
 that repository's *main checkout*, which is branch-divergent content, exactly what the rule exists
 to exclude. EQPE found this hole in my escape-scoping and LabsHQ reproduced it independently. The
 checkable form: after resolution, **reject if the realpath is inside any checkout of this
-repository** — a fallback may only reach a *different* repository. One comparison, strictly stronger.
+repository** — a fallback may only reach a *different* repository. One comparison, strictly
+stronger.
 
-⚠️ **Normalise case and separators before that comparison.** LabsHQ’s own first attempt at this
-test returned the wrong answer, because it compared `/c/DEV/...` against `C:/DEV/...` as strings.
-That is the drive-letter instability recorded in `Fleet_Radio_Protocol.md` this morning, hit by its
-author three hours later. **On Windows the guard silently fails open**, and the masking returns
-behind a comparison that reads as correct.
+⚠️ **Normalise case and separators before that comparison.** LabsHQ’s own first attempt at this test
+returned the wrong answer, because it compared `/c/DEV/...` against `C:/DEV/...` as strings. That is
+the drive-letter instability recorded in `Fleet_Radio_Protocol.md` this morning, hit by its author
+three hours later. **On Windows the guard silently fails open**, and the masking returns behind a
+comparison that reads as correct.
 
 Both guards make a fallback *safer*; **neither makes it sufficient.** In CI there is still no
 worktree and no sibling, so a perfectly guarded fallback remains inert against the failure that is
@@ -238,8 +236,8 @@ actually red. They are recorded for whoever builds one, not as an argument to bu
 
 ## Mechanism notes, verified
 
-- **Worktree detection:** `git-dir != git-common-dir`, true only in a linked worktree. Verified false
-  in a main checkout and, per LabsHQ, in a submodule.
+- **Worktree detection:** `git-dir != git-common-dir`, true only in a linked worktree. Verified
+  false in a main checkout and, per LabsHQ, in a submodule.
 - **Main worktree path:** `git worktree list --porcelain | head -1`, which gives it directly.
   `dirname(--git-common-dir)` is wrong in a submodule, where it lands inside `.git/modules`.
 - Nested worktrees do not exist in git — a worktree of a worktree shares the same common dir — so
@@ -249,5 +247,9 @@ actually red. They are recorded for whoever builds one, not as an argument to bu
 
 - `isExternal` skips `https?:`, `mailto:` and `#`, so anything leaving the repo by URL is unchecked
   by a second route.
-- `check` walks gitignored files: `*/scratch/` is ignored, yet the main checkout reports 13 files and
-  a fresh worktree 12. **The checked population depends on what is lying around.**
+- `check` walks gitignored files: `*/scratch/` is ignored, yet the main checkout reports 13 files
+  and a fresh worktree 12. **The checked population depends on what is lying around.**
+
+[ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/...
+[x]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[x-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md

@@ -3,7 +3,7 @@ id: DT-21
 state: ⬜ planned
 title: Widen the docs-surface test past `Reference.md`
 est: S
-doc: slices/DT-21_Widen_the_docs_surface_test_past_Reference_md.md
+doc: '[DT-21](slices/DT-21_Widen_the_docs_surface_test_past_Reference_md.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,5 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-it asserts every command is in the reference and nothing more, so `tables` shipped absent from the README, the agent guide and this roadmap while the test stayed green
-
+it asserts every command is in the reference and nothing more, so `tables` shipped absent from the
+README, the agent guide and this roadmap while the test stayed green

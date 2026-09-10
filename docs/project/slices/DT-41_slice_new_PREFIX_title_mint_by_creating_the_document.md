@@ -3,7 +3,7 @@ id: DT-41
 state: ⬜ planned
 title: `slice new <PREFIX> "<title>"` — mint by creating the document
 est: M
-doc: "[Frontmatter is the declaration][frontmatter-is-the]"
+doc: '[DT-41](slices/DT-41_slice_new_PREFIX_title_mint_by_creating_the_document.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,8 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-every ID gets a document and most are five-line stubs, because rows-for-small-work reintroduces the second declaring surface; the next number derives from `max(existing filenames)`, the same move `Last Used` made
-
+every ID gets a document and most are five-line stubs, because rows-for-small-work reintroduces the
+second declaring surface; the next number derives from `max(existing filenames)`, the same move
+`Last Used` made
 
 [frontmatter-is-the]: ../../design/frontmatter-is-the-declaration.md

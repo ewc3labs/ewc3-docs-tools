@@ -3,7 +3,7 @@ id: DT-3
 state: ⬜ planned
 title: Publish to npm rather than installing from git
 est: M
-doc: slices/DT-3_Publish_to_npm_rather_than_installing_from_git.md
+doc: '[DT-3](slices/DT-3_Publish_to_npm_rather_than_installing_from_git.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -16,4 +16,3 @@ source: EWC3_Docs_Tools_Roadmap.md
 > is about, and whether it is finished, is judgement.
 
 `github:` specs work but pin nothing; a version number would let consumers upgrade deliberately
-

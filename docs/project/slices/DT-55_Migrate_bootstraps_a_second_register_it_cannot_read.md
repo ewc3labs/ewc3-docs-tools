@@ -3,7 +3,7 @@ id: DT-55
 state: ⬜ planned
 title: '`migrate-project` synthesises a SECOND prefix register, because it cannot read the one this repo has'
 est: M
-doc: slices/DT-55_Migrate_bootstraps_a_second_register_it_cannot_read.md
+doc: '[DT-55](slices/DT-55_Migrate_bootstraps_a_second_register_it_cannot_read.md)'
 status: 'BLOCKS adopting a migrated register: `migrate` cannot read the `Prefix`-first table `series` reads, so it bootstraps a duplicate that unclaims the owner and re-pads DT-54 to DT-00054'
 priority: high
 lane: migrate
@@ -11,9 +11,9 @@ lane: migrate
 
 # DT-55 — `migrate-project` synthesises a second prefix register
 
-`migrate-project` emits a `## Number Series` table into a roadmap that already has `## ID
-Prefixes`, producing **two prefix-declaring surfaces in one document** — the defect the whole
-ownership model exists to prevent.
+`migrate-project` emits a `## Number Series` table into a roadmap that already has `## ID Prefixes`,
+producing **two prefix-declaring surfaces in one document** — the defect the whole ownership model
+exists to prevent.
 
 ## Measured, 2026-09-08, at `799ea54`
 
@@ -27,9 +27,9 @@ Three separate regressions in the generated copy, any one of which is disqualify
 1. **The owner is discarded.** `ewc3-docs-tools` becomes `**?** _unclaimed_`. The bootstrap rule
    that a global prefix may not self-declare is *correct* — but it is being applied to a register
    that had already adjudicated the question.
-2. **The padding contradicts the register.** `DT-54` becomes `DT-00054`, against `DT-44` (padding
-   is a convention of a PREFIX, and the shortest id states it) and `DT-49` (one spelling per id).
-   Every id in this repo is unpadded.
+2. **The padding contradicts the register.** `DT-54` becomes `DT-00054`, against `DT-44` (padding is
+   a convention of a PREFIX, and the shortest id states it) and `DT-49` (one spelling per id). Every
+   id in this repo is unpadded.
 3. **The value marker is malformed**: `<!--/-->` rather than `<!--/ewc3:lastDT-->`.
 
 ⚠️ **And `series` reports the file clean.** It reads the authored table, never sees the generated
@@ -65,8 +65,8 @@ const { used } = readSeries.fromText ? readSeries.fromText(text) : { used: usedF
 
 **Fix: split `readSeries` into a text parser and a thin file wrapper, and have `migrate` ask the
 same parser `series` asks.** Widening `REGISTER_HEADER` instead would add a THIRD grammar for one
-question — which is the defect, not the remedy. `DT-27` already paid for this lesson: it was
-fixed by centralising the id grammar rather than by correcting eighteen regexes.
+question — which is the defect, not the remedy. `DT-27` already paid for this lesson: it was fixed
+by centralising the id grammar rather than by correcting eighteen regexes.
 
 Related and probably the same slice by the time it is built: `DT-32` (one canonical register
 template) and `DT-42` (the registers disagree on shape).
@@ -78,6 +78,6 @@ thinned with `index --write`, which only rewrites Delivery Index rows and never 
 table. Same outcome — a thin greppable index pointing at `slices/` — reached without importing a
 duplicate register.
 
-⛔ **Do not run `migrate-project --write` and adopt its roadmap wholesale on a MedAR repo until
-this lands.** Every register in the estate that uses the `Prefix`-first shape will be given a
-second one, with its owner erased and its ids re-padded, and `series` will call the result clean.
+⛔ **Do not run `migrate-project --write` and adopt its roadmap wholesale on a MedAR repo until this
+lands.** Every register in the estate that uses the `Prefix`-first shape will be given a second one,
+with its owner erased and its ids re-padded, and `series` will call the result clean.

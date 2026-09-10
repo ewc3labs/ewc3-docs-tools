@@ -3,7 +3,7 @@ id: DT-34
 state: ⬜ planned
 title: `migrate-project` ACCEPTS the shapes `series` refuses
 est: M
-doc: "[One template beats three parsers][one-template-beats]"
+doc: '[DT-34](slices/DT-34_migrate_project_ACCEPTS_the_shapes_series_refuses.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,8 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-a converter that refuses what the checker refuses can never migrate anything, so the register-shape reading reverted out of `series` belongs here, where guessing is appropriate because a human reviews the emitted diff
-
+a converter that refuses what the checker refuses can never migrate anything, so the register-shape
+reading reverted out of `series` belongs here, where guessing is appropriate because a human reviews
+the emitted diff
 
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md

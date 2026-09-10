@@ -3,7 +3,7 @@ id: DT-31
 state: ⬜ planned
 title: Report a backlog that DECLARES an ID rather than citing one
 est: S
-doc: slices/DT-31_Report_a_backlog_that_DECLARES_an_ID_rather_than_citing_on.md
+doc: '[DT-31](slices/DT-31_Report_a_backlog_that_DECLARES_an_ID_rather_than_citing_on.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,6 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-a backlog item is intake, not a commitment, so a minted ID in its leading position is a convention violation; today it is silently legal because the backlog inherits its roadmap's ownership table — measured on SX_DW (4 squatters) and MedAR_AI_Runtime (4 that hid cross-repo collisions)
-
+a backlog item is intake, not a commitment, so a minted ID in its leading position is a convention
+violation; today it is silently legal because the backlog inherits its roadmap's ownership table —
+measured on SX_DW (4 squatters) and MedAR_AI_Runtime (4 that hid cross-repo collisions)

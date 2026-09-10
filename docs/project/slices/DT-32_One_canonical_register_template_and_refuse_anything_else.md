@@ -3,7 +3,7 @@ id: DT-32
 state: ⬜ planned
 title: One canonical register template, and refuse anything else
 est: M
-doc: "[One template beats three parsers][one-template-beats]"
+doc: '[DT-32](slices/DT-32_One_canonical_register_template_and_refuse_anything_else.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-five MedAR registers in three shapes and three repos with none; the checker learned all three rather than the estate adopting one, which is backwards and does not scale to a fourth
-
+five MedAR registers in three shapes and three repos with none; the checker learned all three rather
+than the estate adopting one, which is backwards and does not scale to a fourth
 
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md

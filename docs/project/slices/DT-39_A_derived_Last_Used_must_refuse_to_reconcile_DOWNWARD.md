@@ -3,7 +3,7 @@ id: DT-39
 state: ⬜ planned
 title: A derived `Last Used` must refuse to reconcile DOWNWARD
 est: S
-doc: "[One template beats three parsers][one-template-beats]"
+doc: '[DT-39](slices/DT-39_A_derived_Last_Used_must_refuse_to_reconcile_DOWNWARD.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,8 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-during a re-charter the series spans two repos, so deriving from one is systematically LOW — and low hands out a taken number; measured live on `DW-025`, where correcting the register down to match would have written a collision in as an instruction
-
+during a re-charter the series spans two repos, so deriving from one is systematically LOW — and low
+hands out a taken number; measured live on `DW-025`, where correcting the register down to match
+would have written a collision in as an instruction
 
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md

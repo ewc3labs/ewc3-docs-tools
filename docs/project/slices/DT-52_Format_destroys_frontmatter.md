@@ -3,7 +3,7 @@ id: DT-52
 state: ⬜ planned
 title: 'The document modules do not know frontmatter exists, and `format` destroys it'
 est: S
-doc: '[DT-52][dt-52]'
+doc: '[DT-52](slices/DT-52_Format_destroys_frontmatter.md)'
 status: '⛔ blocks the slice-document model — `fix` destroys frontmatter, a five-line stub corrupts SILENTLY, and `links` reports frontmatter values as dead links'
 priority: high
 lane: format
@@ -53,11 +53,11 @@ So `fix`, the command the README tells everyone to run, is the command that brea
 ## Why it was never seen
 
 **This repo had no frontmatter documents.** The `DT-51` slice document above is the first one, and
-the specimen in [the-slice-document-is-the-object](../../design/the-slice-document-is-the-object.md)
-is inside a fenced block, where `format` correctly leaves it alone. `DT-37` (`index`) shipped and was
-exercised against slice documents in *other* trees. The defect has been latent since frontmatter was
-specified and fires on first adoption — **in the repo that builds the tooling meant to migrate every
-other repo to this shape.**
+the specimen in [the-slice-document-is-the-object][the-slice-document] is inside a fenced block,
+where `format` correctly leaves it alone. `DT-37` (`index`) shipped and was exercised against slice
+documents in *other* trees. The defect has been latent since frontmatter was specified and fires on
+first adoption — **in the repo that builds the tooling meant to migrate every other repo to this
+shape.**
 
 ## Fix
 
@@ -109,12 +109,13 @@ One key. `state`, `title`, `est` and `doc` are gone — absorbed into the value 
   DT-53 state: ⬜ planned title: A five-line stub est: S doc: —
 ```
 
-It is caught, but as an *unminted id* — and the remedy that implies is **declare it in the register**,
-which would write the corruption into the roadmap. Nothing says the document was destroyed.
+It is caught, but as an *unminted id* — and the remedy that implies is **declare it in the
+register**, which would write the corruption into the roadmap. Nothing says the document was
+destroyed.
 
-**And `check` never runs `index`.** CI runs `check`, which reports `All N file(s) formatted
-correctly`. So the corruption is invisible to CI, visible only to whoever runs `index` by hand, and
-misdescribed when they do.
+**And `check` never runs `index`.** CI runs `check`, which reports
+`All N file(s) formatted correctly`. So the corruption is invisible to CI, visible only to whoever
+runs `index` by hand, and misdescribed when they do.
 
 That is the same family as the `byId` last-wins Map one layer up: a real defect wearing the label of
 a different, milder one.
@@ -131,8 +132,8 @@ code blocks are already protected for exactly this reason, which means the mecha
 frontmatter is the same class rather than a special case.
 
 Write the fix as **"regions where a newline carries meaning are copied verbatim"**, then ask what
-else belongs in that set — tables, list indentation, anything else `format` currently reflows. A rule
-stated as *"add frontmatter awareness"* patches this instance and will not catch the next one.
+else belongs in that set — tables, list indentation, anything else `format` currently reflows. A
+rule stated as *"add frontmatter awareness"* patches this instance and will not catch the next one.
 
 **Dependency direction**, by LabsHQ's test — *DT-52 blocks anything that AUTHORS frontmatter
 documents; it does not block anything that only READS them*: `DT-35` and `DT-41` author, so they are
@@ -144,9 +145,9 @@ tool that is about to migrate every repo in the estate to the shape that trigger
 
 ## Wider than `format`: four modules do not know frontmatter exists
 
-Found by adopting the model rather than by reading the code. With `doc:` carrying a
-roadmap-scoped reference link — correct **as data**, since the definition lives in the register
-where the cell renders — `check` reported two new failures:
+Found by adopting the model rather than by reading the code. With `doc:` carrying a roadmap-scoped
+reference link — correct **as data**, since the definition lives in the register where the cell
+renders — `check` reported two new failures:
 
 ```
 docs/project/slices/DT-51_....md  ->  [DT-51][dt-51]   (undefined reference)
@@ -174,7 +175,36 @@ This also sharpens the fix framing above. A rule written as *"`format` skips `--
 `links` broken, `values` and `tables` unexamined, and the next module written no wiser. The rule is
 **a leading `---` block is structured data, not prose, for every module that reads a document.**
 
-⚠️ **Live consequence, not hypothetical:** the two failures above are in this branch’s `check`
-right now. They are recorded as DT-52 evidence rather than worked around, because the alternative
-was to write a worse `doc:` value to satisfy a checker that is wrong — **changing correct data to
-please a broken instrument**, which is the failure mode this register exists to catch.
+⚠️ **Live consequence, not hypothetical:** the two failures above are in this branch’s `check` right
+now. They are recorded as DT-52 evidence rather than worked around, because the alternative was to
+write a worse `doc:` value to satisfy a checker that is wrong — **changing correct data to please a
+broken instrument**, which is the failure mode this register exists to catch.
+
+## Fixed 2026-09-09 — and it took THREE paths, not one
+
+`markedLines` now marks a leading `---` block, which is the set `format` already respects. That
+stopped the wrapper destroying frontmatter — and was **not enough**.
+
+`format` rewrites lines on more than one path. The link harvester ignored the protected set and
+turned `doc: '[DT-1](slices/DT-1_....md)'` into `doc: '[DT-1][dt-1]'` plus a definition appended to
+the **body**. The field still read fine; the definition, now outside the frontmatter, resolved
+against the document's own directory, and `links` reported 27 dead targets at `slices/slices/...`.
+
+> **Protecting the wrapper is not protecting the document. A marked region is not merely
+> unwrappable — it is VERBATIM.**
+
+That is LabsHQ's warning arriving exactly as stated: a rule written as *"`format` skips `---`
+blocks"* patches the instance and misses the next path. Three landed together — the wrapper, the
+link harvester, and `links.js` itself, which read frontmatter as prose and reported field values as
+undefined references.
+
+```
+before   40 file(s) not formatted · 13 link problems · `fix` corrupts all 40
+after    All 53 file(s) formatted correctly · 11 link problems, all DT-51 · 155 passing
+```
+
+`fix` now reformats 39 files and every slice document survives — measured by re-parsing all 40
+afterwards. The `doc:` pointer is a real markdown link again, which also cleared 37 documents that
+`links` had been reporting as unreachable.
+
+[the-slice-document]: ../../design/the-slice-document-is-the-object.md

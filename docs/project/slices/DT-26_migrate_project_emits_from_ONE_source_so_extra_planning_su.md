@@ -3,7 +3,7 @@ id: DT-26
 state: ↩️ refuted
 title: `migrate-project` emits from ONE source, so extra planning surfaces are dropped
 est: M
-doc: slices/DT-26_migrate_project_emits_from_ONE_source_so_extra_planning_su.md
+doc: '[DT-26](slices/DT-26_migrate_project_emits_from_ONE_source_so_extra_planning_su.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,9 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-**DOES NOT REPRODUCE, and the original measurement was mine.** Every repo in the estate has exactly ONE roadmap, so `.find()` returning the first has nothing to drop. The 34-of-41 gap on AIR was a STALE PREVIEW compared against a live register — re-extracting emits 35 of 35. The instrument said "declared minus emitted" and was read as "the emitter loses IDs", when it answers "the two scanners disagree" and either side can be the liar; here it was the scanner, via `DT-33`. Kept as a row because a refuted blocker that is merely deleted comes back
-
+**DOES NOT REPRODUCE, and the original measurement was mine.** Every repo in the estate has exactly
+ONE roadmap, so `.find()` returning the first has nothing to drop. The 34-of-41 gap on AIR was a
+STALE PREVIEW compared against a live register — re-extracting emits 35 of 35. The instrument said
+"declared minus emitted" and was read as "the emitter loses IDs", when it answers "the two scanners
+disagree" and either side can be the liar; here it was the scanner, via `DT-33`. Kept as a row
+because a refuted blocker that is merely deleted comes back

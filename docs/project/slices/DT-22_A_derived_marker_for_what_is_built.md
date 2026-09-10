@@ -3,7 +3,7 @@ id: DT-22
 state: ⬜ planned
 title: A derived marker for what is built
 est: M
-doc: slices/DT-22_A_derived_marker_for_what_is_built.md
+doc: '[DT-22](slices/DT-22_A_derived_marker_for_what_is_built.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,5 +15,5 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-`Overview.md` claimed "nothing built" of two partly-built proposals; a prose claim about build state is the exact class this toolkit says to derive
-
+`Overview.md` claimed "nothing built" of two partly-built proposals; a prose claim about build state
+is the exact class this toolkit says to derive

@@ -3,7 +3,7 @@ id: DT-57
 state: ⬜ planned
 title: 'A register with no Doc column loses every pointer to its slices, and any warning its rows carried'
 est: M
-doc: slices/DT-57_A_register_with_no_Doc_column_loses_every_pointer.md
+doc: '[DT-57](slices/DT-57_A_register_with_no_Doc_column_loses_every_pointer.md)'
 status: 'BLOCKS DevTools adoption: their header has no Doc column, so after `index --write` every row renders with an empty Status and no link at all - including the row whose entire purpose is a DO-NOT-RE-SPELL warning'
 priority: high
 lane: index
@@ -17,9 +17,9 @@ is the column that means it. **That reasoning assumed every register has one.** 
 ## Measured against the real DevTools shape, reported by DT
 
 Their Delivery Index header is `| ID | State | Slice | Est | Priority | Lane | Status |` — seven
-columns, no `Doc`. (My first fixture used five; DT corrected it. The conclusion is unchanged —
-there is still no `Doc` column — but the worked example now reproduces against their real file.)
-Run the documented sequence on it:
+columns, no `Doc`. (My first fixture used five; DT corrected it. The conclusion is unchanged — there
+is still no `Doc` column — but the worked example now reproduces against their real file.) Run the
+documented sequence on it:
 
 ```
 migrate-project --write   row -> | DT-01 | ⬜ planned | Mis-minted... | S | See [slice notes](...) |
@@ -39,8 +39,8 @@ DT's register carries `DT-01`: two digits in a series that otherwise pads to thr
 DevTools mint — it came from a stale duplicate register elsewhere — and it survives **only** so a
 citation in `config/STATUS.yaml` resolves. Its row body carries an explicit
 `⛔ DO NOT RE-SPELL THIS ID` clause, put there deliberately under the rule that **a record which
-looks like a defect must carry its own reason IN ITSELF**, because the person who normalises it
-will not be reading commit messages or design docs.
+looks like a defect must carry its own reason IN ITSELF**, because the person who normalises it will
+not be reading commit messages or design docs.
 
 Traced through the sequence:
 
@@ -63,8 +63,8 @@ deletion, relocation, with nothing left behind to say where it went.
    refuse-don’t-drop, applied to columns.
 2. **Where no `Doc` column exists, the pointer belongs in the last cell**, which is where
    `migrate-project` already puts `See [slice notes](...)`. `DT-53` emptied that cell to stop the
-   narrative regenerating; emptying it is right for a paragraph and wrong for a pointer.
-   Distinguish the two rather than blanking the cell.
+   narrative regenerating; emptying it is right for a paragraph and wrong for a pointer. Distinguish
+   the two rather than blanking the cell.
 3. **Or `index --write` offers to add a `Doc` column** when a register lacks one and its documents
    declare `doc:`. A column added once is better than a pointer lost every run.
 
@@ -78,8 +78,8 @@ and unnavigable, and the one row in it that most needs its explanation would los
 - They have **no `## ID Prefixes` table**, so there is only one prefix-declaring surface anyway.
 - `DT-01` is **not re-padded** by the migration; the id is spelled through unchanged.
 
-Their Series column has no Owner, so a migration would still reshape that table — worth their
-review before running it, but it is a reshape rather than a duplication.
+Their Series column has no Owner, so a migration would still reshape that table — worth their review
+before running it, but it is a reshape rather than a duplication.
 
 ## The twin, confirmed by measurement — a column with no field
 

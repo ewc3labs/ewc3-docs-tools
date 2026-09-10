@@ -3,7 +3,7 @@ id: DT-36
 state: ⬜ planned
 title: `fold`: git trailers become frontmatter state, idempotently
 est: L
-doc: "[One thing to edit][one-thing-to-edit]"
+doc: '[DT-36](slices/DT-36_fold_git_trailers_become_frontmatter_state_idempotently.md)'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
@@ -15,7 +15,7 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-Slice:/State: ride the commit that did the work so they cannot drift from it; newest wins, and state_source: human is never overwritten
-
+Slice:/State: ride the commit that did the work so they cannot drift from it; newest wins, and
+state_source: human is never overwritten
 
 [one-thing-to-edit]: ../../design/one-thing-to-edit.md
