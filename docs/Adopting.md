@@ -115,7 +115,7 @@ docs-check = "npx --yes github:ewc3labs/ewc3-docs-tools check"
 The second is better than it sounds. A number that a *build step* wrote is more trustworthy than one
 scraped out of a config file, because it reflects what actually happened.
 
-> **A TOML resolver is a known gap.** See `DT-1` in the
+> **A TOML resolver is a known gap.** See `DOCS-1` in the
 > [roadmap][roadmap]. Until it lands, the pattern above is the workaround
 > rather than the design.
 
@@ -188,7 +188,7 @@ moment you reflow. **Use `npx` if you would rather never think about it.** What 
 pin the dependency and reflow with a different local copy — that is how a repository ends up failing
 CI over its own passing check.
 
-> Until the toolkit is published to npm — `DT-3` in the [roadmap][roadmap] — `github:` specs pin a
+> Until the toolkit is published to npm — `DOCS-3` in the [roadmap][roadmap] — `github:` specs pin a
 > commit but carry no version number, so there is nothing to read that tells you what changed.
 
 ## Shell shortcuts

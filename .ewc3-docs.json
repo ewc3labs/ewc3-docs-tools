@@ -1,8 +1,8 @@
 {
   "exclude": ["docs/project_v2/**.md"],
   "values": {
-    "lastDTNum": { "lastId": { "prefix": "DT" } },
-    "lastDT": { "template": { "text": "DT-${lastDTNum}" } },
+    "lastDOCSNum": { "lastId": { "prefix": "DOCS" } },
+    "lastDOCS": { "template": { "text": "DOCS-${lastDOCSNum}" } },
     "lastFIXNum": { "lastId": { "prefix": "FIX" } },
     "lastFIX": { "template": { "text": "FIX-${lastFIXNum}" } }
   }
