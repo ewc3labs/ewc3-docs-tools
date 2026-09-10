@@ -24,6 +24,7 @@ Run `docscheck` before you tell the human you are finished. If it fails, you are
 | `links` | dead links, **wrong-case** links, undefined references, orphaned documents |
 | `values` | a number in prose that no longer matches what it counts |
 | `series` | an ID prefix a roadmap has not declared, or one claimed twice |
+| `tables` | a table row whose cell count disagrees with its header — usually a pipe inside a cell that needs escaping as `|` |
 
 **The wrong-case check deserves attention.** `USER_GUIDE.md` when the file is `User_Guide.md`
 resolves on Windows and macOS and fails on GitHub. It therefore works on every machine that could

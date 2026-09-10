@@ -59,6 +59,7 @@ references that enumerate everything - with far less handrolling. Thanks, Klippe
 - **links** - dead links, wrong case, undefined references, and unreachable documents
 - **values** - numbers in prose that come from the thing they describe
 - **series** - who owns which ID prefix, and what number comes next
+- **tables** - a table row whose cell count disagrees with its header, i.e. an unescaped pipe
 
 Node 18+, no dependencies. Every one of them exists because of a specific failure, not a style
 preference, and each section below says which.
@@ -236,8 +237,8 @@ Pair it with the `lastId` resolver to make the cell itself derived:
 | PQ | <!--ewc3:lastPQ-->PQ-34<!--/ewc3:lastPQ--> |
 ```
 
-Roadmaps default to `docs/project/*Roadmap.md`. Override with `series.roadmaps` if they live
-elsewhere.
+Planning surfaces default to `docs/project/*Roadmap.md` and the backlog beside it. Override with
+`series.roadmaps` if they live elsewhere.
 
 ## Configuration
 

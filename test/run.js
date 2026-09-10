@@ -14,6 +14,14 @@ const { format } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { applyToText, resolveValues } = require('../lib/values');
 const { expand } = require('../lib/glob');
+const { migrateText } = require('../lib/migrate');
+const { extractSlices, parseIndex, padId } = require('../lib/slices');
+const { checkTable } = require('../lib/tables');
+const { readSeries, lastNumber, undeclaredPrefixes, declaredOwnership,
+	isLocalPrefix, roadmapFiles, declaredIds, frozenViolations, contestedPrefixes,
+	withoutFences, DEFAULT_ROADMAPS } = require('../lib/series');
+const frontmatter = require('../lib/frontmatter');
+const { renderIndex, detectWidth, detectWidths } = require('../lib/deliveryindex');
 
 let passed = 0, failed = 0;
 
@@ -275,7 +283,7 @@ const BIN = fs.readFileSync(path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), '
 const USAGE = fs.readFileSync(path.join(__dirname, '..', 'USAGE.txt'), 'utf8');
 const REFERENCE = fs.readFileSync(path.join(__dirname, '..', 'docs', 'Reference.md'), 'utf8');
 
-const commands = [...BIN.matchAll(/^\tcase '([a-z]+)':/gm)].map(m => m[1]);
+const commands = [...BIN.matchAll(/^\tcase '([a-z][a-z-]*)':/gm)].map(m => m[1]);
 
 test('every command the CLI dispatches is in USAGE.txt', () => {
 	assert.ok(commands.length >= 5, `only found ${commands.length} commands - the scan is broken`);
@@ -289,7 +297,7 @@ test('every command the CLI dispatches is in the reference', () => {
 });
 
 test('USAGE.txt does not describe a command that does not exist', () => {
-	const claimed = [...USAGE.matchAll(/ewc3-docs ([a-z]+)/g)].map(m => m[1]);
+	const claimed = [...USAGE.matchAll(/ewc3-docs ([a-z][a-z-]*)/g)].map(m => m[1]);
 	const phantom = [...new Set(claimed)].filter(c => !commands.includes(c));
 	assert.deepStrictEqual(phantom, [], `USAGE.txt describes non-existent command(s): ${phantom.join(', ')}`);
 });
@@ -536,6 +544,1329 @@ test('counts entries in a JSON collection', () => {
 	}, dir);
 	assert.strictEqual(values.n, '2');
 });
+
+// ---------------------------------------------------------------------------
+// ID series. Untested until now, which is uncomfortable given this module decides what number gets
+// minted next: every failure here hands out an ID that is already taken, silently.
+
+function roadmapRepo(body) {
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'), body);
+	return dir;
+}
+
+const OWNS_VS = '| Prefix | Owner | Series description |\n| --- | --- | --- |\n| VS | x | slices |\n';
+
+test('[series] last number is the MAX, never a count', () => {
+	// A count agrees with the max only while the series is contiguous, and starts handing out taken
+	// numbers the moment one is retired. One row holding VS-42 must report 42, not 1.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-42 | only row |\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 42);
+});
+
+test('[series] a retired ID does not lower the next mint', () => {
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-1 | a |\n| VS-9 | b |\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 9);
+});
+
+test('[series] prose cannot inflate the series', () => {
+	// The anchor is the defence: an ID must be a table row's FIRST cell to count. Without this, any
+	// sentence mentioning a slice would push the next mint past it.
+	const dir = roadmapRepo(`${OWNS_VS}\nWe should revisit VS-123 next quarter, then VS-999.\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+});
+
+test('[series] an ID in a second column does not count either', () => {
+	const dir = roadmapRepo(`${OWNS_VS}\n| Slice | ID |\n| --- | --- |\n| a thing | VS-123 |\n`);
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+});
+
+test('[series] using a prefix without declaring it is reported', () => {
+	// This is what makes the ownership table load-bearing instead of decorative.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| DT-3 | undeclared |\n`);
+	const problems = undeclaredPrefixes(dir);
+	assert.strictEqual(problems.length, 1);
+	assert.strictEqual(problems[0].prefix, 'DT');
+	assert.strictEqual(problems[0].highest, 3);
+});
+
+test('[series] a declared prefix is not reported', () => {
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | declared |\n`);
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
+test('[series] the ownership table stops at the blank line after it', () => {
+	// Rows below the table belong to other tables. An unbounded scan would read the NEXT table's
+	// header cell `| ID |` as a declaration, because a bare uppercase token is exactly what a
+	// declaration looks like. Assert the set EXACTLY: 'no DT' is too weak to catch that.
+	const dir = roadmapRepo(OWNS_VS + `
+| ID | Slice |
+| --- | --- |
+| DT-1 | a row |
+`);
+	const { declared } = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...declared].sort(), ['VS'],
+		'only the ownership table may declare; a later table must contribute nothing');
+});
+
+test('[series] FIX is repo-local, everything else is global', () => {
+	assert.ok(isLocalPrefix('FIX'));
+	assert.ok(isLocalPrefix('fix'), 'case must not decide ownership scope');
+	assert.ok(!isLocalPrefix('VS'));
+	assert.ok(!isLocalPrefix('DT'));
+});
+
+test('[series] declared ownership names the file that claims each prefix', () => {
+	const dir = roadmapRepo(OWNS_VS);
+	const owners = declaredOwnership(dir);
+	assert.deepStrictEqual([...owners.keys()], ['VS']);
+	assert.strictEqual(owners.get('VS').length, 1);
+	assert.match(owners.get('VS')[0], /X_Development_Roadmap\.md$/);
+});
+
+test('[series] a human-named first cell declares nothing, even beside a Last Used column', () => {
+	// "Vertical Slices" is a label, not a prefix. Mining the prefix out of the neighbouring cell
+	// instead is how a checker ends up knowing three register shapes; the register is brought to
+	// the template rather than the parser to the register.
+	const dir = roadmapRepo(
+		'| Series | Last Num | Series Description |\n| --- | --- | --- |\n| Vertical Slices | VS-390 | x |\n' +
+		'\n| ID | Slice |\n| --- | --- |\n| VS-390 | a slice |\n');
+	const file = path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md');
+	assert.strictEqual(readSeries(file).declared.size, 0);
+	assert.strictEqual(undeclaredPrefixes(dir).length, 1);
+});
+test('[series] a prefix named in a neighbouring cell is a mention, not a mint', () => {
+	// SX_Coder's cross-project row names `AIR`, `DW` and `DT` in prose while owning none of them.
+	// Only the first cell of the ownership table declares, so that row claims nothing.
+	const dir = roadmapRepo(
+		'| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n' +
+		'| TS | global | x | TS-2 | mint `AIR-01`=Runtime, `DW-01`=Warehouse for new |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared].sort(), ['TS'],
+		'only the first cell declares; prefixes named beside it do not');
+});
+function backlogRepo(roadmapBody, backlogBody) {
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'backlog'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'), roadmapBody);
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'backlog', 'X_Backlog.md'), backlogBody);
+	return dir;
+}
+
+test('[series] a DECLARED scope beats the hardcoded prefix guess', () => {
+	// `isLocalPrefix` knows about FIX and nothing else, which is right for this toolkit and cannot
+	// be right for every register. A repository that has written down what it means is believed.
+	const dir = roadmapRepo('| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| PQ | repo-local | x | PQ-7 | slices |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.strictEqual(read.scopes.get('PQ').local, true, 'the register said repo-local, so PQ is repo-local');
+	assert.strictEqual(isLocalPrefix('PQ'), false, 'even though the hardcoded fallback would not say so');
+});
+test('[series] a FROZEN series records its ceiling, so minting past it is detectable', () => {
+	// A freeze expressed only in prose is a convention, not a control - the exact failure this
+	// toolkit exists to end. Measured: MedAR_AI_Runtime retired OPS at 08 and every checker in the
+	// estate would still have accepted OPS-09 as the next mint.
+	const dir = roadmapRepo('| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| OPS | frozen at 8 | x | OPS-8 | retired; mint AIR |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	const ops = read.scopes.get('OPS');
+	assert.strictEqual(ops.frozen, true, 'the register retired this series');
+	assert.strictEqual(ops.ceiling, 8, 'and named the number it stops at');
+});
+test('[series] a `Series`-headed register declares NOTHING - one template, not N parsers', () => {
+	// SUPERSEDES the version of this test written 2026-08-30, and restores the contract that one
+	// replaced. The detour is worth recording: the checker was taught to read a `Series` header, a
+	// mint template in the first cell, and a prefix hiding in a `Last Num` cell - three register
+	// shapes met in one estate. Each shape a checker learns is a shape it will half-accept a
+	// FOURTH version of, silently, and a guess is not a check.
+	//
+	// The premise that justified it was that migrating the estate is expensive. It is a header
+	// row. See docs/design/one-template-beats-three-parsers.md.
+	const dir = roadmapRepo('| Series | Scope | Meaning | Last Num | Next |\n| --- | --- | --- | --- | --- |\n| `AIR-NN` | repo-owned | value slices | 28 | **AIR-29** |\n\n| ID | Slice |\n| --- | --- |\n| AIR-28 | a thing |\n');
+	const file = path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md');
+	assert.strictEqual(readSeries(file).declared.size, 0,
+		'a Series-headed register is not an ownership table');
+	assert.strictEqual(undeclaredPrefixes(dir).length, 1,
+		'so the guard fires, and the repo is told to bring its register to the template');
+});
+test('[series] an ACTUAL id in the first cell does not declare a series', () => {
+	// `AIR-NN` is a mint template and declares; `AIR-28` is an ID and declares nothing. Without
+	// that discrimination a Delivery Index row would be read as an ownership row, and every
+	// roadmap would silently declare every prefix it happened to use.
+	const dir = roadmapRepo('| Series | Meaning |\n| --- | --- |\n| `AIR-28` | not a declaration |\n\n| ID | Slice |\n| --- | --- |\n| DT-3 | undeclared |\n');
+	const problems = undeclaredPrefixes(dir);
+	assert.ok(problems.some((p) => p.prefix === 'DT'), 'DT should still be reported as undeclared');
+});
+
+test('[series] a backlog inherits the ownership table of the roadmap beside it', () => {
+	// Declaration is REPOSITORY-scoped. A backlog mints into the same series as its roadmap, so
+	// requiring it to carry a second ownership table would mean two registers for one set of
+	// prefixes - the exact drift this tool exists to stop.
+	const dir = backlogRepo(
+		`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-4 | in the index |\n`,
+		'## Ordered Backlog\n\n1. `VS-07` - not declared here, and that is fine\n');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
+test('[series] a repo that declares NOWHERE is still reported', () => {
+	// The inheritance above must not become a blanket amnesty: a repository with IDs and no
+	// ownership table anywhere has still told us nothing about what it owns.
+	const dir = backlogRepo(
+		'| ID | Slice |\n| --- | --- |\n| VS-4 | no ownership table anywhere |\n',
+		'1. `VS-07` - also nothing\n');
+	const problems = undeclaredPrefixes(dir);
+	assert.ok(problems.length > 0, 'a repo declaring nowhere must still be reported');
+});
+
+test('[series] the REGISTER arbitrates an unseparated heading', () => {
+	// EPQE's guard alone was measured to cost real declarations: ALL 24 of SX_DW's slice headings
+	// are `### DW-001 Title` with no separator, and two of them exist ONLY as headings - exactly
+	// the IDs the heading position was added to catch. So the register decides: a heading naming a
+	// prefix this roadmap OWNS is naming the thing the section IS.
+	const owns = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| DW | global | x | DW-1 | slices |\n';
+	const dir = roadmapRepo(owns + '\n### DW-023 Queue flag Q + synthetic machine-status contract\n');
+	assert.strictEqual(lastNumber(dir, 'DW'), 23,
+		'a heading naming an OWNED prefix declares, separator or not');
+});
+
+test('[series] a heading naming a FOREIGN prefix cites, whatever its punctuation', () => {
+	const owns = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| DT | global | x | DT-1 | ours |\n';
+	const dir = roadmapRepo(owns + '\n| ID | Slice |\n| --- | --- |\n| DT-1 | a thing |\n\n## Notes\n\n### PQ-34 changed how the other repo publishes\n');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'a repo must never be told to declare a prefix it does not own');
+});
+
+test('[frontmatter] the restricted subset a slice document actually needs', () => {
+	const { data, body, had } = frontmatter.read('---\nid: VS-00397\ntitle: Two writers own MFM.Doctors\nstate: coded   # a judgement\nest: 4.0d\ndepends_on: [VS-00352, VS-00353]\nfollowers:\n  - VS-00398\nimplements:\n---\n\n# The narrative\n');
+	assert.strictEqual(had, true);
+	assert.strictEqual(data.id, 'VS-00397');
+	assert.strictEqual(data.title, 'Two writers own MFM.Doctors');
+	assert.strictEqual(data.state, 'coded', 'a trailing # comment is not part of the value');
+	assert.deepStrictEqual(data.depends_on, ['VS-00352', 'VS-00353']);
+	assert.deepStrictEqual(data.followers, ['VS-00398'], 'block list');
+	assert.strictEqual(data.implements, null, "an empty value is null, not the empty string");
+	assert.strictEqual(body, '\n# The narrative\n',
+		'the body starts where it starts - read() consumes only the fence terminator');
+});
+
+test('[frontmatter] a document with no frontmatter is not an error', () => {
+	const r = frontmatter.read('# Just a document\n');
+	assert.strictEqual(r.had, false);
+	assert.deepStrictEqual(r.data, {});
+});
+
+test('[frontmatter] ` #` ends a plain scalar, as YAML says - quote to keep it', () => {
+	// Checked against the spec rather than assumed: an unquoted scalar ENDS at a space-hash, so
+	// a title containing # must be quoted. My first version of this test asserted the opposite
+	// and the parser was right - silently truncating a slice title is exactly the kind of thing
+	// worth pinning.
+	assert.strictEqual(frontmatter.read('---\ntitle: Fix the #4 lookup\n---\n').data.title, 'Fix the',
+		'an unquoted value is truncated at ` #`');
+	assert.strictEqual(frontmatter.read('---\ntitle: "Fix the #4 lookup"\n---\n').data.title, 'Fix the #4 lookup',
+		'quoting keeps it');
+	assert.strictEqual(frontmatter.read('---\ntitle: C#\n---\n').data.title, 'C#',
+		'a hash with no space before it is just a character');
+});
+test('[frontmatter] REFUSES what it does not support, rather than guessing', () => {
+	// The whole grammar is flat key/value plus lists. A document needing more is doing too much,
+	// and this toolkit spent a week learning that a guess is not a check.
+	assert.throws(() => frontmatter.read('---\nowner:\n  name: nested\n---\n'), /nested keys/);
+	assert.throws(() => frontmatter.read('---\nbody: |\n  a block scalar\n---\n'), /block scalars/);
+	assert.throws(() => frontmatter.read('---\nnot a key value line\n---\n'), /not `key: value`/);
+	assert.throws(() => frontmatter.read('---\nid: VS-1\n'), /never closed/);
+});
+
+test('[frontmatter] write preserves the body and the line endings', () => {
+	const doc = '---\nid: VS-1\nstate: planned\n---\n\n# Title\n\nProse that must not move.\n';
+	const { data } = frontmatter.read(doc);
+	data.state = 'coded';
+	const out = frontmatter.write(doc, data);
+	assert.ok(out.includes('state: coded'));
+	assert.ok(out.endsWith('# Title\n\nProse that must not move.\n'));
+
+	const crlfDoc = doc.split('\n').join('\r\n');
+	const crlfOut = frontmatter.write(crlfDoc, frontmatter.read(crlfDoc).data);
+	assert.ok(crlfOut.includes('\r\n'), 'a CRLF document stays CRLF');
+});
+
+test('[frontmatter] rewriting an unchanged document is a no-op', () => {
+	// Idempotent, always - the canon rule. A fold that is not idempotent cannot run automatically,
+	// which returns it to a human, which is where we started.
+	const doc = '---\nid: VS-1\nstate: planned\ndepends_on: [VS-2]\nimplements:\n---\n\n# Title\n';
+	const once = frontmatter.write(doc, frontmatter.read(doc).data);
+	const twice = frontmatter.write(once, frontmatter.read(once).data);
+	assert.strictEqual(once, doc);
+	assert.strictEqual(twice, once);
+});
+
+test('[series] a heading that CITES a sibling slice does not declare it', () => {
+	// Found by EPQE. The list pattern required a trailing separator and the heading pattern did
+	// not, so a Notes section citing another repository's slice failed the repo with instructions
+	// to declare a prefix it does not own - the one remedy that must never be followed.
+	const cites = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-1 | a thing |\n`
+		+ '\n## Notes\n\n### PQ-34 changed how the other repo publishes\n');
+	assert.deepStrictEqual(undeclaredPrefixes(cites), [],
+		'a heading with no separator is prose, not a mint');
+});
+
+test('[series] a heading that DECLARES still counts, including runs and ranges', () => {
+	const one = roadmapRepo(`${OWNS_VS}\n### VS-23 — queue flag contract\n`);
+	assert.strictEqual(lastNumber(one, 'VS'), 23);
+	const run = roadmapRepo(`${OWNS_VS}\n### VS-24 / FIX-89 — the target model\n`);
+	assert.strictEqual(lastNumber(run, 'VS'), 24, 'a `/` run is still a declaring heading');
+	const range = roadmapRepo(`${OWNS_VS}\n### VS-25 through VS-26 — billing rules\n`);
+	assert.strictEqual(lastNumber(range, 'VS'), 26,
+		'a range declares EVERY id in it - this assertion expected 25 and PINNED the bug');
+});
+
+test('[series] a FENCED example is a mention, not a mint', () => {
+	// Found by codex. A roadmap that documents its own syntax pushed `lastId` to the number in
+	// the example, and a fenced table row for a foreign prefix produced a FALSE undeclared-prefix
+	// failure. The toolkit already learned this once for `values` (DT-10) and the lesson did not
+	// carry to the ID scanners - which is the exact class the mention-is-not-a-mint rule names.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | the real highest |\n`
+		+ '\n```markdown\n1. `VS-99` - an example\n| DT-77 | planned | an example row |\n```\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 3, 'a fenced VS-99 must not move the series');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'and a fenced DT-77 must not be reported as an undeclared prefix');
+});
+
+test('[series] withoutFences keeps the line count, so reported lines stay true', () => {
+	const out = withoutFences('a\n```\nhidden\n```\nb');
+	assert.strictEqual(out.split('\n').length, 5);
+	assert.strictEqual(out.split('\n')[4], 'b');
+});
+
+test('[series] a freeze is enforced across EVERY planning surface, not just its own', () => {
+	// Found by codex. Declaration is repository-scoped, so enforcement has to be: a roadmap
+	// frozen at OPS-8 beside a backlog minting OPS-9 reported a clean repo, because the ceiling
+	// was only ever compared with the declaring file's own IDs.
+	const dir = backlogRepo(
+		'| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| OPS | frozen at 8 | x | OPS-8 | retired |\n',
+		'1. `OPS-9` - minted past the freeze, on the inheriting surface\n');
+	const v = frozenViolations(dir);
+	assert.strictEqual(v.length, 1, 'the backlog mint must be caught');
+	assert.strictEqual(v[0].prefix, 'OPS');
+	assert.strictEqual(v[0].ceiling, 8);
+	assert.strictEqual(v[0].highest, 9);
+});
+
+test('[frontmatter] the round-trip is checked through PARSE, not through scalar()', () => {
+	// The previous version of this rule tested candidates against `scalar()` and called that "the
+	// round-trip, so it cannot drift from the parser". It could, because `scalar` IS NOT the parser.
+	// Codex found three ways past it in one round, all parse-level behaviour scalar never sees.
+	// `write` is a fold rewriting frontmatter it did not author, so each one corrupts a field
+	// nobody was editing.
+	const cases = [
+		['*important', 'an anchor sigil - re-read THREW'],
+		['[draft]', 'bracket text - silently retyped as a one-element list'],
+		['Say "go" #4', 'quote plus comment-hash - escapes were not decoded back'],
+		['|', 'a bare block-scalar marker'],
+		['# leading hash', 'reads as a comment line'],
+	];
+	for (const [value, why] of cases) {
+		const doc = '---\nid: VS-1\nstate: planned\n---\n\n# body\n';
+		const data = frontmatter.read(doc).data;
+		data.title = value;
+		data.state = 'coded';
+		const back = frontmatter.read(frontmatter.write(doc, data)).data;
+		assert.strictEqual(back.title, value, `title corrupted (${why})`);
+		assert.strictEqual(back.state, 'coded', 'and the field being edited still lands');
+	}
+});
+
+test('[frontmatter] a comma inside a list element does not change cardinality', () => {
+	// Found by codex: `[alpha,beta]` re-read as TWO elements, so an unrelated frontmatter update
+	// silently changed the size of a dependency list.
+	const doc = '---\ntags: []\n---\n';
+	const d = frontmatter.read(doc).data;
+	d.tags = ['alpha,beta', 'gamma'];
+	const back = frontmatter.read(frontmatter.write(doc, d)).data;
+	assert.deepStrictEqual(back.tags, ['alpha,beta', 'gamma']);
+});
+
+test('[frontmatter] a value the subset cannot represent is REFUSED, not mangled', () => {
+	// Silently mangling is the one outcome worse than failing.
+	assert.throws(() => frontmatter.field('title', 'a\nnewline'), /cannot represent/);
+});
+
+test('[series] an HTML-commented row does not declare', () => {
+	// Found by codex. A commented-out table row is invisible in rendered markdown, so it is not a
+	// mint - but it read as one, and could advance the derived next ID.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | real |\n`
+		+ '\n<!--\n| VS-999 | disabled, commented out |\n-->\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 3, 'a commented row must not move the series');
+});
+
+test('[series] a closing fence may be followed only by whitespace', () => {
+	// Found by codex. ```js inside a block is an info string on a nested example, not a close -
+	// and closing on it exposed the rows beneath to the declaration scanner.
+	const out = withoutFences(['a', '```', '```js', '| VS-888 | exposed |', '```', 'b'].join('\n'));
+	assert.ok(!out.includes('VS-888'), 'an info-string line is content, not a closing fence');
+	assert.strictEqual(out.split('\n').length, 6);
+});
+
+test('[series] a ranged heading records EVERY id, not just the first', () => {
+	// Found by codex, which also noted that my own regression test CONFIRMED the defect rather
+	// than fixing it: `VS-25 through VS-26` asserted 25. Capturing only the leading ID meant a
+	// ranged heading declared one of five, so `lastNumber` could hand out a taken number and the
+	// collision check could not see the rest.
+	//
+	// Fixed by making slices.js parseHeading the single enumerator - it already expanded ranges.
+	// TWO heading parsers that disagreed is what produced this, and it was flagged twice before
+	// it cost anything.
+	const dir = roadmapRepo(`${OWNS_VS}\n### VS-371 through VS-375 — a family\n`);
+	const ids = [...declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md')).keys()];
+	assert.deepStrictEqual(ids, ['VS-371', 'VS-372', 'VS-373', 'VS-374', 'VS-375']);
+	assert.strictEqual(lastNumber(dir, 'VS'), 375, 'so the next mint cannot collide with 375');
+});
+
+test('[series] an HTML comment that opens AFTER prose still hides what follows', () => {
+	// Found by codex as fresh evidence against the earlier HTML-comment fix: `startsWith` missed
+	// `prose <!--`, so the rows beneath were scanned as real declarations.
+	const out = withoutFences('prose <!--\n| VS-999 | hidden |\n-->');
+	assert.ok(!out.includes('VS-999'), 'a mid-line opener still enters comment mode');
+	assert.ok(out.startsWith('prose'), 'and the text before it, which renders, is kept');
+});
+
+test('[series] a BACKTICKED comment delimiter is documentation, not markup', () => {
+	// Found while fixing the above, by investigating a real failure rather than a report - and it
+	// is the most on-theme defect of the branch. This repository's own roadmap row for DT-9
+	// DESCRIBES the wrapped-`<!--` hazard, in backticks. The first version of the comment fix read
+	// that row as an unterminated opener and swallowed every row beneath it, deleting FIX-1 from
+	// the series. The row documenting the trap sprang the trap.
+	//
+	// Same lesson as DT-10, which taught `values` to ignore markers inside code spans. It did not
+	// carry to the comment scanner either.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n`
+		+ '| VS-9 | a wrapped `<!--` becomes an HTML block the splitter freezes forever |\n'
+		+ '| VS-12 | a later row that must survive |\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 12,
+		'a backticked <!-- must not open a comment and swallow the rows beneath');
+});
+
+test('[frontmatter] a block list may start after a comment', () => {
+	// Found by codex. Examining only the immediate next line classified the field as null, and the
+	// item beneath then threw "list item with no list to belong to" - on syntax the subset
+	// advertises as supported.
+	const doc = '---\ndepends_on:\n  # waiting on API\n  - VS-1\n---\n\n# body\n';
+	assert.deepStrictEqual(frontmatter.read(doc).data.depends_on, ['VS-1']);
+});
+
+test('[frontmatter] a REMOVED list item cannot survive the fold', () => {
+	// Found by codex, and the nastiest one yet: gathering a block list stopped at the first
+	// non-item line, so a comment BETWEEN items truncated the region. Changing the field emitted
+	// the new value and left the later items in place - [a, b] set to [x] read back as [x, b].
+	// A dependency that will not die is the one failure a dependency graph cannot tolerate.
+	const doc = ['---', 'tags:', '  - alpha', '  # a note between items', '  - beta', '---', '', '# body', ''].join('\n');
+	const d = frontmatter.read(doc).data;
+	assert.deepStrictEqual(d.tags, ['alpha', 'beta'], 'both items are read across the comment');
+	d.tags = ['xray'];
+	const back = frontmatter.read(frontmatter.write(doc, d)).data;
+	assert.deepStrictEqual(back.tags, ['xray'], 'and beta is GONE');
+});
+
+test('[frontmatter] the closing fence must be a whole line, not a prefix', () => {
+	// Found by codex: searching for the first `\n---` matched `---not-a-fence`, closed the block
+	// early, and dropped the fields beneath into the body - where a rewrite re-fenced them in the
+	// wrong place. Refusing is the correct outcome; silently re-shaping the document is not.
+	const doc = '---\nid: VS-1\n---not-a-fence\nstate: planned\n---\n\n# body\n';
+	assert.throws(() => frontmatter.read(doc), /not `key: value`/,
+		'a malformed delimiter is refused, not treated as the close');
+
+	const ok = '---\nid: VS-1\nstate: planned\n---\n\n# body\n';
+	assert.strictEqual(frontmatter.read(ok).data.state, 'planned', 'a real fence still closes');
+});
+
+test('[frontmatter] a fold PATCHES the block - comments and blank lines survive', () => {
+	// Found by codex. Rebuilding the block from key/value pairs deleted every explanatory comment
+	// in the document, while the docstring promised unrelated fields were preserved.
+	const doc = ['---', '# which slice this is', 'id: VS-1', 'state: planned   # the human judgement',
+		'est: 4.0d', '---', '', '# body', ''].join('\n');
+	const d = frontmatter.read(doc).data;
+	d.state = 'coded';
+	const out = frontmatter.write(doc, d);
+	assert.ok(out.includes('# which slice this is'), 'a whole-line comment survives');
+	assert.ok(out.includes('# the human judgement'), 'and so does a trailing one, on a CHANGED field');
+	assert.ok(/state: coded\s+# the human judgement/.test(out), 'with its separating whitespace');
+	assert.ok(out.includes('est: 4.0d'), 'and an untouched field is verbatim');
+});
+
+test('[frontmatter] an explicit empty string stays a string, not null', () => {
+	// Found by codex: `title: ""` was emitted as `title:` and re-read as null - an unrelated fold
+	// changing a field's TYPE.
+	const doc = '---\nid: VS-1\ntitle: ""\n---\n\n# body\n';
+	const back = frontmatter.read(frontmatter.write(doc, frontmatter.read(doc).data)).data;
+	assert.strictEqual(back.title, '', 'still the empty STRING');
+});
+
+test('[frontmatter] the body is preserved byte-for-byte, blank lines included', () => {
+	// Found by codex. read() stripped every leading blank line and write() added back exactly one,
+	// so a state-only fold silently reflowed the document - against this function's own contract.
+	const doc = '---\nid: VS-1\n---\n\n\n\n# body after three blanks\n';
+	assert.strictEqual(frontmatter.write(doc, frontmatter.read(doc).data), doc,
+		'an unchanged rewrite is byte-identical');
+});
+
+test('[series] a closing fence indented four spaces is content, not a close', () => {
+	// Found by codex. Markdown allows a fence delimiter at most three spaces of indent; at four it
+	// is code. Trimming before classifying made an over-indented run look like a valid close and
+	// exposed the rows beneath it.
+	const out = withoutFences(['a', '```', '    ```', '| VS-777 | inside |', '```', 'b'].join('\n'));
+	assert.ok(!out.includes('VS-777'), 'a four-space-indented run does not close the fence');
+});
+
+test('[frontmatter] a value that would not survive plain is re-quoted on write', () => {
+	// Found by codex, and it is the nastiest kind of bug: a fold updating only `state` would
+	// silently truncate an unrelated TITLE. `title: "Fix the #4 lookup"` written back unquoted
+	// re-reads as 'Fix the'. The round-trip IS the test, so the rule cannot drift from the parser.
+	const doc = '---\ntitle: "Fix the #4 lookup"\nstate: planned\n---\n\n# body\n';
+	const data = frontmatter.read(doc).data;
+	data.state = 'coded';
+	const out = frontmatter.write(doc, data);
+	assert.strictEqual(frontmatter.read(out).data.title, 'Fix the #4 lookup',
+		'the title must survive a write that was not about the title');
+
+	const listDoc = '---\ntags: []\n---\n';
+	const d2 = frontmatter.read(listDoc).data;
+	d2.tags = ['plain', 'has # hash'];
+	assert.deepStrictEqual(frontmatter.read(frontmatter.write(listDoc, d2)).data.tags,
+		['plain', 'has # hash'], 'list items are quoted on the same rule');
+});
+
+test('[series] a longer fence is not closed by a shorter one inside it', () => {
+	// Found by codex. A four-backtick block documenting a three-backtick example was closed by the
+	// inner fence, so whatever followed leaked out and could be scanned as a mint - in a document
+	// whose entire purpose is explaining fenced examples.
+	const out = withoutFences(['a', '````', '```', '| VS-999 | inner |', '````', 'b'].join('\n'));
+	assert.ok(!out.includes('VS-999'), 'the inner fence must not close the outer block');
+	assert.strictEqual(out.split('\n').length, 6, 'and the line count is still preserved');
+	assert.strictEqual(out.split('\n')[5], 'b');
+});
+
+test('[series] a freeze violation names the surface that MINTED, not the one that froze', () => {
+	// Found by codex. Reporting the file that declared the freeze sends the reader to a document
+	// that does not contain the offending ID - the wrong half of a two-file problem, with a message
+	// asserting otherwise.
+	const dir = backlogRepo(
+		'| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| OPS | frozen at 8 | x | OPS-8 | retired |\n',
+		'1. `OPS-9` - minted past the freeze, in the BACKLOG\n');
+	const v = frozenViolations(dir);
+	assert.strictEqual(v.length, 1);
+	assert.ok(v[0].file.includes('Backlog'), 'file must be where the mint is');
+	assert.ok(v[0].declaredIn.includes('Roadmap'), 'and the freeze is still attributed');
+});
+
+test('[series] a `repo:slice` qualified reference can never be a mint', () => {
+	// `DT-1`..`DT-39` mean different slices in ewc3-docs-tools and in MedAR DevTools - 39
+	// overlapping IDs across two estates, and no hub re-charter resolves it because the estates
+	// have separate registries. A qualified reference disambiguates, and costs nothing to support:
+	// every declaring pattern is anchored and needs `-` immediately after the prefix token, while a
+	// qualifier puts `:` there instead.
+	const dir = roadmapRepo(`${OWNS_VS}`
+		+ '\n| ID | State | Slice |\n| --- | --- | --- |\n| VS-9 | done | a real mint |\n'
+		+ '| ewc3-docs-tools:DT-12 | note | qualified, in an ID cell |\n'
+		+ '\n### DevTools:DT-82 the other estate\n'
+		+ '\n1. `DevTools:DT-65` - qualified, in a list item\n'
+		+ '\n### SXDW:DW-1 an ALL-CAPS repo name, still not a mint\n');
+	const ids = declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...ids.keys()], ['VS-9'],
+		'only the bare ID declares; every qualified reference is a citation');
+	assert.deepStrictEqual(undeclaredPrefixes(dir), [],
+		'and no qualified reference raises an undeclared-prefix failure');
+});
+
+test('[series] a `reference-only` row DOCUMENTS a prefix without CLAIMING it', () => {
+	// Asked by SX_DW, whose register states the prefixes it cites but does not own. Stating that
+	// is better than silence - but a row saying "not mine" must not then read as an ownership
+	// claim, or the register contradicts itself and the estate scan reports a false collision.
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| DW | global | SX_DW | DW-24 | ours |\n'
+		+ '| VS | reference-only | SX_Coder | - | cited here, never minted here |\n';
+	const dir = roadmapRepo(reg + '\n| ID | Slice |\n| --- | --- |\n| DW-24 | a thing |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared].sort(), ['DW'],
+		'a reference-only prefix is not declared');
+	assert.strictEqual(read.scopes.get('VS').reference, true,
+		'but the row is kept, so it still documents');
+});
+
+test('[series] MINTING under a reference-only prefix still fails', () => {
+	// The point of dropping it from `declared`. If saying "I do not own VS" also silenced the
+	// undeclared-prefix check, the row would buy silence rather than safety.
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| DW | global | SX_DW | DW-24 | ours |\n'
+		+ '| VS | reference-only | SX_Coder | - | cited here, never minted here |\n';
+	const dir = roadmapRepo(reg + '\n| ID | Slice |\n| --- | --- |\n| VS-500 | minted where it must not be |\n');
+	const problems = undeclaredPrefixes(dir);
+	assert.ok(problems.some((p) => p.prefix === 'VS'),
+		'minting VS here must be reported, precisely because the register disclaims it');
+});
+
+test('[series] a reference-only row can ALSO carry a freeze', () => {
+	// SX_DW documents TS as frozen at TS-02 and owned by SX_Coder. Both halves must work: not a
+	// claim, and still a ceiling, so nobody mints TS-03 here.
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| DW | global | SX_DW | DW-1 | ours |\n'
+		+ '| TS | reference-only, frozen at 2 | SX_Coder | TS-02 | legacy; do not mint |\n';
+	const dir = roadmapRepo(reg + '\n| ID | Slice |\n| --- | --- |\n| TS-3 | minted past a retired series |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.strictEqual(read.scopes.get('TS').reference, true);
+	assert.strictEqual(read.scopes.get('TS').frozen, true);
+	const v = frozenViolations(dir);
+	assert.ok(v.some((x) => x.prefix === 'TS'), 'the freeze still bites on a documented series');
+});
+
+test('[series] a DECLARED repo-local prefix is not a global collision', () => {
+	// Found by codex. The parsed scope changed the DISPLAY but not the claimed-twice check,
+	// which still consulted the hardcoded set - so a register that spells out `repo-local` was
+	// overruled by a Set containing exactly `FIX`.
+	const dir = tmpdir();
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	const reg = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| PQ | repo-local | x | PQ-1 | local fixes |\n';
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'A_Roadmap.md'), reg);
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'B_Roadmap.md'), reg);
+	assert.deepStrictEqual(contestedPrefixes(dir), [],
+		'two roadmaps declaring PQ repo-local is intended, not a collision');
+});
+
+test('[docs] the Reference lists every default planning-surface glob', () => {
+	// Found by codex: two globs were added to DEFAULT_ROADMAPS and the documented default was
+	// not updated, so a reader copying it would silently drop nested-roadmap coverage. Derived
+	// from the code rather than restated, so it cannot drift again.
+	const ref = fs.readFileSync(path.join(__dirname, '..', 'docs', 'Reference.md'), 'utf8');
+	for (const glob of DEFAULT_ROADMAPS) {
+		assert.ok(ref.includes(glob), `Reference.md does not document the default glob ${glob}`);
+	}
+});
+
+test('[series] a numbered backlog item DECLARES, and the roadmap glob reaches it', () => {
+	// Measured on MedAR_AI_Runtime: a backlog written as "3. `VS-07` - definition" is not a table,
+	// so every first-column extractor in that estate returned zero for it. Four IDs minted there
+	// collided with another repository and were invisible to all of them.
+	const dir = backlogRepo(
+		`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-4 | in the index |\n`,
+		'## Ordered Backlog\n\n1. `VS-07` - GPU allocation validation\n2. `VS-13` - speculative decoding\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 13);
+});
+
+test('[series] a bulleted item that DEFINES an ID counts, using a dash or a colon', () => {
+	const dash = backlogRepo(`${OWNS_VS}\n`, '- `VS-21` - a defined thing\n');
+	assert.strictEqual(lastNumber(dash, 'VS'), 21);
+	const colon = backlogRepo(`${OWNS_VS}\n`, '- `VS-22`: a defined thing\n');
+	assert.strictEqual(lastNumber(colon, 'VS'), 22);
+});
+
+test('[series] a list item that CITES an ID mid-sentence does not declare it', () => {
+	// The separator after the ID is the whole defence. Without it, a roadmap Notes section
+	// bulleting a sibling repository's slice would register as a mint of a prefix this roadmap
+	// does not own, and `series` would fail on an undeclared prefix nobody minted.
+	const dir = backlogRepo(`${OWNS_VS}\n`,
+		'- see VS-999 for the background\n- blocked until VS-998 lands\n1. depends on VS-997 shipping\n');
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+});
+
+test('[series] a rename annotation in a DECLARING position hides the ID completely', () => {
+	// Measured while planning a real cross-repo renumber. The migration convention "AIR-19 (was
+	// VS-19)" is good practice in PROSE and catastrophic in an ID cell: the ID is not misparsed,
+	// it DISAPPEARS - from the series check, the collision scan and the last-used number alike.
+	// The renumber intended to end an invisibility bug would have introduced a worse one.
+	//
+	// This test documents the behaviour rather than fixing it, deliberately. Making the parser
+	// tolerant of trailing text in a declaring position would readmit exactly the prose the
+	// position exists to exclude. The annotation belongs in the Status cell; see DT-27 for making
+	// the silent drop loud.
+	const annotated = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-19 (was VS-9) | a thing |\n`);
+	assert.strictEqual(lastNumber(annotated, 'VS'), 0, 'an annotated ID cell parses as NOTHING');
+
+	const clean = roadmapRepo(`${OWNS_VS}\n| ID | Slice | Notes |\n| --- | --- | --- |\n| VS-19 | a thing | was VS-9 |\n`);
+	assert.strictEqual(lastNumber(clean, 'VS'), 19, 'the same fact in the Notes cell is fine');
+});
+
+test('[series] declaredIds returns the whole SET, not the maximum', () => {
+	// `series` needs the max to mint the next ID; a cross-repo collision check needs every member,
+	// because two repositories can collide on any of them and usually not on the highest.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-3 | a |\n| VS-9 | b |\n`);
+	const ids = declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...ids.keys()].sort(), ['VS-3', 'VS-9']);
+});
+
+test('[series] declaredIds keys by NUMBER, so VS-01 and VS-1 are one ID', () => {
+	// Padding is a rendering rule and must never reach identity. A collision check comparing the
+	// text as written would miss exactly the pairs a padding convention was introduced to tidy.
+	const dir = roadmapRepo(`${OWNS_VS}\n| ID | Slice |\n| --- | --- |\n| VS-01 | a |\n| VS-1 | same slice |\n`);
+	const ids = declaredIds(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...ids.keys()], ['VS-1']);
+});
+
+test('[series] a repo with no roadmap at all yields no series and no crash', () => {
+	const dir = tmpdir();
+	assert.deepStrictEqual(roadmapFiles(dir, null), []);
+	assert.strictEqual(lastNumber(dir, 'VS'), 0);
+	assert.deepStrictEqual(undeclaredPrefixes(dir), []);
+});
+
+
+// ---------------------------------------------------------------------------
+// Migrating a MedAR register to the ownership table. Non-destructive by contract, so the tests that
+// matter most are the ones asserting nothing was lost and nothing was invented.
+
+const REGISTER = `# Roadmap
+
+## Number Series
+
+| Series | Last Num | Series Description |
+| --- | --- | --- |
+| Vertical Slices | VS-392 | Feature drops |
+| Hotfixes | FIX-91 | Emergent fixes |
+| Cross-Project | TS-02 · DW-024 | Sibling-repo work |
+
+## Delivery Index
+
+| ID | Slice |
+| --- | --- |
+| VS-392 | a slice |
+| DT-01 | minted in DevTools, not here |
+`;
+
+test('[migrate] one register cell naming two series becomes two rows', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	const p = r.rows.map((x) => x.prefix);
+	assert.ok(p.includes('TS') && p.includes('DW'),
+		'TS-02 · DW-024 is two series sharing a cell, and must not survive as one row');
+});
+
+test('[migrate] a prefix used but never registered is NOT claimed for this repo', () => {
+	// The measured case: SX_Coder uses DT-01 while DT is minted in DevTools, whose roadmap already
+	// records DT-042 being minted twice by two registers that each thought they owned it. Claiming it
+	// here would manufacture that collision under a migration advertised as lossless.
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	const dt = r.rows.find((x) => x.prefix === 'DT');
+	assert.ok(dt, 'the unregistered prefix must still appear, or the problem stays invisible');
+	assert.strictEqual(dt.owner, null, 'an unregistered prefix must not be auto-assigned an owner');
+	assert.match(r.text, /\*\*\?\*\* _unclaimed_/, 'and it must render as a question a human resolves');
+});
+
+test('[migrate] a registered prefix keeps its owner', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	assert.strictEqual(r.rows.find((x) => x.prefix === 'VS').owner, 'SX_Coder');
+});
+
+test('[migrate] a register number behind the index is reported as stale', () => {
+	// The register is an INPUT to minting and goes stale; the IDs are evidence and cannot. This
+	// direction of disagreement means the next mint reuses a live number.
+	const behind = REGISTER.replace('| VS-392 | a slice |', '| VS-500 | a later slice |');
+	const r = migrateText(behind, { owner: 'SX_Coder' });
+	const vs = r.rows.find((x) => x.prefix === 'VS');
+	assert.strictEqual(vs.stale, true);
+	assert.strictEqual(vs.lastUsed, 500, 'the evidence wins over the stale register cell');
+});
+
+test('[migrate] the original register survives verbatim', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	for (const line of ['| Vertical Slices | VS-392 | Feature drops |',
+		'| Cross-Project | TS-02 · DW-024 | Sibling-repo work |']) {
+		assert.ok(r.text.includes(line), `migration dropped: ${line}`);
+	}
+});
+
+test('[migrate] IDs are padded to five in the emitted table', () => {
+	const r = migrateText(REGISTER, { owner: 'SX_Coder' });
+	assert.match(r.text, /VS-00392/);
+	assert.match(r.text, /FIX-00091/);
+	assert.doesNotMatch(r.text.split('<details>')[0], /\| VS-392 \|/,
+		'the emitted table must not keep the unpadded form');
+});
+
+test('[migrate] a document with no register is reported, not half-migrated', () => {
+	const r = migrateText('# Roadmap\n\nNothing here.\n', { owner: 'X' });
+	assert.strictEqual(r.ok, false);
+	assert.strictEqual(r.reason, 'no-register');
+	assert.strictEqual(r.text, null, 'no text means the caller cannot accidentally write a partial');
+});
+
+
+// ---------------------------------------------------------------------------
+// Slice extraction. This module destroyed content three separate ways before it had any tests, and
+// every one of them was silent, so the regression tests below are the point of it rather than a
+// formality. The property that matters is CONTAINMENT: every word of the roadmap must survive
+// somewhere in the output. Assert it directly.
+
+const ROADMAP = [
+	'# Roadmap',
+	'',
+	'## Delivery Index',
+	'',
+	'### Vertical Slices',
+	'',
+	'| ID | State | Slice | Est | Priority | Lane | Status |',
+	'| --- | --- | --- | --- | --- | --- | --- |',
+	'| VS-371 | planned | Schema | 1d | High | SQL | Added 2026-08-08. Wilson said so. |',
+	'| VS-372 | planned | Engine | 2d | High | Daemon | Precedence is operator-authored. |',
+	'| VS-400 | planned | Escaped | 1d | Low | Tools | It `\\|`-joined the store list into one argv. |',
+	'| VS-401 | planned | CodeSpan | 1d | Low | UI | Now reads `DSET SFE \| unresolved` in the tooltip. |',
+	'| VS-273 | planned | Reject | 1d | High | Workflow | The reject dialog. |',
+	'| FIX-89 | planned | Mixup | 1d | High | SQL | The join was wrong. |',
+	'',
+	'## Slice Notes (Narrative)',
+	'',
+	'### VS-371 through VS-372 (MedFM Billing Rules Engine)',
+	'',
+	'The engine evaluates rules in operator order.',
+	'',
+	'### VS-273 — Reject-path mechanics',
+	'',
+	'Measured against fn_CalcStatus.',
+	'',
+	'### FIX-89 — the join that paired the wrong rows',
+	'',
+	'An INNER JOIN on RowNum mispaired the entries.',
+	'',
+	'### VS-273 / FIX-89 — the target model, and the one measured constraint',
+	'',
+	'Once every database runs through SXCoder, bolt a new overflow table on.',
+	'',
+].join('\n');
+
+/** Every word of the source must appear somewhere in the output. No parsing, so it cannot self-validate. */
+function assertLossless(source, result) {
+	const words = (t) => t.split(/\s+/).map((w) => w.trim()).filter((w) => w.length > 3);
+	const all = result.text + '\n' + result.docs.map((d) => d.content).join('\n');
+	// Substring, not token equality. Markdown glues words to punctuation - a heading that becomes a
+	// link renders "Engine)](slices/..)" - so a token-set check reports loss that did not happen,
+	// and a checker that cries wolf is worse than no checker.
+	// Table cells escape pipes and prose does not, so `\|` legitimately becomes `|` on the way
+	// into a slice document - and back again when the Delivery Index is rendered from it. That
+	// is a change of NOTATION, not of content, so the comparison is made in one notation.
+	const plain = (t) => t.split('\\|').join('|');
+	const missing = [...new Set(words(plain(source)))].filter((w) => !plain(all).includes(w));
+	assert.deepStrictEqual(missing, [], `content lost: ${[...new Set(missing)].slice(0, 8).join(' | ')}`);
+}
+
+test('[slices] nothing is lost - every word survives somewhere', () => {
+	assertLossless(ROADMAP, extractSlices(ROADMAP));
+});
+
+test('[slices] an escaped pipe is a literal, not a column boundary', () => {
+	// 504 rows in the real roadmap contain one. Splitting on it finds phantom columns, so the "last
+	// cell" is a fragment from the middle and rewriting it corrupts the row.
+	const r = extractSlices(ROADMAP);
+	const doc = r.docs.find((d) => d.content.includes('VS-00400'));
+	assert.ok(doc.content.includes('joined the store list into one argv'),
+		'the whole Status cell must reach the document, not just the tail after the escaped pipe');
+});
+
+test('[slices] an UNescaped pipe inside a code span does not truncate the row', () => {
+	// The author wrote `DSET SFE | unresolved`. Escaping alone does not save this; the column COUNT
+	// from the header does, because the last column simply keeps every pipe it contains.
+	const r = extractSlices(ROADMAP);
+	const doc = r.docs.find((d) => d.content.includes('VS-00401'));
+
+	// Assert the WHOLE cell arrived. Checking only the tail passes even when the split is broken,
+	// because the tail is precisely the fragment a naive split keeps - the front half is what gets
+	// stranded in the row. A test that inspects the surviving half cannot see the missing one.
+	assert.ok(doc.content.includes('Now reads `DSET SFE | unresolved` in the tooltip.'),
+		'the entire Status cell must reach the document, pipes and all');
+
+	// And the row must be thin afterwards. Containment alone is satisfied by prose that never moved.
+	const row = r.text.split('\n').find((l) => l.startsWith('| VS-401 |'));
+	assert.ok(!row.includes('Now reads'),
+		'the prose is still in the row, so it was pinned but never actually moved');
+});
+
+test('[slices] a row is pinned to its document exactly once, and keeps its other columns', () => {
+	const r = extractSlices(ROADMAP);
+	const row = r.text.split('\n').find((l) => l.startsWith('| VS-371 |'));
+	assert.match(row, /See \[slice notes\]\(slices\/VS-00371_[^)]+\)/);
+	for (const cell of ['planned', 'Schema', '1d', 'High', 'SQL']) {
+		assert.ok(row.includes(cell), `pinning the row dropped the ${cell} column`);
+	}
+	assert.ok(!row.includes('Wilson said so'), 'the prose should have MOVED, not been copied');
+});
+
+test('[slices] a later section revisiting claimed slices is appended, never deleted', () => {
+	// `### VS-273 / FIX-89` names IDs an earlier section already claimed. The group then has no
+	// members, is skipped before it is assigned a filename, and the splice still removes it - which
+	// deleted the prose and left a link to slices/undefined.
+	const r = extractSlices(ROADMAP);
+	assert.ok(!r.text.includes('slices/undefined'), 'a dangling link means a section was dropped');
+	const doc = r.docs.find((d) => d.content.includes('Measured against fn_CalcStatus'));
+	assert.ok(doc, 'the VS-273 document should exist');
+	assert.ok(doc.content.includes('bolt a new overflow table'),
+		'the revisiting section must be appended to the document that owns the IDs');
+});
+
+test('[slices] a range heading claims every slice in the range', () => {
+	// Deliberate change: a range still claims every slice in it, but each one now gets its own
+	// document. Frontmatter is the declaration, and a document carrying two ids has no single
+	// `id:` to declare - so the Delivery Index could not be regenerated from it.
+	const r = extractSlices(ROADMAP);
+	const a = r.docs.find((d) => d.file.startsWith('VS-00371_'));
+	const b = r.docs.find((d) => d.file.startsWith('VS-00372_'));
+	assert.ok(a && b, 'VS-371 through VS-372 is two slices, so two documents');
+	assert.deepStrictEqual(a.ids, ['VS-00371']);
+	assert.deepStrictEqual(b.ids, ['VS-00372']);
+
+	// The narrative is NOT copied into both. One points at the other, because the same prose
+	// in two files is how two files start disagreeing.
+	assert.strictEqual(b.data.see, 'VS-00371');
+});
+
+test('[slices] evidence is gathered but never asserted as completion', () => {
+	const status = 'statusDetails:\n  - accomplishments:\n    - "[VS-371] shipped the schema"\n';
+	const r = extractSlices(ROADMAP, { statusText: status });
+	const doc = r.docs.find((d) => d.file.startsWith('VS-00371_'));
+	assert.ok(doc.content.includes('shipped the schema'));
+	assert.ok(/not\*\* a judgement that the slice is complete/.test(doc.content),
+		'the document must say plainly that evidence is not a completion claim');
+});
+
+test('[slices] the summary one-liner is NOT invented', () => {
+	// The whole point of pinning rather than summarising: a generated one-liner reads like a decision
+	// and is not one. If this ever starts writing summaries, it must be a deliberate change.
+	const r = extractSlices(ROADMAP);
+	for (const d of r.docs) {
+		assert.ok(/has deliberately not been written/.test(d.content),
+			`${d.file} lost the notice that the summary is still owed`);
+	}
+});
+
+
+// ---------------------------------------------------------------------------
+// The Delivery Index as a PROJECTION of the slice documents that declare its rows.
+//
+// Every one of these was found by running the round trip over the six real registers in the
+// estate rather than by reading the code, which is why they are phrased as properties of a
+// register rather than of a function.
+
+const HDC_SHAPE = [
+	'# Roadmap',
+	'',
+	'## Delivery Index',
+	'',
+	'| ID | Title | State | Notes |',
+	'| --- | --- | --- | --- |',
+	'| HDC-1 | the burster | **done** | See Slice Notes. |',
+	'| HDC-13 | the lookup that stopped every export | **deployed** | See Slice Notes. |',
+	'',
+	'## Slice Notes',
+	'',
+	'### HDC-13 — VS-413: the lookup that would have stopped every export',
+	'',
+	'Body.',
+	'',
+].join('\n');
+
+// ---------------------------------------------------------------------------
+// Four findings codex left on the round-trip commit that went UNREAD FOR SIX DAYS while this
+// lane reported the branch "settled" and "clean". The position was current; the REVIEW was not.
+//
+// Three of them live in bin/, which the suite could not reach - so the most dangerous logic in
+// the toolkit was also the least testable. These drive the real CLI.
+
+/** Run the CLI against a throwaway repo and return { code, out }. */
+function cli(args, repo) {
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), ...args, '--repo', repo],
+		{ encoding: 'utf8' });
+	return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+function stagedRepo() {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-'));
+	const index = ['# R', '', '## Delivery Index', '', '| ID | State | Slice | Status |',
+		'| --- | --- | --- | --- |', '| VS-1 | planned | first | x |', ''].join('\n');
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	fs.mkdirSync(path.join(dir, 'docs', 'project_v2', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), index);
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), index);
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-1_first.md'),
+		'---\nid: VS-1\nstate: coded\ntitle: CHANGED\n---\n\n# VS-1\n');
+	return dir;
+}
+
+test('[index] STAGED slices never write the LIVE roadmap', () => {
+	// P1. The slice directory fell back to docs/project_v2/slices while the roadmap target stayed
+	// the live docs/project tree - so the DOCUMENTED command, in the NORMAL pre-adoption state of
+	// every repo in the estate, would have rewritten an authoritative register from generated
+	// previews. Two of six repos were exposed; the other four were saved by a README happening to
+	// sit in docs/project/slices, which is not a design.
+	//
+	// The rule that removes the class: the slices and the roadmap they render into come from the
+	// SAME TREE.
+	const dir = stagedRepo();
+	const live = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	const before = fs.readFileSync(live, 'utf8');
+
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(fs.readFileSync(live, 'utf8'), before,
+		'the live register must not be touched by a staged preview');
+	assert.ok(r.out.includes('project_v2'), 'and the staged copy is what it renders into');
+	assert.ok(fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8')
+		.includes('CHANGED'), 'which it did write');
+});
+
+test('[index] two documents declaring one id is REFUSED', () => {
+	// P1. `byId` as a Map silently keeps whichever document was read last, and VS-1_First.md and
+	// VS-1_Second.md coexist because the filename carries a title slug too. One commitment renders,
+	// the other vanishes without a word. Which of two documents owns an id is not a tool decision.
+	const dir = stagedRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-1_second.md'),
+		'---\nid: VS-1\nstate: planned\ntitle: OTHER\n---\n\n# VS-1\n');
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2);
+	assert.ok(/declared by more than one document/.test(r.out));
+	assert.ok(r.out.includes('VS-1_first.md') && r.out.includes('VS-1_second.md'),
+		'both documents are named, because the human has to pick');
+});
+
+test('[index] rendering NO Delivery Index at all is not a success', () => {
+	// A misspelled heading, an overly broad glob or a backlog-only repo all produced exit 0 - a
+	// confident pass over nothing examined. Same shape as `tables` reporting success across 0 files.
+	const dir = stagedRepo();
+	const staged = path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md');
+	fs.writeFileSync(staged, fs.readFileSync(staged, 'utf8').replace('## Delivery Index', '## Deliverry Index'));
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2);
+	assert.ok(/no roadmap in that tree carries a recognised Delivery Index/.test(r.out));
+});
+
+test('[slices] a row links to its OWN document, not the anchor\'s', () => {
+	// P2. Every member of a group gets its own document, but the row rewrite used the anchor-only
+	// `g.file` for all of them - so a follower row pointed at the anchor and that follower own
+	// document had no row pointing at it, making its frontmatter and history unreachable from the
+	// index that exists to be a projection of exactly those documents.
+	const src = [
+		'## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| VS-1 | coded | first | x |', '| VS-2 | planned | second | y |', '',
+		'## Slice Notes', '', '### VS-1, VS-2 — one narrative', '', 'Body.', '',
+	].join('\n');
+	const r = extractSlices(src, { width: 0 });
+	const rows = r.text.split('\n').filter((l) => /^\| VS-/.test(l));
+	assert.ok(rows[0].includes('slices/VS-1_first.md'));
+	assert.ok(rows[1].includes('slices/VS-2_second.md'),
+		'the follower row must point at ITS document, not the anchor');
+});
+
+test('[slices] a LOWERCASE suffix is a distinct id, not a decoration', () => {
+	// The id regex captured `[A-Z]?`, so `VS-203a` did not match and the ROW WAS SILENTLY DROPPED.
+	// Eleven authored rows in SX_Coder were invisible to every check in this toolkit: the collision
+	// check could not see them, `declaredIds` folded VS-203a/b/c into VS-203, and migrate-project
+	// emitted ONE document for four separate commitments.
+	//
+	// They are ids rather than annotations, and the proof is that they carry INDEPENDENT STATES -
+	// VS-203c is planned while VS-203a and VS-203b are coded. A revision-of shares its parent state.
+	const src = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice |',
+		'| --- | --- | --- |',
+		'| VS-203 | coded | the wheel |',
+		'| VS-203a | coded | wire check_demo_match |',
+		'| VS-203c | planned | activate DemoWait routing |',
+	].join('\n');
+	const rows = parseIndex(src.split('\n'));
+	assert.deepStrictEqual(rows.map((r) => r.id), ['VS-203', 'VS-203a', 'VS-203c']);
+	assert.strictEqual(rows[2].state, 'planned', 'and it keeps its own state, which is why it is an id');
+});
+
+test('[slices] a -R<n> revision is a distinct id too', () => {
+	// FIX-09-R1 is smoked while FIX-09 is coded. Different titles, different lifecycles, separately
+	// committed - so the grammar has to admit it or the register loses a commitment.
+	const src = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice |',
+		'| --- | --- | --- |',
+		'| FIX-09 | coded | dirty save guard |',
+		'| FIX-09-R1 | smoked | guard expansion across all paths |',
+	].join('\n');
+	const rows = parseIndex(src.split('\n'));
+	assert.deepStrictEqual(rows.map((r) => r.id), ['FIX-09', 'FIX-09-R1']);
+	assert.strictEqual(rows[1].suffix, '-R1');
+});
+
+test('[slices] canonical padding applies to the NUMBER only; the suffix appends', () => {
+	// `VS-09a` is canonical at a minimum of two, not `VS-9a` and not `VS-009a`. Padding is a
+	// rendering rule for the numeric part and must never reach the suffix.
+	assert.strictEqual(padId('VS', 9, 'a', 2), 'VS-09a');
+	assert.strictEqual(padId('VS', 203, 'a', 2), 'VS-203a');
+	assert.strictEqual(padId('FIX', 9, '-R1', 2), 'FIX-09-R1');
+	assert.strictEqual(padId('DW', 24, '', 3), 'DW-024');
+});
+
+test('[slices] the suffix grammar is defined ONCE', () => {
+	// It was spelled out in 18 places across four files in four different forms, and it had already
+	// drifted - this suite uses `VS-33A`, so the grammar decided suffixes were uppercase while the
+	// estate writes them lowercase. A key assembled from parts in N places drifts silently; the fix
+	// is ONE builder, not N correct copies.
+	const slices = require('../lib/slices');
+	assert.strictEqual(typeof slices.ID_SUFFIX, 'string');
+	assert.ok(slices.idPattern('^', '$', '').test('VS-203a'));
+	assert.ok(slices.idPattern('^', '$', '').test('FIX-09-R1'));
+	assert.ok(slices.idPattern('^', '$', '').test('VS-33A'), 'the uppercase form still works');
+	assert.ok(!slices.idPattern('^', '$', '').test('VS-203abc'), 'but not arbitrary trailing text');
+
+	// The grammar reaches the OTHER modules rather than being re-spelled in them.
+	const di = require('../lib/deliveryindex');
+	const rendered = di.renderRow(['ID', 'State', 'Slice'], { id: 0, state: 1, title: 2 },
+		{ id: 'VS-203a', state: 'coded', title: 'x' }, null);
+	assert.ok(rendered.includes('VS-203a'));
+});
+
+test('[slices] a column is found by its HEADER NAME, not its position', () => {
+	// Position was hardcoded as state=1, title=2 against the house style `| ID | State | Slice |`.
+	// HDCTranslators writes `| ID | Title | State |`, so every document generated for it was named
+	// after its STATE: HDC-00001_done.md, HDC-00002_done.md, all the way down. Nothing errored and
+	// the output looked plausible enough to sit on disk unnoticed.
+	const r = extractSlices(HDC_SHAPE, { width: 0 });
+	const doc = r.docs.find((d) => d.ids[0] === 'HDC-1');
+	assert.strictEqual(doc.data.title, 'the burster');
+	assert.strictEqual(doc.data.state, '**done**');
+	assert.ok(!/_done\.md$/.test(doc.file), 'the filename must come from the title, not the state');
+});
+
+test('[slices] a heading declares only its LEADING RUN of ids', () => {
+	// `### HDC-13 — VS-413: the lookup...` was declaring VS-413 too, which is an SX_Coder slice.
+	// Adopting that migration would have written a cross-repo mint into a second register - the
+	// same collision class that cost 26 ids when AIR and SX_Coder both owned VS-.
+	//
+	// A heading names its slice and then TALKS about it. Commas and range words join ids; an
+	// em-dash or a colon ends the declaration and begins the label.
+	const r = extractSlices(HDC_SHAPE, { width: 0 });
+	const doc = r.docs.find((d) => d.ids[0] === 'HDC-13');
+	assert.deepStrictEqual(doc.ids, ['HDC-13'], 'VS-413 is cited by that heading, not minted by it');
+	assert.ok(!r.docs.some((d) => d.ids[0].startsWith('VS-')));
+});
+
+test('[slices] an AUTHORED document is never regenerated, and the row points at it', () => {
+	// Migration is a one-time import, but a repo part-way through adoption has both kinds: rows
+	// nobody has written up, and documents somebody HAS. Regenerating the second kind overwrites
+	// human prose with a projection of the row that prose replaced - and on the second run, with no
+	// diff to notice, because the generated text is stable.
+	//
+	// The name is taken from the existing file rather than derived from the row: deriving it would
+	// emit a SECOND document for the same id under a different slug, which is two declaring
+	// surfaces for one commitment - the exact defect this model removes, built by the tool that
+	// implements it.
+	const first = extractSlices(ROADMAP, { width: detectWidths(ROADMAP) });
+	const one = first.docs[0];
+	const id = frontmatter.read(one.content).data.id;
+	const held = `${id}_AUTHORED_BY_A_HUMAN.md`;
+
+	const guarded = extractSlices(ROADMAP, {
+		width: detectWidths(ROADMAP),
+		existing: new Map([[id, held]]),
+	});
+
+	assert.ok(!guarded.docs.some((d) => frontmatter.read(d.content).data.id === id),
+		'the authored id must not be regenerated');
+	assert.deepStrictEqual(guarded.kept, [id], 'and it is REPORTED as kept, not silently skipped');
+	assert.strictEqual(guarded.docs.length, first.docs.length - 1, 'every other row still emits');
+	assert.ok(guarded.text.includes(held),
+		'the register points at the authored filename, not a freshly derived one');
+	assert.ok(!guarded.text.includes(one.file),
+		'and never at a name derived from the row it replaced');
+});
+
+test('[slices] every emitted document declares exactly ONE id, in frontmatter', () => {
+	// The whole design rests on this. A document carrying two ids has no single `id:` to declare,
+	// and the Delivery Index could not be regenerated from it.
+	const r = extractSlices(ROADMAP);
+	for (const d of r.docs) {
+		const { data } = frontmatter.read(d.content);
+		assert.ok(data.id, `${d.file} declares no id`);
+		assert.deepStrictEqual(d.ids, [data.id]);
+	}
+});
+
+test('[slices] a document CARRIES the reference definitions it uses', () => {
+	// A roadmap keeps its reference definitions in one block at the bottom. Moving a cell into a
+	// slice document moved the usage and left the definition behind, so every generated document
+	// linking to a design doc had a dead reference - `links` found nine the moment the preview was
+	// regenerated, and they would have followed the documents into docs/project/slices/ on adoption.
+	//
+	// This is pinned here rather than left to CI over the generated folder, because that folder is
+	// gitignored and excluded: the signal has to live somewhere permanent.
+	const src = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice | Doc |',
+		'| --- | --- | --- | --- |',
+		'| VS-1 | planned | one | [The design][d] |',
+		'| VS-2 | planned | two | none |',
+		'',
+		'[d]: ../design/thing.md',
+	].join('\n');
+	const r = extractSlices(src, { width: 0 });
+	const one = r.docs.find((d) => d.ids[0] === 'VS-1');
+	const two = r.docs.find((d) => d.ids[0] === 'VS-2');
+
+	// A slice document sits one directory deeper than the roadmap, so a relative target needs one
+	// more `../` to still mean the same file.
+	assert.ok(one.content.includes('[d]: ../../design/thing.md'),
+		'the definition must travel with the usage, re-pointed for the extra directory');
+
+	// Only what is used. Copying every definition into every document would have `links` reporting
+	// the unused ones instead.
+	assert.ok(!two.content.includes('[d]:'), 'a document that cites nothing carries nothing');
+});
+
+test('[index] a MIGRATED register is stable, and the narrative it moved is not lost', () => {
+	// The round trip, end to end: roadmap -> slice documents -> roadmap. Read back off the
+	// GENERATED text rather than the in-memory objects, so the serialise/parse leg is exercised
+	// instead of skipped.
+	//
+	// THIS USED TO ASSERT `res.text === ROADMAP` - that a freshly migrated register regenerates its
+	// ORIGINAL rows byte for byte - and that is the one thing it must not do. Byte-for-byte identity
+	// here means the narrative cell is still DECLARED in frontmatter, so `index --write`, the step
+	// documented to follow a migration, writes every paragraph straight back into the register the
+	// migration just emptied. Measured on this repo (DT-53): longest row 341 chars after migrating,
+	// 5961 after re-indexing. The invariant was encoding the defect as a requirement.
+	//
+	// Migration is a deliberate, one-time relocation: the narrative leaves the cell and lands in the
+	// document body. So what must hold is IDEMPOTENCE FROM THE SECOND PASS, plus losslessness.
+	const first = extractSlices(ROADMAP, { width: detectWidths(ROADMAP) });
+	const recs1 = first.docs.map((d) => frontmatter.read(d.content).data);
+	const once = renderIndex(ROADMAP, recs1).text;
+
+	const second = extractSlices(once, { width: detectWidths(once) });
+	const recs2 = second.docs.map((d) => frontmatter.read(d.content).data);
+	const twice = renderIndex(once, recs2).text;
+
+	assert.strictEqual(twice, once,
+		'an already-migrated register must regenerate to itself, byte for byte');
+
+	// Losslessness: the paragraph is RELOCATED, never dropped. Checked on a specific cell rather
+	// than a count, so a regression that empties the body as well as the row cannot pass.
+	const moved = 'Added 2026-08-08. Wilson said so.';
+	const bodies = first.docs.map((d) => frontmatter.read(d.content).body).join('\n');
+	assert.ok(ROADMAP.includes(moved), 'fixture still carries the narrative cell this test tracks');
+	assert.ok(bodies.includes(moved), 'the narrative moved into a document body');
+	assert.ok(!once.includes(moved), 'and it no longer sits in the register row');
+});
+
+test('[index] rows keep the position their AUTHOR gave them', () => {
+	// Sorting by prefix then number looked canonical and was wrong: DevTools lists DT-030 before
+	// DT-029, and this repo lists DT-36 above DT-26. Those orders are decisions - rows get grouped
+	// and moved next to what they relate to - and reshuffling them produced a 555-row diff on
+	// SX_Coder that said nothing at all.
+	const src = HDC_SHAPE.replace('| HDC-1 | the burster', '| HDC-9 | the burster');
+	const r = extractSlices(src, { width: 0 });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	const rows = renderIndex(src, records).text.split('\n')
+		.filter((l) => /^\| HDC-/.test(l)).map((l) => l.split('|')[1].trim());
+	assert.deepStrictEqual(rows, ['HDC-9', 'HDC-13'], 'HDC-9 stays above HDC-13 because it was');
+});
+
+test('[index] a row with more cells than columns is REFUSED, not repaired', () => {
+	// `tables` already refuses this: given one pipe too many, no tool can tell a literal pipe from
+	// a forgotten column. The renderer was quietly escaping them, which is the same guess made
+	// silently - five rows across the estate would have shipped with invented escaping.
+	const src = HDC_SHAPE.replace('| HDC-1 | the burster | **done** | See Slice Notes. |',
+		'| HDC-1 | the burster | **done** | a | b | c |');
+	const r = extractSlices(src, { width: 0 });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	const res = renderIndex(src, records);
+	assert.deepStrictEqual(res.malformed, ['HDC-1']);
+	assert.ok(res.text.includes('| HDC-1 | the burster | **done** | a | b | c |'),
+		'the row is copied through byte-for-byte, not rewritten');
+});
+
+test('[index] a document claiming an unminted id is reported, never added', () => {
+	// Minting is a human act in a planning surface. A generator that can mint is a generator that
+	// can mint by accident.
+	const r = extractSlices(HDC_SHAPE, { width: 0 });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	records.push({ id: 'HDC-99', state: 'planned', title: 'never minted' });
+	const res = renderIndex(HDC_SHAPE, records);
+	assert.deepStrictEqual(res.unknown, ['HDC-99']);
+	assert.ok(!res.text.includes('HDC-99'), 'and it must not appear in the table');
+});
+
+test('[index] padding is a convention of a PREFIX, not of a file', () => {
+	// SX_Coder's own ids are two digits wide and its index also carries DW-024 and DW-025, which
+	// SX_DW pads to three. One width for the whole file renamed those two rows on every run.
+	const mixed = [
+		'## Delivery Index',
+		'',
+		'| ID | State | Slice |',
+		'| --- | --- | --- |',
+		'| VS-01 | planned | one |',
+		'| VS-100 | planned | two |',
+		'| DW-024 | planned | three |',
+	].join('\n');
+	assert.deepStrictEqual(detectWidths(mixed), { VS: 2, DW: 3 });
+
+	// And the shortest id states the convention: requiring one uniform length read SX_Coder - 217
+	// two-digit ids and 349 three-digit - as unpadded, and would have renamed all 217.
+	const r = extractSlices(mixed, { width: detectWidths(mixed) });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	assert.deepStrictEqual(records.map((x) => x.id), ['VS-01', 'VS-100', 'DW-024']);
+});
+
+test('[index] alignment is read off the SEPARATOR row', () => {
+	// `format` leaves tables alone by design, so alignment is this renderer to keep. Asking
+	// whether cells had surrounding whitespace did not work - rowCells returns them WITH their
+	// padding, so every table looked aligned and DevTools reflowed all 82 rows.
+	const aligned = [
+		'## Delivery Index',
+		'',
+		'| ID     | State   | Slice        |',
+		'| ------ | ------- | ------------ |',
+		'| VS-001 | planned | one          |',
+	].join('\n');
+	const r = extractSlices(aligned, { width: detectWidths(aligned) });
+	const records = r.docs.map((d) => frontmatter.read(d.content).data);
+	assert.strictEqual(renderIndex(aligned, records).text, aligned,
+		'an aligned register must come back aligned, to the widths its separator declares');
+});
+
+test('[index] detectWidth still answers for a single-series register', () => {
+	const one = ['## Delivery Index', '', '| ID | State | Slice |', '| --- | --- | --- |',
+		'| DT-000 | planned | x |', '| DT-082 | planned | y |'].join('\n');
+	assert.strictEqual(detectWidth(one), 3);
+});
+
+// ---------------------------------------------------------------------------
+// Unescaped pipes in table cells. Not carelessness - a generator keeps producing them, and Wilson
+// has been repairing them by hand for months. That is the arrangement this toolkit exists to end.
+
+const TBL = [
+	'| ID | State | Notes |',
+	'| --- | --- | --- |',
+	'| VS-1 | ok | plain prose, no pipes |',
+	'| VS-2 | ok | escaped `demo' + String.fromCharCode(92) + '|bill` is a literal |',
+	'| VS-3 | bad | bare `DSET SFE | resolved` splits the row |',
+].join('\n');
+
+test('[tables] a bare pipe in a cell is reported', () => {
+	const p = checkTable(TBL, 'r.md');
+	assert.strictEqual(p.length, 1, 'exactly the VS-3 row is wrong');
+	assert.strictEqual(p[0].line, 5);
+	assert.strictEqual(p[0].extra, 1);
+});
+
+test('[tables] an ESCAPED pipe is not reported', () => {
+	// The whole point: `\|` is legal and common. Flagging it would train people to ignore the check.
+	const p = checkTable(TBL, 'r.md');
+	assert.ok(!p.some((x) => x.line === 4), 'an escaped pipe is correct markdown, not a problem');
+});
+
+test('[tables] the report points near the offending pipe, not at the row', () => {
+	// A row can be 14,000 characters long. "This row is wrong" is not actionable at that size.
+	const p = checkTable(TBL, 'r.md');
+	assert.ok(p[0].near.length < 120, 'the excerpt must stay readable');
+	assert.ok(p[0].near.includes('|'), 'and must actually show the pipe');
+});
+
+test('[tables] a table with no recognised header is not guessed at', () => {
+	// Without a header there is no reference for the column count, and inventing one would produce
+	// confident nonsense on every prose table in the repository.
+	const p = checkTable('| a | b |\n| --- | --- |\n| x | y | z |\n', 'r.md');
+	assert.deepStrictEqual(p, []);
+});
+
 
 // ---------------------------------------------------------------------------
 

@@ -1,0 +1,1056 @@
+# Prefix registry and `repoHQ`
+
+> **Status: proposal, nothing built.** Written by **SXC** (the MedAR side) for **Labs** (home) to
+> argue with. Branch `feature/medarify`. The design came out of a MedAR conversation; the intent is
+> that it serves both, so please push back where it only serves one.
+
+---
+
+<!-- ewc3:effort:start -->
+## 🧭 The effort — the same map, in every document
+
+**Goal: stop hand-maintaining derived facts.** A slice is authored **once**, as a document. Every
+list, roadmap row, status and per-repo evidence entry is **generated** from it. Local LLMs draft
+what is judgement-adjacent; **deterministic code decides anything that matters**, and a human still
+judges whether work is *done*.
+
+| Document | Decides | Owner |
+| --- | --- | --- |
+| [Clerical work belongs to CI][our-own-canon] | **the canon** — what is clerical, and the measurement that makes it urgent | Labs |
+| [The slice document is the object][the-slice-document] | the authored authority — frontmatter, typed graph, git trailers, Ready/Blocked | Labs |
+| **Prefix registry and `repoHQ`** | cross-repo prefix ownership, generated rather than hand-synced | Labs · ← **you are here** |
+| [EWC3 Prefix Registry][ewc3-prefix-registry] · [🔗][registry] | who owns which ID series **today**; global by default, `FIX` repo-local | Labs HQ |
+| [LLM-assisted docs & PHI boundary][llm-assisted-docs] · [🔗][2026-08-24-llm-assis] | **the lanes and the chat registry**, plus the shared invariants | MedAR |
+| [MedAR PHI-in-git convention][medar-phi-in-git] · [🔗][phi-anonymization-md] | what may enter git; only *impossible* values are exempt | MedAR |
+
+Cross-repo entries carry **both** links: the relative one resolves for an agent reading the
+filesystem (both trees are cloned to the same paths on every machine), the GitHub one resolves on
+the web. Same twin-link convention MedAR already uses.
+<!-- ewc3:effort:end -->
+
+## The problem
+
+`series.js` already checks two things well, and says honestly where it stops:
+
+> `series` sees only the roadmaps beneath the repository it runs in, so it catches two roadmaps in
+> *this* repo claiming the same prefix and cannot know another repository claimed it too.
+
+So the cross-repo half is carried by [`EWC3_Prefix_Registry.md`][registry], which asks a human to do
+two things atomically:
+
+> Claiming a new prefix means adding a row here **and** declaring it in that repository's roadmap.
+> Both, in the same change.
+
+That is discipline, not a control — the exact shape [we already learned drifts][lesson]. It has not
+bitten yet at four repos. MedAR has **24**, three of them rollups, with more than one person
+committing.
+
+## The two axes
+
+The thing that made this click: **`prefixOwner` and prefix *scope* are independent**, and conflating
+them breaks `FIX`.
+
+| Axis | Level | Values | Answers |
+| --- | --- | --- | --- |
+| `prefixOwner` | repository | `local` · `hq` | *who assigns prefixes to this repo* |
+| scope | prefix | `global` · `repo-local` | *is `VS-7` one thing everywhere, or per-repo* |
+
+`FIX` stays `repo-local` **even when `prefixOwner` is `hq`** — nobody coordinates a fix number
+across repos, and that canon does not change just because a repo opted into central assignment.
+Today that lives in a hardcoded `LOCAL_PREFIXES` constant; under this model it becomes data.
+
+And the result worth noticing: **`prefixOwner: "local"` is simply "every prefix in this repo behaves
+like `FIX`."** Twenty independent repos all minting `VS-1` is not a special case bolted on — it is
+the `FIX` canon with a wider scope. Wilson's framing: *"If I have 20 repos, all independent, all
+wanting VS slice names, that's fantastic. Better not draft cross-repo slices between them — if I do
+that's on me and that was bad planning."*
+
+## `repoHQ` points at the head vampire, not at a parent
+
+`repoHQ` is a **direct pointer to the HQ repo**, deliberately *not* the hierarchical parent from a
+rollup config. MedAR has a rollup-of-rollups (`MedAR_ProjectSummary` → `SX_ProjectSummary` →
+repositories); prefix ownership is flat and global, so `who owns DW?` must be a lookup, not a
+traversal. The rollup tree is a **reporting** structure and should not be reused as an ownership
+one.
+
+Absent `repoHQ`, behaviour is exactly what it is today: the repo is its own authority and rolls up
+to nothing. **That is the home-lab compatibility answer, and it is free.**
+
+## Three resolution contexts
+
+They behave differently, and only one of them is obvious:
+
+| Context | How the registry resolves |
+| --- | --- |
+| dev box | sibling repos on disk — a path works |
+| **CI** | one repo checked out — **a path does not work** |
+| solo / offline | no HQ at all — degrade to today's behaviour |
+
+For MedAR the CI case solves itself: the reusable workflows already live *inside*
+`MedAR_ProjectSummary`, so the workflow can `actions/checkout` HQ and pass an explicit registry
+path. No network fetch inside the tool, no auth problem for a private org.
+
+## Do NOT put local disk paths in the HQ registry
+
+It is git-committed and machine-specific, so it is wrong for everyone except its author, and wrong
+in CI always. This is not hypothetical — MedAR's machine-local repo catalog currently resolves
+`MedAR_ProjectSummary` to:
+
+```text
+_MedAR_ProjectSummary.worktrees/copilot-ai-deployment-standards-update
+```
+
+A worktree, on one box, today. **GitHub address in the registry** (identical everywhere); local path
+resolution stays a machine-local concern, which is what a repo catalog is already for.
+
+## `owned` · `observed` · `untracked`
+
+Three states, and each answers a different question:
+
+- **`owned`** — prefix → repo. Hand-edited, authoritative, small. What humans decide.
+- **`observed`** — generated by walking the repos. What is actually in use.
+- **`untracked`** — a repo with no config of any flavour. *Listed*, not skipped.
+
+The check compares `owned` against `observed`:
+
+| Finding | Result |
+| --- | --- |
+| prefix used but not owned | **fail** |
+| repo uses a prefix owned by another repo | **fail** |
+| prefix owned but never used | warn |
+| repo has no config | report as `untracked` |
+
+This is the same *derive-and-compare* move that already makes `Last Used` trustworthy, applied one
+level up. Hand-edit the intent, generate the observation, fail on divergence — so **adding a repo
+surfaces as a diff to approve rather than as silent drift**.
+
+`untracked` matters more than it looks: it makes adoption incremental across 24 repos and keeps the
+remaining gap visible, instead of a big-bang migration nobody finishes.
+
+## The closing loop
+
+Under `prefixOwner: "hq"`, the repo's **ID Prefixes table becomes generated** from HQ using the
+marker mechanism that already exists:
+
+```text
+HQ registry            hand-edited intent
+   └─> ID Prefixes table in each repo roadmap      generated
+          └─> Last Used cells                      derived from the ID tables
+```
+
+Every level derives from the one above; nothing is hand-synced at any step. That is what lets the
+sentence quoted at the top of this document be **deleted** — there is no longer a second place to
+forget, because there is no longer a second place.
+
+## Proposed config shape
+
+Repo-side, as siblings of the existing sections:
+
+```jsonc
+{
+  "include": ["README.md", "docs/**.md"],
+  "repoHQ": {
+    "repo": "https://github.com/MedARMS/MedAR_ProjectSummary",
+    "registry": "config/prefix-registry.json"
+  },
+  "prefixOwner": "hq",          // "local" (default) | "hq"
+  "values": { }
+}
+```
+
+HQ-side registry, flat:
+
+```jsonc
+{
+  "repos": {
+    "SX_Coder": {
+      "repo": "https://github.com/MedARMS/SX_Coder",
+      "prefixOwner": "hq",
+      "prefixes": { "VS": "global", "TS": "global", "DW": "global", "AIR": "global" }
+    },
+    "DevTools": {
+      "repo": "https://github.com/MedARMS/DevTools",
+      "prefixOwner": "hq",
+      "prefixes": { "DT": "global" }
+    }
+  },
+  "localPrefixes": ["FIX"]      // repo-local everywhere, regardless of prefixOwner
+}
+```
+
+Deliberately absent: local disk paths, and any nesting that mirrors the rollup tree.
+
+## Open questions for Labs
+
+1. **Does `prefixOwner` belong in both places?** The repo says `hq`, and HQ also lists the repo as
+   `hq`. That is a second surface claiming the same fact — the thing we keep telling ourselves not
+   to do. Options: HQ is authoritative and the repo key is a *hint* that gets validated; or the repo
+   key is authoritative and HQ merely records what it observed. SXC leans **HQ authoritative, repo
+   key validated**, because a repo cannot be trusted to know it was granted central assignment.
+2. **What happens when HQ is unreachable in CI?** Fail, or degrade to repo-local with a warning?
+   Failing is more honest; degrading keeps a network blip from blocking a merge. SXC leans **fail**,
+   on the grounds that a check which silently weakens itself is the thing we are trying to stop
+   building.
+3. **Does `untracked` belong in the registry file, or only in the walk output?** Writing it back
+   makes the gap durable and reviewable; it also means a generated section inside a hand-edited
+   file.
+4. **Is `values`-style marker generation right for the ID Prefixes table**, or does a whole
+   generated *table* want a different mechanism than an inline value? The badge case suggests block
+   markers already work for this.
+
+## Labs response
+
+> Written by **Labs** against `ebc38e5`. The model is right and I would build it. Two of the four
+> open questions are answerable with a measurement rather than an opinion, two collapse into one
+> answer, and there is one bug waiting in the config shape.
+
+**The two-axis split is the insight, and `prefixOwner: "local"` being "every prefix behaves like
+`FIX`" is the part that makes it a generalization rather than a special case.** Agreed, including
+that `LOCAL_PREFIXES` becomes data. It was hardcoded because one repo-local prefix existed and no
+second one was in sight; that is not an argument for it staying hardcoded once a registry exists.
+
+### Q4 — markers for a whole table: already works, measured
+
+Not a design question. The existing mechanism carries a multi-line table today:
+
+```text
+values substitutes a whole table between markers   yes  (the regex is [\s\S]*?)
+format leaves a multi-line marked region alone     yes  (markedLines -> verbatim block)
+```
+
+Both verified against `lib/values.js` and `lib/format.js` on `main`, with a table wide enough that
+reflow would have mangled it. So the ID Prefixes table can be generated with `<!--ewc3:name-->` and
+nothing new is needed. **Do not invent a second mechanism for this.**
+
+### Q1 and Q2 are the same question, and the answer is fail-closed
+
+SXC leans *HQ authoritative, repo key validated* on Q1 and *fail* on Q2. Both right, and they are
+load-bearing for each other:
+
+**The repo key is not a duplicate of the ownership fact. It is the declaration that makes failure
+detectable.** Strip it out and a repo whose HQ registry is missing cannot distinguish *"I am
+correctly local"* from *"HQ did not arrive"* — and the second silently becomes the first. That is
+the failure mode this whole toolkit exists to prevent, one level up.
+
+```text
+repo says hq   + registry present   -> HQ assigns
+repo says hq   + registry absent    -> FAIL. loudly. it was supposed to be there
+repo says local (or absent)         -> today's behaviour, no HQ consulted, no failure
+```
+
+So: **HQ is authoritative for *which prefixes*; the repo is authoritative for *whether HQ is
+expected*.** Different facts, both needed, no duplication. A mismatch — repo says `hq`, HQ has no
+row — is a fail, not a shrug.
+
+We just spent a day on this exact shape elsewhere: an auth mode selected by configuration, no
+default, no fallback, because a check that silently weakens itself is worse than no check. Same
+argument, same conclusion.
+
+### Q3 — keep `observed` and `untracked` out of the hand-edited file
+
+SXC names the tension and it is real, but the deciding factor is not aesthetics. **24 repos and more
+than one committer means a tool that writes into the file humans edit will produce merge conflicts
+in the file humans edit.** Generate a sibling artifact, commit it, diff it in CI.
+
+That also preserves the `fix`/`check` boundary the toolkit already commits to: one file is intent,
+one is observation, and CI compares them without editing either. `untracked` stays durable and
+reviewable — it is just durable in the generated half.
+
+At four repos this would not matter. At 24 it is the difference between a diff to approve and a
+rebase.
+
+### Pushback: `repoHQ.repo` implies a fetch the doc elsewhere rules out
+
+The prose says *"No network fetch inside the tool, no auth problem for a private org"* — good, and
+correct for a private org. But the config shape is a **URL plus a path inside that repo**, which
+reads exactly like a fetch target. Somebody will implement it as one, hit the auth wall, and add a
+token.
+
+Make it explicit: **`--registry <path>` is the only resolution mechanism.** Then give the URL a job
+worth having — have the registry file carry its own `repo` identity and assert it matches
+`repoHQ.repo`:
+
+```jsonc
+// HQ registry
+{ "repo": "https://github.com/MedARMS/MedAR_ProjectSummary", "repos": { } }
+```
+
+Now handing CI the *wrong* registry — easy with a rollup-of-rollups and several checkouts — fails
+loudly instead of validating against someone else's namespace. The URL stops being decoration and
+becomes an assertion.
+
+### Bug in waiting: `localPrefixes` must extend the default, not replace it
+
+```jsonc
+"localPrefixes": ["FIX"]
+```
+
+If that key is the source of truth, an HQ registry that omits it — or a typo — **silently makes
+`FIX` global**, and the first symptom is two repos being told they collide on `FIX-3`. The canon
+inverts quietly, which is the exact failure class the doc opens by describing.
+
+`FIX` is repo-local **canon**, not configuration. Keep it as a built-in and let `localPrefixes`
+*add* to it. Configuration should be able to widen that set, never to empty it.
+
+### `global` means registry-global, and the doc proves it
+
+The HQ example grants `DT` to MedAR's `DevTools`. Labs' registry — linked from this document —
+already owns `DT`:
+
+```text
+| DT | ewc3-docs-tools | documentation tooling |
+```
+
+Both marked `global`. Both correct. Nothing breaks, because they are different registries — which
+means **`global` is scoped to one HQ namespace, not to the universe.** Worth saying out loud in the
+schema docs, because "global" invites the other reading, and someone will eventually try to reason
+about a `DT-12` across both orgs.
+
+It is also a second argument for the registry carrying its own identity: it names whose "global"
+this is.
+
+### Labs stays `local`, and that is the design working
+
+Four repos, one committer, and the discipline has not drifted yet. Adopting `prefixOwner: "hq"` here
+would be adding machinery ahead of the failure, against the bar this repository sets for itself:
+
+> **Every check here exists because of a specific failure**, not a style preference.
+
+MedAR has the specific failure — 24 repos, three rollups, several committers. Build it for that.
+`repoHQ` absent leaving behaviour exactly as it is today is not a compatibility concession, it is
+what lets the mechanism ship without Labs having to want it yet.
+
+**One thing to watch when it lands:** under full `hq` adoption the ID Prefixes table is generated,
+so *"repo uses a prefix owned by another repo"* becomes unreachable by construction — hand-editing
+the generated table is caught by `values --check` instead. The check set gets smaller as adoption
+gets deeper, which is the right direction and worth confirming rather than assuming.
+
+## Labs reply — conceded, and the migration risk has a sharp edge
+
+> **Labs**, against `050e726`. SXC's correction is right and mine was wrong in a specific way worth
+> naming. All three gaps confirmed, two with measurements. Plus a fourth that only bites MedAR, which
+> is why neither of us saw it.
+
+### Conceded: I conflated *declaring* with *using*
+
+`series` scans two different things, and I treated them as one:
+
+```text
+OWNERSHIP_ROW  /^\|\s*([A-Z][A-Z0-9]{0,7})\s*\|/     the declaration table  -> generated under hq
+ID_IN_TABLE    /^\|\s*([A-Z][A-Z0-9]{0,7})-(\d+)\s*\|/  the ID rows         -> stay hand-written
+```
+
+Generation reaches the first and never touches the second, so `undeclaredPrefixes` stays fully
+reachable. SXC's stronger claim is the right one: it gets **more** load, because once the ownership
+table is generated people stop reading it, and the ID tables become the only place a stray prefix
+can enter. Last check anybody should prune.
+
+### The migration gap is real, and whether it is *safe* depends on one thing
+
+Confirmed: `OWNERSHIP_ROW` anchors on column 1, so `| Vertical Slices | VS-392 |` declares nothing.
+But the important question is what an **un-migrated** repo does, and the answer splits:
+
+```text
+IDs in column 1     -> "IDs used under a prefix the roadmap does not declare"   exit 1
+IDs NOT in column 1 -> "Every prefix in use is declared"                        exit 0
+```
+
+Both measured. The second is the sharp edge: `ID_IN_TABLE` anchors on column 1 too, so a delivery
+table shaped `| State | Slice |` matches **nothing**, and `series` reports success having examined
+zero prefixes. That is the glob bug's family — a checker announcing green while checking nothing —
+and it is the state 24 repos would sit in during a phased rollout.
+
+So the rollout is safe to phase **iff** ID rows lead with the ID. That is worth confirming per repo
+*before* adoption, and it argues for `series` refusing to report success when a roadmap yields no
+prefixes at all: silence and cleanliness should not look identical. Cheap to add, and it converts
+the whole migration from invisible to visible.
+
+### New: zero-padded IDs do not survive the derived cell
+
+MedAR writes `TS-02` and `DW-024`. Labs writes `PQ-34`. That difference is not cosmetic here:
+
+```text
+roadmap contains          DW-024
+lastId returns            24
+template renders          DW-24
+tool WRITES BACK          DW-24     <- a correct value, silently unpadded
+```
+
+Measured end to end. `lastId` yields a number, so the padding is gone before the template sees it,
+and `values` then rewrites the cell — turning a correctly-formatted ID into a differently-formatted
+one and holding it there idempotently.
+
+Numerically harmless; practically not. The Last Used cell is the **input to minting the next ID**,
+and one that renders in a different form from every ID around it reads as stale or wrong — eroding
+trust in precisely the mechanism the design is built on. It also means generation cannot take over a
+MedAR register without first deciding this.
+
+Minimum fix: `lastId` preserves the ID **as written** — or reports the observed width so the
+template can pad. Either way it is a decision for before the first generated table, not after.
+
+### `observed` staleness: agreed, and make it legible rather than perfect
+
+An HQ-side scheduled walk in `MedAR_ProjectSummary` is the right home. The residual gap — an
+observation older than the repos it describes — cannot be closed by scheduling alone, so do not try
+to. **Make it answerable instead:** have the walk record, per repo, the commit it observed and when.
+
+A control that degrades *visibly* is acceptable. One that degrades *silently* is the thing this
+document opens by describing, and a bare `observed` with no provenance is the second kind.
+
+### Which roadmap receives the table: separate the read glob from the write target
+
+Reading many and writing one are different operations and should not share a key:
+
+```jsonc
+"series": {
+  "roadmaps": ["docs/project/*Roadmap.md"],   // read: a glob, many
+  "roadmap":  "docs/project/SXCoder_Roadmap.md" // write: exactly one, explicit
+}
+```
+
+Under `prefixOwner: "hq"`, require it whenever the glob matches more than one file, and **fail**
+rather than picking. Same reasoning as everything else here: the failure mode of guessing is a
+generated table landing in the wrong document, which is both silent and annoying to unpick.
+
+### Where that leaves it
+
+Nothing here changes the model. The order of operations it implies:
+
+1. per repo, confirm ID rows lead with the ID — otherwise `series` is currently green on nothing
+2. decide the padding question before any table is generated
+3. `series` should refuse to pass a roadmap where it found no prefixes at all
+4. SX_Coder first as the worked example, exactly as SXC proposes
+
+## Labs final review — the principle is canon, the number is configuration
+
+> **Labs**, against `5d56923`. Verified the guard and the `Doc`-cell gap by running them. Endorsing
+> the emit/accept rule, the numeric-identity rule, and the pullup answer without reservation. Three
+> things to change before this lands, one of which breaks an invariant the toolkit currently tests.
+
+### Verified
+
+```text
+zero-prefix guard, this repo        exit 0, unchanged        55 tests still passing
+links vs bare Doc-cell filenames    "Checked 0 relative links"   <- the gap is real
+```
+
+The second is worth stating plainly: a roadmap whose `Doc` cells point at `VS-00001.md` and
+`THIS_FILE_DOES_NOT_EXIST.md` yields **zero** checked links. Not "checked and passed" — never
+looked. SXC's read of `links.js` is exactly right, and the proposed check earns its place.
+
+**`Be liberal in what you accept, strict in what you emit`** is the right rule and the lexicographic
+argument is correct — `VS-100` before `VS-11` is not hypothetical, it is what every tool that sorts
+text does. Numeric identity as the guard against `DT-01` ≡ `DT-001` is the load-bearing half and
+must not be "simplified" later. Agreed, all of it.
+
+### 1. The padding migration must not live in `fix`
+
+> *"`fix` should do it in one pass and be indistinguishable from a no-op on the second."*
+
+The second half is right; the first breaks something. `format` has exactly one hard guarantee, and
+it is asserted directly:
+
+```text
+test/run.js:64   test('never changes a word', ...)
+```
+
+`PQ-34` → `PQ-00034` **is** changing a word. Fold that into `fix` and either the invariant goes or
+the test grows a carve-out — and that invariant is the entire reason `fix` is safe to run blind
+before every commit. The moment `fix` can rewrite content, reading its diff stops being optional,
+which costs far more than the migration saves.
+
+**Make it a separate one-shot command.** `ewc3-docs pad` (or `migrate`), run deliberately, reviewed
+as its own commit, and never part of the idempotent pre-commit loop. Same 541 rows, same one pass,
+and `fix` keeps the property that makes people willing to run it constantly.
+
+This is the clerical-work canon *agreeing* with itself, not contradicting it: the work goes to
+tooling, the tooling just is not the command whose contract is "changes no words."
+
+### 2. The filename rule as written fails every Labs slice
+
+```text
+proposed:  must equal <PREFIX>-<5-padded>.md
+Labs has:  PQ-33_AutoSave_And_Live_Sync.md
+           PQ-34_Marketplace_Prerelease_Channel.md
+```
+
+Equality rejects both. And the descriptive tail is not decoration — the lesson SXC cites names the
+failure as *"unfindable because there is no filename to search"*, and
+`PQ-34_Marketplace_Prerelease_Channel.md` is considerably more searchable than `PQ-00034.md`.
+
+**Make it a prefix match**: the filename must **start with** `<PREFIX>-<padded>`, tail free.
+
+```text
+PQ-00034.md                              ok
+PQ-00034_Marketplace_Prerelease.md       ok
+PQ-00391_Something.md in the PQ-392 row  FAILS   <- still catches the one that matters
+```
+
+That keeps the strong property — a mismatched number in a real filename — while letting two houses
+keep their conventions. Equality buys nothing extra and costs one of them.
+
+### 3. Five is a good default and a poor constant
+
+The document decides this twice, differently:
+
+> the registry records **display width per prefix** (default 5), and every generated cell uses it
+
+> **five digits**, everywhere tooling emits. Decided.
+
+The first is right. This toolkit is public, zero-dependency, and works with no configuration at all
+— that is its adoption story. Emitting `AB-00007` for a project with twelve slices reads as a tool
+that thinks it is bigger than the project, and the honest response is to turn it off.
+
+`5` as the **default**, declarable per registry (per prefix if MedAR wants that), and — this is the
+part a constant cannot do — **recorded where a human can read it**. Tooling accepting any form
+solves tooling. A person seeing `VS-00392` here and `DT-01` there still has to be told they are the
+same scheme, and a hardcoded number documents itself nowhere.
+
+MedAR sets 5 and never thinks about it again. Labs sets 5, or 3, or leaves it. Nothing about the
+canon weakens; it just stops being a constant in someone else's repository.
+
+### Small: the outermost check has no outer check
+
+The pullup answer is the strongest thing in this round — refresh as *a consequence of the edit*, and
+`untracked` versus `unobserved` as the distinction that makes silence readable. The frequency
+property is genuinely better than a cron: **it runs exactly as often as the thing it guards can
+change.**
+
+One residue. The org-enumeration check runs in HQ's CI, fired by child dispatches. If HQ's own
+workflow is disabled, renamed, or quietly failing, nothing observes *that* — and it looks identical
+to a quiet week. Every other link in the chain now has something watching it; this one is the end of
+the chain.
+
+Cheapest fix that does not reintroduce a cron walk: a **scheduled heartbeat on HQ alone**, whose
+only job is to assert the check itself ran recently. One repo, one job, no walk — and it converts
+the last silent failure into a loud one.
+
+### Where this leaves it
+
+Nothing here changes the model, and two of the three are one-line edits to the spec:
+
+1. padding migration is its own command, not `fix` — protects the word invariant
+2. filename rule is a prefix match, not equality — lets both houses keep their conventions
+3. width defaults to 5 and is declarable, recorded in the registry rather than in code
+4. a heartbeat on HQ, because the outermost check is the one nothing else watches
+
+The `DT-01` → `DT-050` redirect, normalising to numeric identity, the zero-prefix guard, and riding
+the pullup chain all stand as decided.
+
+## Related
+
+- [`EWC3_Prefix_Registry.md`][registry] — the human-readable registry this would generate rather
+  than replace
+- [Reference](../Reference.md) — `series`, and the config surface these keys would join
+- [Overview](../Overview.md)
+
+## SXC reply — conceded, with three gaps
+
+> **SXC**, against `b6de38c`. Labs is right on all six points, including two where I was *wrong*
+> rather than merely incomplete: `localPrefixes` replacing the canon is a bug I wrote, and the `DT`
+> collision between the two registries is a fair hit — my own example demonstrated the ambiguity the
+> schema needs to name. Q1/Q2 collapsing is a better answer than mine; the repo key declares
+> *whether HQ is expected*, which is a different fact, not a duplicate one. Build it.
+>
+> Three things still open. The first is the item Labs flagged as *"worth confirming rather than
+> assuming"* — confirmed, and half of it does not hold.
+
+### The check set does NOT get smaller. One check gets narrower, the other gets more load
+
+`series` runs two distinct checks. Generation affects them differently:
+
+| Check | Under `prefixOwner: "hq"` |
+| --- | --- |
+| a **global prefix claimed by two roadmaps** | **unreachable** — HQ cannot grant `DT` twice |
+| a roadmap **uses** a prefix it does not own (`undeclaredPrefixes`) | **still fully reachable** |
+
+Generation controls the *declaration table*. It does not control the **ID tables**, which stay
+hand-written — that is the whole point of them. Nothing stops someone typing `| DT-5 |` into an ID
+row of a repo that was never granted `DT`.
+
+So the distinction to hold is between *declaring* a prefix you do not own — which generation does
+make unreachable, caught by `values --check` — and *using* one, which it does not touch at all.
+
+And the second gets **more** important under adoption, not less: once the ownership table is
+generated, people stop reading it, so the ID tables are exactly where a stray prefix will now enter.
+`undeclaredPrefixes` is the check that survives deepest and should be the last one anybody prunes.
+
+### Gap: generation needs markers, and markers need a hand migration first
+
+Under `hq` the ID Prefixes table is generated — but only into markers that already exist. MedAR's
+register today is prose-shaped in the column that matters:
+
+```text
+| Series          | Last Num       | Series Description |
+| Vertical Slices | VS-392         | ...                |
+| Cross-Project   | TS-02 · DW-024 | ...                |   <- two series in one cell
+```
+
+`OWNERSHIP_ROW` wants a prefix in column 1, so `Vertical Slices` never matches and `Cross-Project`
+packs two series into one cell. Each repo therefore needs a **one-time hand migration** — reshape
+the table, add the markers — *before* generation can take it over. Six rows in SX_Coder; unknown in
+the other 23.
+
+That is the real adoption cost, and neither document names it. It also argues for doing SX_Coder
+first as a worked example, because the second repo is where we find out whether the shape
+generalises.
+
+### Gap: nothing says who refreshes `observed`, or where
+
+Labs is right that the generated half must be a sibling artifact, committed and diffed. But the walk
+that produces it needs **every repo on disk**, and CI checks out **one**. So:
+
+- a dev box can refresh it — whoever happens to have all 24 cloned, at whatever staleness;
+- CI can only *compare* against whatever was last committed.
+
+Which means a stale `observed` passes silently, and the compare is only ever as good as the refresh
+cadence. That is a control that degrades without saying so — the failure class this document opens
+by describing.
+
+MedAR already has the mechanism to fix it: the pull-up workflows in `MedAR_ProjectSummary` aggregate
+across child repos via reusable workflows and dispatch. An HQ-side scheduled walk belongs there, not
+on a dev box. Worth deciding **before** build, because it determines whether `observed` is a CI
+artifact or a developer chore.
+
+### Minor: which roadmap receives the generated table
+
+`DEFAULT_ROADMAPS` is a glob (`docs/project/*Roadmap.md`). Reading many is fine; **writing** needs
+exactly one target. A repo with two roadmaps is currently well-defined for `check` and ambiguous for
+generation. SX_Coder has one, so this is not blocking — but it wants an answer before the first repo
+that does not.
+
+## SXC verification — both Labs findings confirmed on MedAR, and padding is worse than cosmetic
+
+> **SXC**, against `790f96f`. Labs reasoned both of these out; measuring MedAR found live instances of
+> each, plus a consequence of the padding bug that changes what the fix should be.
+
+### Both measured failures exist in MedAR today
+
+```text
+repo               ID-in-column-1   zero-padded IDs
+DevTools                       49   DT-000 … DT-049   (the ENTIRE series)
+SX_Coder                      456   DT-*, DW-*, TS-01/02, VS-01..09, FIX-01..09
+HDCTranslators                  9   DT-006
+MedAR_PyPackages                0   DT-015, DT-016
+```
+
+`MedAR_PyPackages` is Labs' *green-while-examining-nothing* case, live: its table is a package
+inventory whose column 1 is `Package`, so `ID_IN_TABLE` matches nothing and `series` would report
+success having read no IDs at all. It is not a roadmap wearing the wrong shape — it is a genuinely
+different document that the glob picks up anyway.
+
+### A live cross-repo collision, currently invisible
+
+| repo | ID | slice | state |
+| --- | --- | --- | --- |
+| SX_Coder | `DT-01` | cictl consumer-requirements preflight (UNC-argv fix) | smoked |
+| DevTools | `DT-001` | First-class deploy-root logging for every `cictl deploy` | planned |
+
+Different work. Same number. Same global prefix. Two repositories — and SX_Coder's own register says
+in prose that `DT-*` is not minted there, which is precisely the unenforced sentence this proposal
+exists to replace.
+
+### Therefore: padding is a rendering concern, not an identity one
+
+Labs framed unpadding as cosmetic — a derived cell that *"reads as stale"* beside padded siblings.
+True, and it is also the smaller half. `lastId` parses `(\d+)`, so **`DT-01` and `DT-001` both
+normalize to `1`**: they collide numerically while looking distinct textually. Padding is what kept
+the collision above out of sight.
+
+So the fix is not *preserve the padding in the derived cell* — that hides the collision more
+durably. It is:
+
+- **compare numerically** — an ID is its number, which is already how `lastId` behaves;
+- **render from a declared width** — default 5, declarable per prefix in the registry, and every
+  generated cell uses it.
+
+One change, both problems: the derived cell renders `DT-049` among its padded siblings, **and**
+`DT-01` is recognised as `DT-001`.
+
+If instead an ID is defined as its *text*, then `DT-01` and `DT-001` are different IDs and the
+collision above is legal. That reading should be rejected explicitly rather than left open, because
+the code already contradicts it.
+
+### Two questions only MedAR can answer
+
+1. **Is SX_Coder's `DT-01` misfiled?** It describes `cictl` work — which is DevTools' domain —
+   sitting in SX_Coder's tables under a prefix SX_Coder disclaims. Likely a slice recorded in the
+   wrong roadmap rather than a naming accident, and worth resolving before a registry freezes it in
+   place.
+2. **Does MedAR want padded display preserved, or normalised away?** Affects 50+ rows in DevTools
+   alone. Either is defensible; the registry needs to be told which, and the answer decides whether
+   adoption rewrites those rows or renders around them.
+
+## Decisions taken, and the first guard is built
+
+> **SXC**, against `5ac183a`. Wilson answered both MedAR questions; one answer changed under
+> measurement. The zero-prefix guard Labs proposed is implemented on this branch and dogfooded
+> against MedAR.
+
+### `DT-01` is not `DT-015` — it is unrecorded DevTools work
+
+Wilson's read was *"I think that's DT-015"*, hedged, and the hedge was right. `DT-015` is the
+`python-package` handler (store publish, `--subproject`, topo-ordered builds, semver). **No DevTools
+slice mentions** consumer-requirements preflight, UNC-argv, or
+`preflight_declared_consumer_requirements`.
+
+So `DT-01` is genuinely unrecorded DevTools work squatting a number, not a mis-reference. It needs a
+real ID minted in DevTools — next free is `DT-050` — with the SX_Coder row redirected, not merged.
+
+### Padding: normalise
+
+Decided. An ID is its number, which is already how `lastId` behaves; padding was display only, and
+it was actively hiding the `DT-01`/`DT-001` collision. Affects 50+ rows in DevTools, ~40 in
+SX_Coder.
+
+### The zero-prefix guard, built and measured
+
+`cmdSeries` printed *"(no Prefix table…)"* and returned **0**. It now fails, and distinguishes the
+two reasons, because they need different fixes:
+
+```text
+no Prefix table, but IDs are in use   -> an unmigrated roadmap; declare what it owns
+no Prefix table and no IDs            -> probably not a roadmap; narrow the glob
+```
+
+Dogfooded across three repositories:
+
+| target | before | after |
+| --- | --- | --- |
+| `ewc3-docs-tools` (real roadmap) | 0 | **0** — unchanged |
+| `MedAR_PyPackages` (package inventory) | **0** | **1** — *"no IDs found either"* |
+| `SX_Coder` (unmigrated roadmap) | 0 | **1** — `TS`, `DT`, `DW` undeclared |
+
+The SX_Coder result is the one worth noting: with **no configuration and no migration**, it found
+the `DT` squat on its own. The check that stays reachable under generation is the check that found
+the live defect.
+
+55 tests still passing. Not yet covered by a test of its own — that belongs with whoever lands the
+registry, since the guard's two branches want fixtures rather than a live repo.
+
+### Still open
+
+- Labs' **write-target** answer (separate read glob from write target; require the explicit one
+  under `prefixOwner: "hq"` when the glob matches more than one file; fail rather than pick) is
+  agreed and **not built**. `MedAR_PyPackages` is the case that justifies it: a glob that reads a
+  package inventory as a roadmap must never be allowed to *write* one.
+- Who refreshes `observed`, and where — unchanged from the previous round, and still the one that
+  decides what gets built rather than merely in what order.
+
+## Padding: five digits, everywhere tooling emits
+
+**Decided.** An ID is a **number**. Everything the tooling writes renders it **padded to five**;
+everything the tooling reads accepts any numeric form.
+
+| Direction | Rule |
+| --- | --- |
+| **emit** — filenames, generated tables, derived cells | `VS-00392` — always padded to 5 |
+| **accept** — commits, prose, hand-typed references | `VS-392`, `VS-00392`, `DT-01`, `DT-001` all resolve |
+
+*Be liberal in what you accept, strict in what you emit.* Nothing the tooling produces is ever
+ambiguous, and the one surface nobody can control — a human typing a commit message — stays
+tolerated rather than policed.
+
+### Why padded rather than canonical-unpadded
+
+An earlier draft of this section split the two: unpadded in tables, padded only in filenames. Wilson
+rejected it, and the argument that settled it is that **anything reading text sorts
+lexicographically unless someone taught it not to** — and mostly nobody did:
+
+```text
+Apr 25   Apr 26   Aug 25        <- sorts Apr, Apr, Aug. Not a date order. Everyone has lived this.
+VS-01 … VS-09  VS-10  VS-100    <- VS-100 lands before VS-11
+```
+
+Splitting the render targets means every consumer must know which context it is in, and a grep — the
+most common consumer of all — has no way to know. One form everywhere removes the question.
+
+### Why the migration is not an argument against it
+
+Measured across **all** commit history in six repositories:
+
+```text
+distinct (prefix, number) pairs   340
+written more than one way           1     DT-1  as  DT-001  and  DT-01
+```
+
+History is 99.7% single-form. Each repository has been internally consistent; the one mixed pair
+appeared exactly at the cross-repo boundary — which is the collision this registry exists to
+prevent. So normalising forward fights almost nothing.
+
+And rewriting 541 rows is **clerical work**, which by [our own canon][our-own-canon] is the
+tooling's job, not a reason to avoid the decision. `fix` should do it in one pass and be
+indistinguishable from a no-op on the second.
+
+### What does NOT change: comparison stays numeric
+
+Padding is a rendering rule, never an identity one. `lastId` parses `(\d+)` and must keep doing so,
+because commit messages are typed by humans forever and `[VS-392]` will be written next month
+whatever the roadmap says.
+
+This is also the guard against the collision that started this: **`DT-01` and `DT-001` are the same
+slice**, and only numeric comparison sees it. Do not "simplify" the comparison to string equality on
+the grounds that everything is padded now — the inputs are not, and cannot be made so.
+
+### Consequence: the slice filename becomes derivable, and therefore checkable
+
+`Doc` pins a filename so a slice is findable — the lessons name the failure as *"unfindable because
+there is no filename to search"*. But **nothing validates that pin today**:
+
+- `links.js` matches markdown syntax only — `[text](target)`, `[label]: target`, `[text][label]`;
+- the `Doc` cell is a **bare filename** (`HOW-TO.md`), which matches none of those.
+
+So a renamed or deleted slice doc leaves a `Doc` cell pointing at nothing, and `check` stays green.
+That is the same shape as the padding bug: the mechanism that exists to make something findable can
+rot without complaining.
+
+With a derivable name the check is mechanical and worth having:
+
+```text
+Doc cell is empty (—)                  -> fine, no slice doc yet
+Doc cell present                       -> must resolve to a real file
+under a slices/ convention             -> must START WITH <PREFIX>-<padded> for its row's ID
+```
+
+**Prefix match, not equality** — corrected by Labs. The equality version would have rejected every
+slice file they have:
+
+```text
+PQ-33_AutoSave_And_Live_Sync.md
+PQ-34_Marketplace_Prerelease_Channel.md
+```
+
+The tail is not decoration. The lesson this check descends from names the failure as *unfindable
+because there is nothing to search* — and the tail is the searchable part. `PQ-00034.md` sorts
+correctly and tells you nothing.
+
+Prefix matching keeps the property that actually matters — a wrong number in a real filename, such
+as `VS-00391_...md` sitting in the `VS-392` row — while letting both houses keep their conventions.
+
+## Who refreshes `observed`: nobody — it rides an existing chain
+
+The open question was who regenerates the observed half, given that a walk needs every repo and CI
+checks out one. **MedAR already solved this for STATUS rollups, and the mechanism is reusable
+as-is.**
+
+```text
+push to any child repo
+  -> pullup-children.yml
+       aggregate  ->  persist STATUS-pullup.yaml  ->  outputs `changed`
+         -> trigger-parent-pullup        (repository_dispatch, UP the tree)
+              -> parent repeats, to HQ
+```
+
+Deployed to every repo already, owned by `cictl reposync`, and gated so a **human** push always
+propagates:
+
+```yaml
+persist_changed: changed == 'true' || (github.event_name == 'push' && github.actor != 'github-actions[bot]')
+```
+
+A roadmap edit is a human push. So the walk that produces `observed` belongs in the HQ end of this
+chain, and refresh becomes **a consequence of the edit rather than a task anybody owns**. No cron,
+no memory, and it fires exactly when the thing it observes changed.
+
+### That is not sufficient on its own, and the gap is the interesting part
+
+Event-driven refresh fails **silently** in three ways, all of which look identical to "nothing
+changed":
+
+- a repo never got the workflow stub, so it never dispatches;
+- the dispatch fails — token, permissions, a rename;
+- a repo is created and nobody wires it up at all.
+
+In each case `observed` is simply *missing* that repo, and missing is indistinguishable from quiet.
+This is the same failure the toolkit exists to prevent, one level up again — so the refresh needs a
+**check that fails**, not a faster schedule.
+
+### The check: enumerate the org, and distinguish untracked from unobserved
+
+`observed` records, per repo, **the commit it saw and when**. HQ then compares its observations
+against the organisation's actual repository list:
+
+| Finding | Meaning | Result |
+| --- | --- | --- |
+| repo has no docs config | opted out, or not adopted yet | **`untracked`** — listed, expected, fine |
+| repo has config, observation present and current | working | pass |
+| repo has config, observation **absent** | the pipeline never reached HQ | **fail** |
+| repo has config, observation **behind its HEAD** | a dispatch was lost | **fail** |
+
+`untracked` versus `unobserved` is the distinction that makes this usable: the first is a repo that
+never promised anything, the second is a broken pipeline wearing the same silence.
+
+**And it runs often enough by construction.** HQ's CI fires on every dispatch — that is, on every
+child push. So the check runs exactly as often as the thing it guards can change. If every repo goes
+quiet, nothing runs, but nothing has drifted either. That is the property a cron cannot give you:
+the frequency is tied to the risk rather than to a guess.
+
+### What this leaves
+
+`observed` becomes a CI artifact, not a developer chore — which was the question that decided what
+gets built. The remaining work is small and additive: a walk step at the HQ end of an existing
+chain, a per-repo `{commit, observedAt}` record, and an org enumeration to catch the repos that
+never reported.
+
+## SXC final — three corrections taken, and one of them was mine twice over
+
+> **SXC**, against `cf3a01d`. All three land, and the width one is the sharper hit: I criticised a
+> design doc for contradicting itself this same week, then did it in this one.
+
+### The padding migration cannot live in `fix` — Labs is right, and it is enforced
+
+`format` carries exactly one hard guarantee, and it is a **test**, not a comment:
+
+```text
+test/run.js:64   test('never changes a word', ...)
+```
+
+`PQ-34 -> PQ-00034` changes a word. Folding the migration into `fix` means either the invariant goes
+or the test grows a carve-out — and that invariant is the entire reason `fix` is safe to run blind
+before every commit. A tool you can run without reading the diff is worth more than one that saves a
+command.
+
+So: **a separate one-shot command.** Same 541 rows, same single pass, different contract. The
+clerical canon is satisfied either way — the work goes to tooling, just not to the tool whose
+promise is *"changes no words."*
+
+### The filename rule was equality; it should be prefix match
+
+Corrected above. Worth recording *why* I got it wrong: I derived the rule from the sorting problem
+alone, and sorting only needs the head. The lesson it descends from is about **findability**, which
+needs the tail. Optimising for one property and silently dropping the other is how a check ends up
+technically correct and practically hostile.
+
+### Five is a default, not a constant — and I decided it twice, differently
+
+Labs caught the document saying *"display width per prefix"* in two places and *"five, decided"* in
+a third. Both are now **default 5, declarable per prefix, recorded in the registry**.
+
+The failure mode is worth naming because it is the one this week keeps producing: **I replaced the
+section I was editing and did not re-read the rest of the document.** That is exactly what happened
+to `SX_Coder_Security_Model.md`, where line 88 outlived the matrix two lines above it and the code
+obeyed the stale sentence for months.
+
+Labs' reason for declarability is the better one, though: this toolkit is public and works with zero
+configuration, and emitting `AB-00007` for a twelve-slice project reads as a tool that thinks it is
+bigger than the project. Accepting any form solves *tooling*; a consistent rendered form is what
+stops a **human** having to be told that `VS-00392` here and `DT-01` there are the same scheme.
+
+## Residue: the outermost link has nothing watching it
+
+Labs is right and this is a real hole in what I wrote. I argued the pullup chain needs no cron
+because *"the check runs as often as the thing it guards can change"*. True of the **children**.
+False of **HQ itself**:
+
+```text
+child workflow disabled     -> its own pushes stop dispatching     -> other children still report
+HQ workflow disabled        -> children dispatch into silence      -> LOOKS EXACTLY LIKE A QUIET WEEK
+```
+
+Every link in the chain is watched by the link above it. Nothing watches the top. So a **scheduled
+heartbeat on HQ alone** — one repo, one job, no walk — is the cheapest possible assertion that the
+outermost check is still alive. It respects the cost constraint precisely because it does no work:
+it exists to fail when the thing that does the work has stopped.
+
+That closes the argument honestly. *Frequency tied to risk* holds for everything the chain guards;
+the chain itself needs one heartbeat, because a stopped clock and a quiet week are indistinguishable
+from inside.
+
+## Wilson: insist on the structure, and the write-target question dissolves
+
+> *"I just have this nagging feeling we're going to HAVE to insist on common folder structure, once
+> we migrate to common folder structure. It's easier for the tooling. Searching far and wide for
+> `*roadmap.md` will cause problems."*
+
+He is right, and this **supersedes** both earlier attempts above at *"which roadmap receives the
+table"*. Labs and I circled that question twice and each time answered it as *separate the read glob
+from the write target, and fail rather than pick*. That is the correct answer to the wrong question.
+The question only exists because discovery is a glob.
+
+**A glob tells you what it found. It never tells you where to write.** Make the path canonical and
+there is nothing to pick:
+
+```text
+read glob    -> "these files look like roadmaps"       (a guess, from a filename)
+canonical    -> "the roadmap is at docs/project/X.md"  (a fact, from the standard)
+```
+
+### Measured: insisting is cheap, because the drift is one folder deep
+
+Ten MedAR daily-driver repos, checked against `docs/project/<Repo>_Development_Roadmap.md`:
+
+| Outcome | Repos |
+| --- | --- |
+| Conforms exactly | `DevTools`, `HDCTranslators`, `MedAR_PyPackages`, `MedAR_Service_Daemons` |
+| No planning surface at all | `SX_Coder_API`, `SX_Coder_UI`, `medar-web-foundation` |
+| Real structural drift | `SX_DW`, `MedAR_AI_Runtime` — both `docs/project/roadmap/`, one level too deep |
+| False positive | `SX_Coder` — its three extra hits are all under `docs/_ARCHIVE/` |
+
+So the entire structural migration is **one `git mv` in two repos**. The standard is not
+aspirational; it is already what most of the estate does. What is missing is the tooling insisting
+on it.
+
+### The decoys are the proof, and they are benign *today*
+
+A wide search finds three files that are not slice registries at all:
+
+```text
+SX_DW/docs/powerbi/history/PowerBI_Implementation_Roadmap.md   a delivery history
+SX_DW/docs/SX_DW_Agent/CICD_Roadmap.md                         a different plan entirely
+MedAR_AI_Runtime/docs/MedAR_AI_Runtime_Build_Roadmap.md        a build sequence
+```
+
+None currently contains a slice-shaped ID or an ID-column table, so nothing is broken right now.
+That is **luck, not a control** — though the exposure is narrower than it first looks, and worth
+stating precisely rather than dramatically.
+
+`ID_IN_TABLE` is anchored to the **first cell of a table row**, so prose cannot inflate anything.
+Measured: `VS-123` in a sentence contributes nothing, and neither does `VS-123` in a second column.
+Only a first-column ID counts. That anchoring is a deliberate defence, and it already holds.
+
+The residual exposure is a decoy that grows a **first-column ID table** — which is precisely what a
+document called `CICD_Roadmap.md` does the moment it starts tracking work. Then `lastNumber`
+inflates, the next mint collides, and nothing says a word. A filename is not a semantic; matching on
+one means the tool cannot distinguish a registry from a document that merely shares a noun.
+
+### What this changes
+
+1. **Canonical path is the contract.** `docs/project/<Repo>_Development_Roadmap.md`, declarable in
+   config for a genuine exception, defaulted otherwise. The write target is always this. It is never
+   inferred, so it can never be inferred wrongly.
+2. **The glob demotes to a migration aid.** Its job is no longer *find the roadmap* but *report that
+   this repo is not on the standard yet* — which is a *check*, and therefore something that can
+   fail. `untracked` already names that state; this gives it a detector.
+3. **`_ARCHIVE/` is excluded by rule, everywhere.** Three of SX_Coder's four hits are archived. Any
+   discovery that counts an archived document is manufacturing its own false positives.
+4. **The read-glob/write-target split is no longer needed.** Not because the reasoning was wrong,
+   but because the ambiguity it managed stops existing once the path is declared. Deleting the
+   problem beats handling it.
+
+### Migration shape: `project_v2` alongside, swapped at the end
+
+Wilson: *"We don't want to mess with git TOO much but a `projects_v2` folder that we eventually swap
+out with `projects` might work."*
+
+This is better than emitting sibling files, and it also sidesteps the collision cleanly — nothing
+under `docs/project_v2/` matches `docs/project/*Roadmap.md`, so old and new coexist without the
+tooling seeing two registries:
+
+```text
+docs/project/      untouched, live, still authoritative     <- humans keep working here
+docs/project_v2/   generated, reviewable, diffable          <- tooling writes only here
+                   ...swap when it is right, as one commit
+```
+
+Non-destructive by construction: the emitter has exactly one writable root, and it is not the one
+anybody depends on. If the output is wrong, the fix is `rm -rf docs/project_v2` — not a revert.
+
+[2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
+[ewc3-prefix-registry]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[lesson]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/RAG_Sessions/2026-08-12_Building_The_Agent_Working_System_By_Using_It_On_RecallTape.md
+[llm-assisted-docs]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
+[medar-phi-in-git]: ../../../../../Programs_MedAR/DevTools/docs/PHI_ANONYMIZATION.md
+[our-own-canon]: clerical-work-belongs-to-ci.md
+[phi-anonymization-md]: https://github.com/MedARMS/DevTools/blob/main/docs/PHI_ANONYMIZATION.md
+[registry]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
+[the-slice-document]: the-slice-document-is-the-object.md

@@ -1,4 +1,5 @@
 {
+  "exclude": ["docs/project_v2/**.md"],
   "values": {
     "lastDTNum": { "lastId": { "prefix": "DT" } },
     "lastDT": { "template": { "text": "DT-${lastDTNum}" } },
