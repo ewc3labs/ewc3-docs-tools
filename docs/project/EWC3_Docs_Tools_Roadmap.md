@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-060<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-061<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -82,6 +82,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-058 | ⬜ planned | One narrow id re-spells every other id in the register, and `index --write` applies it | M | [DOCS-058][docs-058] | measured on the real DevTools shape: DT-090 and DT-092 become DT-90 and DT-92 because DT-01 sets the derived width to 2; migrate leaves the register clean and the documented next step applies the damage |
 | DOCS-059 | ⬜ planned | `format` and `index --write` disagree about the register, stably and forever | S | [DOCS-059][docs-059] | each undoes the other on every run, so whether `check` passes depends on which command ran last - measured stable across three rounds |
 | DOCS-060 | ⬜ planned | Both register readers are blind to the other shape, and one comment claims otherwise | M | [DOCS-060][docs-060] | found by Copilot on PR #2: `readSeries` documents accepting `Prefix` OR `Series` and matches only `Prefix`, which is why 4 of 6 estate registers read as declaring nothing |
+| DOCS-061 | 🟦 tested | `format` lifts reference definitions out of fenced code and re-emits them as live links | S | [DOCS-061][docs-061] | unit-tested against the exact lines it destroyed, failing before and passing after; not yet re-run across another repo |
 
 ## Done
 
@@ -163,6 +164,7 @@ caught.
 [docs-058]: slices/DOCS-058_One_narrow_id_re_spells_the_whole_register.md
 [docs-059]: slices/DOCS-059_Format_and_index_disagree_about_the_register_forever.md
 [docs-060]: slices/DOCS-060_Both_register_readers_are_blind_to_the_other_shape.md
+[docs-061]: slices/DOCS-061_Format_lifts_definitions_out_of_fenced_code.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md

@@ -92,6 +92,33 @@ test('does not touch fenced code', () => {
 	assert.strictEqual(format(src), src);
 });
 
+test('a reference DEFINITION inside fenced code is an example, not a definition to relocate', () => {
+	// The test above was named for this guarantee and passed the whole time it was broken. It fences
+	// an INLINE link, which the wrapper already skipped. It never fenced a DEFINITION line - and the
+	// definition paths harvest and strip by their own set, which fences were not in. So an example
+	// was lifted out of its block, lost its trailing annotation, and came back at the foot as a live
+	// link, leaving an empty fence. `DOCS-051` lost two illustrations that way. A guarantee is only
+	// as good as the path it exercises.
+	const example = [
+		'```',
+		'[twin]:   ../../../../elsewhere/docs/X.md   <- the relative half',
+		'[twin-2]: https://github.com/org/elsewhere/blob/main/docs/X.md',
+		'```',
+	].join('\n');
+	const src = `# Example\n\nProse before.\n\n${example}\n\nProse after.\n`;
+	const out = format(src);
+
+	assert.ok(out.includes(example), 'the fenced example must survive byte for byte');
+	assert.ok(!/^\[twin(-2)?\]: /m.test(out.split(example).join('')),
+		'and must not ALSO appear outside the fence as a live definition');
+
+	// The ordinary behaviour must still happen next to it: a long link in prose still moves.
+	const mixed = `${example}\n\nSee [a long link](https://example.com/a-long-enough-url-to-be-harvested).\n`;
+	const moved = format(mixed);
+	assert.ok(moved.includes(example), 'fence still intact beside real harvesting');
+	assert.match(moved, /^\[a-long-link\]: https:\/\/example\.com\//m, 'the prose link still relocates');
+});
+
 test('does not wrap tables', () => {
 	const row = '| a very long cell | another very long cell | a third one that pushes past 100 columns |';
 	assert.ok(format(`${row}\n`).includes(row));
