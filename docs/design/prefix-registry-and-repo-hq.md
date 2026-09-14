@@ -304,7 +304,7 @@ already owns `DT`:
 Both marked `global`. Both correct. Nothing breaks, because they are different registries — which
 means **`global` is scoped to one HQ namespace, not to the universe.** Worth saying out loud in the
 schema docs, because "global" invites the other reading, and someone will eventually try to reason
-about a `DOCS-012` across both orgs.
+about a `DT-12` across both orgs.
 
 It is also a second argument for the registry carrying its own identity: it names whose "global"
 this is.
@@ -771,7 +771,7 @@ Measured across **all** commit history in six repositories:
 
 ```text
 distinct (prefix, number) pairs   340
-written more than one way           1     DOCS-001  as  DT-001  and  DT-01
+written more than one way           1     DT-1  as  DT-001  and  DT-01
 ```
 
 History is 99.7% single-form. Each repository has been internally consistent; the one mixed pair

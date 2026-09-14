@@ -15,8 +15,8 @@ source: EWC3_Docs_Tools_Roadmap.md
 > paragraph rather than a summary, that is the row as it stands — deciding what a slice
 > is about, and whether it is finished, is judgement.
 
-DOCS-001..DOCS-039 mean different slices in ewc3-docs-tools and MedAR DevTools — 39 overlapping IDs
-across two estates; a qualifier cannot be mistaken for a mint because every declaring pattern needs -
-where a qualifier puts :
+DT-1..DT-39 mean different slices in ewc3-docs-tools and MedAR DevTools — 39 overlapping IDs across
+two estates; a qualifier cannot be mistaken for a mint because every declaring pattern needs - where
+a qualifier puts :
 
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md

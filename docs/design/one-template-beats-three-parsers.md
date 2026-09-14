@@ -174,8 +174,8 @@ going to become very important for us.")*
 
 | Register | Owner | Range | Declared |
 | --- | --- | --- | --- |
-| `ewc3-docs-tools` | ewc3-docs-tools | **DOCS-001 … DOCS-039** | `global` |
-| MedAR `DevTools` | DevTools | **DOCS-001 … DT-82** | *(no scope column)* |
+| `ewc3-docs-tools` | ewc3-docs-tools | **DT-1 … DT-39** | `global` |
+| MedAR `DevTools` | DevTools | **DT-1 … DT-82** | *(no scope column)* |
 
 **39 overlapping IDs**, against 26 for the AIR/SX_Coder `VS` collision — and unlike that one it
 crosses **estates**, so no hub re-charter resolves it.

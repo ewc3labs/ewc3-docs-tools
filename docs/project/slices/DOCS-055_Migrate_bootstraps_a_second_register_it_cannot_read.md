@@ -4,7 +4,7 @@ state: ⬜ planned
 title: '`migrate-project` synthesises a SECOND prefix register, because it cannot read the one this repo has'
 est: M
 doc: '[DOCS-055](slices/DOCS-055_Migrate_bootstraps_a_second_register_it_cannot_read.md)'
-status: 'BLOCKS adopting a migrated register: `migrate` cannot read the `Prefix`-first table `series` reads, so it bootstraps a duplicate that unclaims the owner and re-pads DOCS-054 to DT-00054'
+status: 'BLOCKS adopting a migrated register: `migrate` cannot read the `Prefix`-first table `series` reads, so it bootstraps a duplicate that unclaims the owner and re-pads DT-54 to DT-00054'
 priority: high
 lane: migrate
 ---
@@ -27,9 +27,9 @@ Three separate regressions in the generated copy, any one of which is disqualify
 1. **The owner is discarded.** `ewc3-docs-tools` becomes `**?** _unclaimed_`. The bootstrap rule
    that a global prefix may not self-declare is *correct* — but it is being applied to a register
    that had already adjudicated the question.
-2. **The padding contradicts the register.** `DOCS-054` becomes `DT-00054`, against `DOCS-044`
-   (padding is a convention of a PREFIX, and the shortest id states it) and `DOCS-049` (one spelling
-   per id). Every id in this repo is unpadded.
+2. **The padding contradicts the register.** `DT-54` becomes `DT-00054`, against `DOCS-044` (padding
+   is a convention of a PREFIX, and the shortest id states it) and `DOCS-049` (one spelling per id).
+   Every id in this repo is unpadded.
 3. **The value marker is malformed**: `<!--/-->` rather than `<!--/ewc3:lastDOCS-->`.
 
 ⚠️ **And `series` reports the file clean.** It reads the authored table, never sees the generated
