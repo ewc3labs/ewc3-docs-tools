@@ -121,7 +121,7 @@ Everything below exists only to disambiguate prose, and every line of it has pro
 
 `withoutFences` stays — cheap, and a fenced example must never be read as content regardless.
 
-**`DT-30` becomes CHEAP, not automatic** — and the first version of this paragraph overclaimed.
+**`DOCS-030` becomes CHEAP, not automatic** — and the first version of this paragraph overclaimed.
 
 It said a duplicate *"cannot happen without one file overwriting the other."* **False, and codex
 caught it:** the filename carries a title slug as well as the ID, so `VS-00001_First.md` and
@@ -130,9 +130,9 @@ objects for one identity.
 
 What the model actually buys is that a duplicate becomes **a set comparison over frontmatter `id:`
 fields** instead of a heuristic over prose. That is a real improvement and it is not the same as
-being structural. **So duplicate-ID validation is a REQUIRED part of `DT-35`, not a consequence of
-it** — uniqueness that nothing checks is a convention, which is the thing this whole effort exists
-to stop.
+being structural. **So duplicate-ID validation is a REQUIRED part of `DOCS-035`, not a consequence
+of it** — uniqueness that nothing checks is a convention, which is the thing this whole effort
+exists to stop.
 
 ## Every ID gets a document, and most are five-line stubs
 
@@ -154,9 +154,9 @@ keep it in step with whatever it describes. And it keeps the rule uniform — *a
 exception is a rule somebody has to remember the exception to*, and the requirement here was that
 none of us can forget a step.
 
-### Which answers `DT-15`, parked since it was minted
+### Which answers `DOCS-015`, parked since it was minted
 
-`DT-15` (`next <PREFIX>`) sits at *"not yet earned — derived Last Used already removed the state
+`DOCS-015` (`next <PREFIX>`) sits at *"not yet earned — derived Last Used already removed the state
 that could go stale; only the `+1` is manual."* Under this model the `+1` stops being read off a
 register cell at all:
 
@@ -170,16 +170,16 @@ ewc3-docs slice new VS "Two writers own MFM.Doctors"
 same move `Last Used` made, applied to the last input still read by hand — and a stub then costs one
 command rather than one act of remembering.
 
-### ⚠️ Sequencing: this model WIDENS `DT-30` before it closes it
+### ⚠️ Sequencing: this model WIDENS `DOCS-030` before it closes it
 
-`DT-30` — a same-repo duplicate declaration is undetectable — is **still live, and the two-surface
-design makes it likelier.** Measured by EPQE and reproduced here: a `VS-7` Delivery Index row beside
-a `` 3. `VS-7` - a different thing `` backlog item in one repository reports *"Every prefix in use
-is declared"* and **exits 0**.
+`DOCS-030` — a same-repo duplicate declaration is undetectable — is **still live, and the
+two-surface design makes it likelier.** Measured by EPQE and reproduced here: a `VS-7` Delivery
+Index row beside a `` 3. `VS-7` - a different thing `` backlog item in one repository reports
+*"Every prefix in use is declared"* and **exits 0**.
 
 Under frontmatter-as-declaration it closes **structurally** — two documents cannot carry the same
-`id:` without one file overwriting the other. **So `DT-35` should land before anything that adds a
-third declaring surface**, or the window widens again with nothing watching it.
+`id:` without one file overwriting the other. **So `DOCS-035` should land before anything that adds
+a third declaring surface**, or the window widens again with nothing watching it.
 
 ## Open questions
 
@@ -190,8 +190,8 @@ third declaring surface**, or the window widens again with nothing watching it.
    both a roadmap row and a slice's frontmatter carry the same ID, structure alone cannot say which
    is the declaration: scanning both reports every projected slice as a duplicate, and excluding
    either hard-codes the direction anyway. "Works in either direction" was true of the *structure*
-   and false of the *checker* — a distinction I collapsed. It is a prerequisite for `DT-35`, and it
-   now has an answer.
+   and false of the *checker* — a distinction I collapsed. It is a prerequisite for `DOCS-035`, and
+   it now has an answer.
 2. **Does the roadmap's Delivery Index still declare IDs?** If slice docs become authoritative, the
    register declares *prefixes* and the Delivery Index becomes a view. If the roadmap stays
    authoritative, its Index is the declaring position and slice-doc frontmatter is the projection.
@@ -236,7 +236,7 @@ third declaring surface**, or the window widens again with nothing watching it.
    ignored.** Same result across all five repositories holding a preview, measured twice a week
    apart. So the migration below is a regeneration, and the companion doc's claim is stale rather
    than this one being optimistic. Raised by codex, who reasonably trusted the document over the
-   tree — which is its own argument for deriving claims about build state (`DT-22`).
+   tree — which is its own argument for deriving claims about build state (`DOCS-022`).
 5. **Migration cost for the 400 already-emitted slice documents.** They are gitignored previews and
    the emitter is ours, so this is a regeneration rather than an edit — but it is only free while
    they stay unadopted, which is what the estate freeze is currently protecting.

@@ -244,7 +244,7 @@ argument; this is the decision EWC3Labs should make first.**
    a one-time import, not a repeatable generator. **Enforce it; do not merely document it.**
 3. **Do MedAR repos adopt this, or only Labs?** MedAR carries the 22% clerical tax and the 47%
    cross-repo fan-out — it is the motivating case but also the riskier one.
-4. **Cross-repo trailer scan** overlaps **DT-16** (org-level series check). Same traversal, two
+4. **Cross-repo trailer scan** overlaps **DOCS-016** (org-level series check). Same traversal, two
    uses.
 5. **⚠️ Cross-repo pinning breaks the `FIX` canon** *(found by SD, 2026-08-24)*. The registry keeps
    `FIX` repo-local on an explicit justification — *"a fix is never referenced from outside the
@@ -265,7 +265,7 @@ argument; this is the decision EWC3Labs should make first.**
    **`(SXdb, Record)`** — an identifier unique only within its scope, qualified by that scope when
    referenced from outside. `Record 12345` alone is meaningless; `M55DB1:12345` is not. Both agree 2
    is the worst option.
-6. **`next <PREFIX>` was deferred as DT-15** (*"only the +1 is manual"*).
+6. **`next <PREFIX>` was deferred as DOCS-015** (*"only the +1 is manual"*).
    **Mint-that-creates-the-file is a different thing** — the file's existence is the reservation,
    which also removes the concurrent mint race. Justify it on that, not on `+1`.
 
@@ -303,12 +303,12 @@ move for `state:`.
 
 The objection that C stores a derivable fact twice does not land, and the distinction is worth
 stating precisely: **trailers are an event log, frontmatter is the fold.** The fold is
-marker-delimited and machine-owned, exactly like `<!--ewc3:lastDT-->` is today.
+marker-delimited and machine-owned, exactly like `<!--ewc3:lastDOCS-->` is today.
 
 Deciding anything else makes `state:` the one derived fact in the system that works differently from
-every other derived fact. **And C's stated cost — the N-repo scan — is DT-16**, already on the
-Delivery Index. §9 Q4 spots the overlap and undersells it: DT-16 stops being speculative and becomes
-load-bearing.
+every other derived fact. **And C's stated cost — the N-repo scan — is DOCS-016**, already on the
+Delivery Index. §9 Q4 spots the overlap and undersells it: DOCS-016 stops being speculative and
+becomes load-bearing.
 
 ### §5 — the case for trailers is much stronger than the document makes it
 
@@ -468,20 +468,20 @@ the register is the authority, and punctuation is one more shape to guess at. Ve
 that roadmap now exits 0.
 
 **And the larger argument converged independently.** I was drafting *"if the slice document is the
-object, a declaration is a file"* while [DT-35][frontmatter-is] was landing the stronger form — a
+object, a declaration is a file"* while [DOCS-035][frontmatter-is] was landing the stronger form — a
 declaration is a **field in a structured block**, which covers `state` and `est` too rather than
 only the ID. *"Three reviewers, three findings, one cause — we were parsing prose we generate
 ourselves"* is the right summary, and it makes my version redundant. Endorsed as written.
 
 Two things that survive the convergence.
 
-**DT-30 is still live, and this model makes it likelier before it makes it impossible.** Measured on
-`5c7bb64`: a `VS-7` Delivery Index row and a `` 3. `VS-7` - a different thing `` backlog item in the
-same repository still report `Every prefix in use is declared` and exit 0. Two declaring surfaces
-now exist by design, so the window is wider than when DT-30 was written. Under
+**DOCS-030 is still live, and this model makes it likelier before it makes it impossible.** Measured
+on `5c7bb64`: a `VS-7` Delivery Index row and a `` 3. `VS-7` - a different thing `` backlog item in
+the same repository still report `Every prefix in use is declared` and exit 0. Two declaring
+surfaces now exist by design, so the window is wider than when DOCS-030 was written. Under
 frontmatter-as-declaration it closes structurally — two documents cannot carry the same `id:`
-without one file overwriting the other — which is an argument for sequencing DT-35 ahead of anything
-that adds a third surface.
+without one file overwriting the other — which is an argument for sequencing DOCS-035 ahead of
+anything that adds a third surface.
 
 **Nobody has costed the lightweight ID, and Labs has the numbers.** EPQE carries **~39 IDs and two
 slice documents**. `FIX-3` is a real ID that deserves a changelog line and nothing more. Three ways
@@ -497,8 +497,8 @@ document, and it keeps the rule uniform — which is what makes a workflow unfor
 an exception is a rule somebody has to remember the exception to, and the ask here was that none of
 us can forget a step.
 
-That also gives [`DT-15`][dt-15-note] its answer. It is currently parked as *"not yet earned — only
-the `+1` is manual"*. Under this model the `+1` stops being read off a register cell at all:
+That also gives [`DOCS-015`][dt-15-note] its answer. It is currently parked as *"not yet earned —
+only the `+1` is manual"*. Under this model the `+1` stops being read off a register cell at all:
 
 ```bash
 ewc3-docs slice new VS "Two writers own MFM.Doctors"

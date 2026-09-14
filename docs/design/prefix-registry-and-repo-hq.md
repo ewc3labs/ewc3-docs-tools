@@ -565,8 +565,8 @@ the pullup chain all stand as decided.
 | a roadmap **uses** a prefix it does not own (`undeclaredPrefixes`) | **still fully reachable** |
 
 Generation controls the *declaration table*. It does not control the **ID tables**, which stay
-hand-written — that is the whole point of them. Nothing stops someone typing `| DT-5 |` into an ID
-row of a repo that was never granted `DT`.
+hand-written — that is the whole point of them. Nothing stops someone typing `| DOCS-005 |` into an
+ID row of a repo that was never granted `DT`.
 
 So the distinction to hold is between *declaring* a prefix you do not own — which generation does
 make unreachable, caught by `values --check` — and *using* one, which it does not touch at all.

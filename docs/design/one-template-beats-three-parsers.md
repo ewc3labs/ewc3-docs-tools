@@ -1,7 +1,7 @@
 # One template beats three parsers
 
 > **Status: proposal.** Written by **PMO** for **EWC3Labs** and **codex** to shoot down.
-> Supersedes the approach taken in `DT-25`/`DT-28`, and reverses a decision I made three days ago.
+> Supersedes the approach taken in `DOCS-025`/`DOCS-028`, and reverses a decision I made three days ago.
 > **This document exists because Wilson rejected the fix I built and proposed a better one.**
 
 > ### ⚠️ CORRECTED 2026-09-02, after the branch was pushed
@@ -199,9 +199,9 @@ DevTools:DT-82               a CITATION of the other estate
 
 **A qualified reference is structurally incapable of being a mint**, and this needs no new rule.
 Every declaring pattern is anchored and requires `-` immediately after the prefix token; a qualifier
-puts `:` there instead. Verified against the parser: `ewc3-docs-tools:DT-12` in a Delivery Index ID
-cell, `DevTools:DT-82` in a heading and `DevTools:DT-65` in a list item all declare **nothing**,
-while a bare `DT-39` beside them declares normally.
+puts `:` there instead. Verified against the parser: `ewc3-docs-tools:DOCS-012` in a Delivery Index
+ID cell, `DevTools:DT-82` in a heading and `DevTools:DT-65` in a list item all declare **nothing**,
+while a bare `DOCS-039` beside them declares normally.
 
 It holds for any repository name, including all-caps ones, because the discriminator is the `:` and
 not the case.
@@ -212,7 +212,7 @@ we simply had one estate reading the other's documents without noticing.
 
 ### ⚠️ The re-charter window: a derived `Last Used` is systematically LOW while a series moves
 
-**Found by SX_DW, 2026-09-02, and it is a hazard in `DT-33` before `DT-33` exists.**
+**Found by SX_DW, 2026-09-02, and it is a hazard in `DOCS-033` before `DOCS-033` exists.**
 
 `Last Used` derives from the rows **in this repository**. During a re-charter the series spans two
 repositories by definition — the hub still holds rows it minted before ownership moved. So for that
@@ -281,7 +281,7 @@ which is the toolkit's existing bar: *every field has a working default.*
 It looks like it. Both let the checker cope with more than one register shape. **The difference is
 the only thing that matters here:**
 
-| | `DT-25`/`DT-28` (reverted) | templates as config |
+| | `DOCS-025`/`DOCS-028` (reverted) | templates as config |
 | --- | --- | --- |
 | how the shape is known | **SNIFFED** — try `Prefix`, else `Series`, else mine the `Last Num` cell | **DECLARED** — the repo names its template root |
 | shapes accepted per repo | any of three, whichever matched | exactly one |
@@ -331,7 +331,7 @@ conversion runs against an unmigrated roadmap. **Backwards.**
 
 Obvious once stated, and it **relocates the reverted work rather than deleting it.** The three-shape
 reading stripped out of `series` is exactly what a converter needs — and guessing is appropriate
-there, because a human reviews the emitted diff before adopting it. `DT-34`.
+there, because a human reviews the emitted diff before adopting it. `DOCS-034`.
 
 | | `series` | `migrate-project` |
 | --- | --- | --- |

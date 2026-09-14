@@ -1,9 +1,32 @@
 {
-  "exclude": ["docs/project_v2/**.md"],
+  "exclude": [
+    "docs/project_v2/**.md"
+  ],
   "values": {
-    "lastDTNum": { "lastId": { "prefix": "DT" } },
-    "lastDT": { "template": { "text": "DT-${lastDTNum}" } },
-    "lastFIXNum": { "lastId": { "prefix": "FIX" } },
-    "lastFIX": { "template": { "text": "FIX-${lastFIXNum}" } }
+    "lastDOCSNum": {
+      "lastId": {
+        "prefix": "DOCS"
+      }
+    },
+    "lastDOCS": {
+      "template": {
+        "text": "DOCS-${lastDOCSNum}"
+      }
+    },
+    "lastFIXNum": {
+      "lastId": {
+        "prefix": "FIX"
+      }
+    },
+    "lastFIX": {
+      "template": {
+        "text": "FIX-${lastFIXNum}"
+      }
+    }
+  },
+  "series": {
+    "widths": {
+      "DOCS": 3
+    }
   }
 }

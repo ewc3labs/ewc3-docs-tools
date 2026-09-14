@@ -18,7 +18,7 @@ using it.
 
 **Both are now partly built.** The design documents are the argument; the Delivery Index in the
 roadmap is what has actually shipped. This section claimed "nothing built" of both for longer than
-it was true, which is why `DT-22` exists — a prose claim about build state is precisely the class
+it was true, which is why `DOCS-022` exists — a prose claim about build state is precisely the class
 this toolkit says should be derived rather than written.
 
 - [Prefix registry and `repoHQ`][prefix-registry-and]: cross-repo prefix ownership — `prefixOwner`,
@@ -36,7 +36,8 @@ this toolkit says should be derived rather than written.
   document is the ONLY place anything declares anything. Deletes four parsers that each shipped a
   defect.
 - [One template beats three parsers][one-template]: the register shape is DECIDED and every roadmap
-  is brought to it, rather than the checker learning each shape it meets. Reverses DT-25/DT-28.
+  is brought to it, rather than the checker learning each shape it meets. Reverses
+  DOCS-025/DOCS-028.
 - [Clerical work belongs to CI][clerical-work]: the canon these proposals serve - what is
   bookkeeping, what is judgement, and the measurements that make it a rule rather than a preference.
 
