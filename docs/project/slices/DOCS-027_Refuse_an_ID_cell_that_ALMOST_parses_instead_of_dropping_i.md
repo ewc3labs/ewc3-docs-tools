@@ -1,10 +1,10 @@
 ---
 id: DOCS-027
-state: 🟦 coded
+state: 🟨 coded
 title: Refuse an ID cell that ALMOST parses, instead of dropping it
 est: S
 doc: '[DOCS-027](slices/DOCS-027_Refuse_an_ID_cell_that_ALMOST_parses_instead_of_dropping_i.md)'
-status: ""
+status: 'doubt: the id grammar half is proven on SX_Coder, 566 of 566 parsed, but the title commitment - refuse an almost-parsing cell rather than drop it - is not built'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 

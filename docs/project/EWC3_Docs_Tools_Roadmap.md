@@ -52,7 +52,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-030 | ⬜ planned | Report an ID declared TWICE inside one repository | S | [DOCS-030][docs-030] |  |
 | DOCS-031 | ⬜ planned | Report a backlog that DECLARES an ID rather than citing one | S | [DOCS-031][docs-031] |  |
 | DOCS-036 | ⬜ planned | `fold`: git trailers become frontmatter state, idempotently | L | [DOCS-036][docs-036] |  |
-| DOCS-037 | 🟦 coded | `index`: regenerate the Delivery Index from the slice documents | M | [DOCS-037][docs-037] |  |
+| DOCS-037 | 🟩 proven | `index`: regenerate the Delivery Index from the slice documents | M | [DOCS-037][docs-037] | ewc3-docs-tools: the live register has been generated from its slice documents since 2026-09-09, and it round-trips byte-for-byte on 4 of 6 estate registers |
 | DOCS-038 | ⬜ planned | Refuse a Slice: trailer naming an ID with no slice document | S | [DOCS-038][docs-038] |  |
 | DOCS-035 | ⬜ planned | Frontmatter is the ONLY declaring position in a slice or module doc | L | [DOCS-035][docs-035] |  |
 | DOCS-034 | ⬜ planned | `migrate-project` ACCEPTS the shapes `series` refuses | M | [DOCS-034][docs-034] |  |
@@ -60,22 +60,22 @@ is never referenced from outside the repository it fixes.
 | DOCS-039 | ⬜ planned | A derived `Last Used` must refuse to reconcile DOWNWARD | S | [DOCS-039][docs-039] |  |
 | DOCS-040 | ⬜ planned | epo:slice qualified references, and a Registry column | M | [DOCS-040][docs-040] |  |
 | DOCS-041 | ⬜ planned | `slice new <PREFIX> "<title>"` — mint by creating the document | M | [DOCS-041][docs-041] |  |
-| DOCS-042 | 🟦 coded | Read the Delivery Index columns by HEADER NAME, not by position | S | [DOCS-042][docs-042] |  |
-| DOCS-043 | 🟦 coded | A heading declares only its LEADING RUN of IDs | S | [DOCS-043][docs-043] |  |
-| DOCS-044 | 🟦 coded | ID padding is a convention of a PREFIX, not of a file | S | [DOCS-044][docs-044] |  |
-| DOCS-045 | 🟦 coded | `--repo` was silently ignored by every command except `migrate-project` | S | [DOCS-045][docs-045] |  |
-| DOCS-046 | 🟦 coded | A slice document must CARRY the reference definitions it uses | S | [DOCS-046][docs-046] |  |
-| DOCS-047 | 🟦 coded | `check` must refuse to report a PASS over zero files | S | [DOCS-047][docs-047] |  |
+| DOCS-042 | 🟦 tested | Read the Delivery Index columns by HEADER NAME, not by position | S | [DOCS-042][docs-042] | unit-tested; not re-run against HDCTranslators, where the positional defect was found |
+| DOCS-043 | 🟦 tested | A heading declares only its LEADING RUN of IDs | S | [DOCS-043][docs-043] | unit-tested; not re-run against HDCTranslators, where the cross-repo mint was found |
+| DOCS-044 | 🟦 tested | ID padding is a convention of a PREFIX, not of a file | S | [DOCS-044][docs-044] | unit-tested; narrowed by DOCS-058 - shortest-id holds as a description of a register, not as a rewrite rule, and width is now declared in series.widths |
+| DOCS-045 | 🟨 coded | `--repo` was silently ignored by every command except `migrate-project` | S | [DOCS-045][docs-045] | doubt: the fix is in targetFiles, but no test covers --repo and no re-run is recorded |
+| DOCS-046 | 🟩 proven | A slice document must CARRY the reference definitions it uses | S | [DOCS-046][docs-046] | ewc3-docs-tools adoption 2026-09-09: carried reference definitions resolve, with no dead link originating in a slice document |
+| DOCS-047 | 🟨 coded | `check` must refuse to report a PASS over zero files | S | [DOCS-047][docs-047] | doubt: the guard is built and seen firing for index only; format, values, links and tables still report a pass over zero files |
 | DOCS-049 | ⬜ planned | Read the canonical Number Series table, and derive `Next` from it | M | [DOCS-049][docs-049] |  |
-| DOCS-050 | 🟦 coded | STAGED slices must never write the LIVE roadmap, and three other findings that sat unread for six days | M | [DOCS-050][docs-050] |  |
+| DOCS-050 | 🟦 tested | STAGED slices must never write the LIVE roadmap, and three other findings that sat unread for six days | M | [DOCS-050][docs-050] | all four fixes unit-tested; staged-never-writes-live proven on ewc3-docs-tools 2026-09-09, but the duplicate-id guard has never met a real duplicate |
 | DOCS-048 | ⬜ planned | A Delivery Index ROW has no ownership gate, so a MIRROR is indistinguishable from a mint | M | [DOCS-048][docs-048] |  |
 | DOCS-032 | ⬜ planned | One canonical register template, and refuse anything else | M | [DOCS-032][docs-032] |  |
-| DOCS-026 | ↩️ refuted | `migrate-project` emits from ONE source, so extra planning surfaces are dropped | M | [DOCS-026][docs-026] |  |
-| DOCS-027 | 🟦 coded | Refuse an ID cell that ALMOST parses, instead of dropping it | S | [DOCS-027][docs-027] |  |
+| DOCS-026 | 🟥 cancelled | `migrate-project` emits from ONE source, so extra planning surfaces are dropped | M | [DOCS-026][docs-026] | refuted - did not reproduce: every repo has one roadmap, and the 34-of-41 gap on AIR was a stale preview read against a live register. Kept so the next report of it finds this |
+| DOCS-027 | 🟨 coded | Refuse an ID cell that ALMOST parses, instead of dropping it | S | [DOCS-027][docs-027] | doubt: the id grammar half is proven on SX_Coder, 566 of 566 parsed, but the title commitment - refuse an almost-parsing cell rather than drop it - is not built |
 | DOCS-051 | ⬜ planned | Cross-repo relative links cannot resolve in a single-repo checkout | M | [DOCS-051][docs-051] | CI red for 8 runs; 9 of the 10 failures are the relative half of a twin link, the 10th has no twin and is genuinely dead |
 | DOCS-052 | ⬜ planned | The document modules do not know frontmatter exists, and `format` destroys it | S | [DOCS-052][docs-052] | ⛔ blocks the slice-document model — `fix` destroys frontmatter, a five-line stub corrupts SILENTLY, and `links` reports frontmatter values as dead links |
-| DOCS-053 | 🟦 coded | `migrate-project` output fed to `index` restores every row it just moved out | S | [DOCS-053][docs-053] | CODED - migrated documents no longer declare the paragraph they moved to the body, so a register survives its own `index --write`; measured 341 to 341 |
-| DOCS-054 | 🟦 coded | `migrate-project` must never regenerate a slice document a human already authored | S | [DOCS-054][docs-054] | CODED - authored documents are matched by frontmatter id, kept, and REPORTED; the register points at the existing filename rather than one derived from the row |
+| DOCS-053 | 🟩 proven | `migrate-project` output fed to `index` restores every row it just moved out | S | [DOCS-053][docs-053] | ewc3-docs-tools 2026-09-09: longest row 341 chars after migrate, and still 341 after index --write |
+| DOCS-054 | 🟩 proven | `migrate-project` must never regenerate a slice document a human already authored | S | [DOCS-054][docs-054] | ewc3-docs-tools 2026-09-09: every authored document kept across two consecutive migrations, and re-import from 23d2937 blocked exactly as designed |
 | DOCS-055 | ⬜ planned | `migrate-project` synthesises a SECOND prefix register, because it cannot read the one this repo has | M | [DOCS-055][docs-055] | BLOCKS adopting a migrated register: `migrate` cannot read the `Prefix`-first table `series` reads, so it bootstraps a duplicate that unclaims the owner and re-pads DT-54 to DT-00054 |
 | DOCS-056 | ⬜ planned | After adoption, editing a Delivery Index row is silently discarded by the next `index --write` | M | [DOCS-056][docs-056] | the register becomes generated and nothing says so, so a row edited by hand is overwritten with no warning and exit 0; PMO had 9952 characters of live reasoning standing in exactly that position |
 | DOCS-057 | ⬜ planned | A register with no Doc column loses every pointer to its slices, and any warning its rows carried | M | [DOCS-057][docs-057] | BLOCKS DevTools adoption: their header has no Doc column, so after `index --write` every row renders with an empty Status and no link at all - including the row whose entire purpose is a DO-NOT-RE-SPELL warning |
@@ -102,8 +102,8 @@ is never referenced from outside the repository it fixes.
 | DOCS-019 | ✅ done | `migrate-project`: emit a migrated planning surface beside the live one | — | [Reference](../Reference.md) | **backfilled** — writes only `docs/project_v2/`, dry-run without `--write`, and leaves a GLOBAL prefix unclaimed rather than self-awarding it |
 | DOCS-020 | ✅ done | `slices`: one document per slice, extracted from the index | — | [Reference](../Reference.md) | **backfilled** — evidence is gathered and never asserted as completion, which a test enforces in the emitted prose |
 | DOCS-024 | ✅ done | Declaring positions: see IDs outside the first table column | S | [Reference](../Reference.md) | a backlog written as a numbered list of backticked IDs was invisible to every extractor in the estate, hiding four real cross-repo collisions; the separator after the ID is what keeps a citing bullet from minting |
-| DOCS-025 | ↩️ reverted | `series` reads the MedAR register shape | S | [Reference](../Reference.md) | **reverted 2026-09-02** — the register is brought to the template, not the parser to the register. The backlog-inherits-its-roadmap half was kept |
-| DOCS-028 | ↩️ reverted | Read a legacy register instead of refusing it | S | [Reference](../Reference.md) | **reverted 2026-09-02.** I argued a checker must read the estate as it is; that assumed migrating was expensive, and it is a header row. Each shape a parser learns is one it will half-accept a fourth version of, silently |
+| DOCS-025 | 🟥 cancelled | `series` reads the MedAR register shape | S | [Reference](../Reference.md) | **reverted 2026-09-02** — the register is brought to the template, not the parser to the register. The backlog-inherits-its-roadmap half was kept |
+| DOCS-028 | 🟥 cancelled | Read a legacy register instead of refusing it | S | [Reference](../Reference.md) | **reverted 2026-09-02.** I argued a checker must read the estate as it is; that assumed migrating was expensive, and it is a header row. Each shape a parser learns is one it will half-accept a fourth version of, silently |
 | DOCS-029 | ✅ done | A declared `Scope` column, and a freeze that actually holds | M | [Reference](../Reference.md) | scope was guessed from the prefix string against a hardcoded set of one; a register saying a series is **retired** now records a ceiling and minting past it fails, instead of the retirement living in prose no parser reads |
 | FIX-1 | ✅ done | `Overview.md` said "nothing built" of two partly-built proposals | — | [Overview](../Overview.md) | found while orienting; the sentence outlived the fact by several shipped commands, which is what `DOCS-022` is for |
 

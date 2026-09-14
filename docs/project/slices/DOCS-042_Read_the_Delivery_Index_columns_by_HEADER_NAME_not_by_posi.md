@@ -1,10 +1,10 @@
 ---
 id: DOCS-042
-state: 🟦 coded
+state: 🟦 tested
 title: Read the Delivery Index columns by HEADER NAME, not by position
 est: S
 doc: '[DOCS-042](slices/DOCS-042_Read_the_Delivery_Index_columns_by_HEADER_NAME_not_by_posi.md)'
-status: ""
+status: 'unit-tested; not re-run against HDCTranslators, where the positional defect was found'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 

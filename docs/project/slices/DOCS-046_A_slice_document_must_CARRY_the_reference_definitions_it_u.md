@@ -1,10 +1,10 @@
 ---
 id: DOCS-046
-state: 🟦 coded
+state: 🟩 proven
 title: A slice document must CARRY the reference definitions it uses
 est: S
 doc: '[DOCS-046](slices/DOCS-046_A_slice_document_must_CARRY_the_reference_definitions_it_u.md)'
-status: ""
+status: 'ewc3-docs-tools adoption 2026-09-09: carried reference definitions resolve, with no dead link originating in a slice document'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 
