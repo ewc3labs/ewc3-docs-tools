@@ -18,7 +18,7 @@ exists to prevent.
 ## Measured, 2026-09-08, at `799ea54`
 
 ```
-17: ## ID Prefixes     | DT | global | ewc3-docs-tools    | DOCS-054     |   <- authored, correct
+17: ## ID Prefixes     | DT | global | ewc3-docs-tools    | DT-54     |   <- authored, correct
 37: ## Number Series   | DT | global | **?** _unclaimed_  | DT-00054  |   <- generated
 ```
 

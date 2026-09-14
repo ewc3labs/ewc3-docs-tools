@@ -186,14 +186,14 @@ register.** Both say `global`; neither names a registry; nothing mechanical dist
 decision recorded only in a survey document is a convention with no enforcement — the thing this
 whole effort exists to stop.
 
-And it is not theoretical: this branch's own documents cite `DOCS-033` and `DOCS-039` meaning
-*Labs*, in messages read by MedAR lanes whose registers say `DT → DevTools`.
+And it is not theoretical: this branch's own documents cite `DT-33` and `DT-39` meaning *Labs*, in
+messages read by MedAR lanes whose registers say `DT → DevTools`.
 
 ### The qualified reference — and it is free
 
 ```text
-DOCS-039                        a MINT, in this registry
-ewc3-docs-tools:DOCS-039        a CITATION, from anywhere
+DT-39                        a MINT, in this registry
+ewc3-docs-tools:DT-39        a CITATION, from anywhere
 DevTools:DT-82               a CITATION of the other estate
 ```
 
