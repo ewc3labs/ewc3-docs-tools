@@ -125,7 +125,7 @@ Only the Delivery Index is a view, and **the toolkit already wraps generated reg
 <!--ewc3:index-->
 | ID | State | Slice | Est | Priority | Lane | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| VS-00397 | 🟦 coded | Two writers own MFM.Doctors | 4.0d | high | MedFM | … |
+| VS-00397 | 🟨 coded | Two writers own MFM.Doctors | 4.0d | high | MedFM | … |
 <!--/ewc3:index-->
 ```
 
