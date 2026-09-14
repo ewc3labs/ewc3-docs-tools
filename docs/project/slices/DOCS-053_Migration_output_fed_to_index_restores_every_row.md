@@ -1,10 +1,10 @@
 ---
 id: DOCS-053
-state: 🟦 coded
+state: 🟩 proven
 title: '`migrate-project` output fed to `index` restores every row it just moved out'
 est: S
 doc: '[DOCS-053](slices/DOCS-053_Migration_output_fed_to_index_restores_every_row.md)'
-status: 'CODED - migrated documents no longer declare the paragraph they moved to the body, so a register survives its own `index --write`; measured 341 to 341'
+status: 'ewc3-docs-tools 2026-09-09: longest row 341 chars after migrate, and still 341 after index --write'
 priority: high
 lane: migrate
 ---

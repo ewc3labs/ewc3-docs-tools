@@ -48,7 +48,7 @@ That duplication *is* the drift.
 ---
 id: VS-00397
 title: Two writers own MFM.Doctors — retire the second IBM i channel
-state: coded            # ⬜ planned · 🟦 coded · 💨 smoked · 🟩 go · 🟧 blocked · ⏸️ deferred · 🟥 cancelled
+state: coded            # ⬜ planned · 🟨 coded · 🟦 tested · 🟩 proven — <where> · ⛔ blocked · ⏸ deferred · 🟥 cancelled
 est: 4.0d
 priority: high
 lane: MedFM / Gateway / Caches
@@ -66,6 +66,10 @@ Narrative. Whatever a human needs to understand the work. Design and analysis ar
 ordinary markdown link** — [the gateway design](../design/2026-08-03_medfm_gateway.md) — and the
 summarizer reads them too.
 ```
+
+*The `state:` comment above carries the 2026-09-14 legend, which is canonical at
+`ewc3labs-hq f28529a`, `docs/project/EWC3_Labs_HQ_Punchlist.md`, 2026-09-14 Decisions. This proposal
+originally showed 🟦 as `coded`; under the current legend 🟦 means **tested**.*
 
 **A reasonably descriptive slice doc is often the whole slice.** Big analysis and design docs get
 *pinned*, not inlined.
@@ -140,6 +144,12 @@ can act on.
 | **In flight** | state is `coded` or `smoked` |
 | **Waiting on me** | in flight, and a follower is `ready` |
 | **Family roll-up** | members by state, worst state wins |
+
+> ⚠️ **These queries name states from the legend in force when this was written** — `coded`,
+> `smoked`, `go` — and the State legend changed on 2026-09-14 (`ewc3labs-hq f28529a`, `docs/project/EWC3_Labs_HQ_Punchlist.md`, 2026-09-14 Decisions). There
+> `smoked` and `go` are retired, and `tested` and `proven — <where>` are new. **How these views map
+> onto the new states is not ruled**: whether *Ready* needs every dependency `proven` or only
+> `tested` is a design decision, and it is left open here rather than guessed.
 
 **"Ready" is the one that pays for the whole graph.** Nothing else we have answers *"what can I
 actually start right now?"* without a human reading the roadmap end to end.

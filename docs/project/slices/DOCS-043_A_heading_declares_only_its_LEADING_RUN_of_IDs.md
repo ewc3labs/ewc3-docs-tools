@@ -1,10 +1,10 @@
 ---
 id: DOCS-043
-state: 🟦 coded
+state: 🟦 tested
 title: A heading declares only its LEADING RUN of IDs
 est: S
 doc: '[DOCS-043](slices/DOCS-043_A_heading_declares_only_its_LEADING_RUN_of_IDs.md)'
-status: ""
+status: 'unit-tested; not re-run against HDCTranslators, where the cross-repo mint was found'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 

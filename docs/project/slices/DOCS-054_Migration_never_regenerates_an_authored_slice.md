@@ -1,10 +1,10 @@
 ---
 id: DOCS-054
-state: 🟦 coded
+state: 🟩 proven
 title: '`migrate-project` must never regenerate a slice document a human already authored'
 est: S
 doc: '[DOCS-054](slices/DOCS-054_Migration_never_regenerates_an_authored_slice.md)'
-status: 'CODED - authored documents are matched by frontmatter id, kept, and REPORTED; the register points at the existing filename rather than one derived from the row'
+status: 'ewc3-docs-tools 2026-09-09: every authored document kept across two consecutive migrations, and re-import from 23d2937 blocked exactly as designed'
 priority: high
 lane: migrate
 ---

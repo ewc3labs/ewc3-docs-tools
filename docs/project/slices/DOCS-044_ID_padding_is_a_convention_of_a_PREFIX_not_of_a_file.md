@@ -1,10 +1,10 @@
 ---
 id: DOCS-044
-state: 🟦 coded
+state: 🟦 tested
 title: ID padding is a convention of a PREFIX, not of a file
 est: S
 doc: '[DOCS-044](slices/DOCS-044_ID_padding_is_a_convention_of_a_PREFIX_not_of_a_file.md)'
-status: ""
+status: 'unit-tested; narrowed by DOCS-058 - shortest-id holds as a description of a register, not as a rewrite rule, and width is now declared in series.widths'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 

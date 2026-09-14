@@ -1,10 +1,10 @@
 ---
 id: DOCS-050
-state: 🟦 coded
+state: 🟦 tested
 title: STAGED slices must never write the LIVE roadmap, and three other findings that sat unread for six days
 est: M
 doc: '[DOCS-050](slices/DOCS-050_STAGED_slices_must_never_write_the_LIVE_roadmap_and_three.md)'
-status: ""
+status: 'all four fixes unit-tested; staged-never-writes-live proven on ewc3-docs-tools 2026-09-09, but the duplicate-id guard has never met a real duplicate'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 

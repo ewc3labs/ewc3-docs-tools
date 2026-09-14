@@ -1,10 +1,10 @@
 ---
 id: DOCS-045
-state: 🟦 coded
+state: 🟨 coded
 title: `--repo` was silently ignored by every command except `migrate-project`
 est: S
 doc: '[DOCS-045](slices/DOCS-045_repo_was_silently_ignored_by_every_command_except_migrate.md)'
-status: ""
+status: 'doubt: the fix is in targetFiles, but no test covers --repo and no re-run is recorded'
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 
