@@ -64,6 +64,8 @@ Measured across the three failing documents: **of the 10 failing cross-repo targ
 relative half of a TWIN LINK whose GitHub half sits in the same reference block.** One is not.
 
 ```
+[ewc3-prefix-registry]:   ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md   <- checked, unverifiable here
+[ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/...          <- skipped by isExternal
 ```
 
 This is deliberate and documented: *"the relative one resolves for an agent reading the filesystem
@@ -109,6 +111,8 @@ outcomes and belongs behind `--online` or a scheduled job that can be red withou
 EQPE’s proposal, and it is the cheapest verification in this whole exchange:
 
 ```
+[x]:   ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[x-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
                               ^^^^^^^^^^^ repo   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ path
 ```
 
@@ -249,7 +253,3 @@ actually red. They are recorded for whoever builds one, not as an argument to bu
   by a second route.
 - `check` walks gitignored files: `*/scratch/` is ignored, yet the main checkout reports 13 files
   and a fresh worktree 12. **The checked population depends on what is lying around.**
-
-[ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/...
-[x]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
-[x-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
