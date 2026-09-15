@@ -280,4 +280,27 @@ This belongs beside the twin convention itself, but that sentence lives in an `e
 copied identically into three design documents. Editing one copy would make it diverge from the
 other two, so the caveat is recorded here instead.
 
+## Known boundary: the twin check proves CONSISTENCY, not CORRECTNESS
+
+Codex (PR #5) found a twin that passes while naming the wrong repository:
+
+```text
+local   ../../Programs_MedAR/DevTools/docs/X.md
+twin    https://github.com/MedARMS/Programs_MedAR/blob/main/DevTools/docs/X.md
+```
+
+The URL puts a local **folder** in the repository slot. It passes because it is *consistent* with
+the local path: `Programs_MedAR` holding `DevTools/docs/X.md` and `DevTools` holding `docs/X.md` are
+two readings of the same string, and **nothing available offline says which is true**. Every correct
+twin is ambiguous in the same way — `DevTools/docs/X.md` also parses as a repository named `docs`
+holding `X.md` — so a rule forcing one reading would false-fail the correct twins the estate relies
+on. A false failure on a correct twin is worse than this false pass, because it trains people to
+distrust the check.
+
+What catches it is verifying the twin's **target**, not its consistency. That needs either a network
+fetch — ruled out above, because a slow runner, a rate limit or a private repository would read as a
+dead link — or a map from repository name to location, which is the later layer LabsHQ scoped when
+de-scoping HQ-2: *verifying a twin's target rather than its existence.* Until then, this is a stated
+limit of an offline check, not a gap nobody saw.
+
 [the-slice-document]: ../../design/the-slice-document-is-the-object.md

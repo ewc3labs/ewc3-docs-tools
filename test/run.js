@@ -535,6 +535,26 @@ test('[fence] links: a link inside a longer fence is not checked', () => {
 	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, []);
 });
 
+test('[fence] an UNCLOSED opener indented four spaces is indented code, not a fence to the end', () => {
+	// `    ~~~` in an indented-code example opened an unclosed fence, blankFences erased the rest of the
+	// document, and a real link below it was never checked. Codex on PR #5.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'a.md'), 'Indented code:\n\n    ~~~\n    example\n\nThen [a real link](missing.md).\n');
+	const r = checkLinks(dir, { orphanRoot: 'nope' });
+	assert.strictEqual(r.problems.length, 1, 'the dead link after the indented example must still be found');
+	assert.match(r.problems[0].target, /missing\.md/);
+});
+
+test('[fence] a CLOSED fence nested in a list item is still protected', () => {
+	// The regression the obvious fix would cause. CommonMark measures a fence's indent from its list
+	// item's content, so list-nested fences sit four or more spaces in - and capping every opener at
+	// three spaces would turn their contents back into prose, reopening DOCS-061 for exactly those.
+	const block = ['- a step:', '', '    ```', '    [x]:   ../../a.md   <- example', '    ```'].join('\n');
+	const out = format(`# T\n\n${block}\n\nProse after.\n`);
+	assert.ok(out.includes(block), 'a list-nested closed fence keeps its example');
+	assert.ok(!/^\[x\]: /m.test(out.split(block).join('')), 'and nothing is relocated out of it');
+});
+
 test('[links] a twin path must match in CASE - GitHub paths are case-sensitive', () => {
 	// Both halves were lowercased before comparing, so `docs/X.md` beside a URL ending `docs/x.md`
 	// passed while the web link was broken - the wrong-case defect `links` catches everywhere else.
