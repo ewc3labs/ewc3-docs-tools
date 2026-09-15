@@ -535,6 +535,16 @@ test('[fence] links: a link inside a longer fence is not checked', () => {
 	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, []);
 });
 
+test('[format] a file with NO trailing newline does not crash', () => {
+	// Removing splitBlocks' fence variable left one reference behind, in the branch that flushes a
+	// final prose buffer - reached only when a file does not end in a newline. Every test input and
+	// every document in this repository ends in one, so the suite and CI both passed while
+	// `format('plain text')` threw ReferenceError. Codex on PR #5. A crash on valid input aborts both
+	// `fix` and `check` for anyone whose files lack a final newline.
+	assert.strictEqual(format('plain text'), 'plain text\n');
+	assert.strictEqual(format('# Heading\n\nlast paragraph, no newline'), '# Heading\n\nlast paragraph, no newline\n');
+});
+
 test('[fence] an UNCLOSED opener indented four spaces is indented code, not a fence to the end', () => {
 	// `    ~~~` in an indented-code example opened an unclosed fence, blankFences erased the rest of the
 	// document, and a real link below it was never checked. Codex on PR #5.
@@ -543,6 +553,20 @@ test('[fence] an UNCLOSED opener indented four spaces is indented code, not a fe
 	const r = checkLinks(dir, { orphanRoot: 'nope' });
 	assert.strictEqual(r.problems.length, 1, 'the dead link after the indented example must still be found');
 	assert.match(r.problems[0].target, /missing\.md/);
+});
+
+test('[fence] an UNCLOSED list-nested fence is protected by format and values', () => {
+	// Codex's fourth pass, and the direct counterpart of the test above: the look-ahead rule made an
+	// unclosed four-space opener "indented code", so an unclosed fence under a list item had its
+	// example joined into prose and its example marker substituted. The two cases cannot be told apart
+	// without a list-container parser - so each consumer takes its OWN safe default. For format and
+	// values that is to protect: verbatim cannot corrupt anything.
+	const src = '- Example:\n\n    ```md\n    [x]:   ../../a.md   <- an example definition\n'
+		+ '    <!--ewc3:tests-->1<!--/ewc3:tests-->\n';
+	const out = format(src);
+	assert.ok(out.includes('    [x]:   ../../a.md   <- an example definition'), 'format keeps the example verbatim');
+	assert.ok(!/^\[x\]: /m.test(out), 'and does not relocate it');
+	assert.strictEqual(applyToText(src, { tests: 136 }).text, src, 'values does not substitute the example marker');
 });
 
 test('[fence] a CLOSED fence nested in a list item is still protected', () => {
