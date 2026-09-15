@@ -3,7 +3,7 @@ id: DOCS-036
 state: ⬜ planned
 title: `fold`: git trailers become frontmatter state, idempotently
 est: L
-doc: '[DOCS-036](slices/DOCS-036_fold_git_trailers_become_frontmatter_state_idempotently.md)'
+doc: '[DOCS-036](slices/DOCS-036_fold_git_trailers_become_frontmatter_state_idempotently.md) · [One thing to edit][one-thing-to-edit]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---

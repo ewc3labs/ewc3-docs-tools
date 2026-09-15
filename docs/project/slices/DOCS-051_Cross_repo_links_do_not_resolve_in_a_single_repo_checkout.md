@@ -1,10 +1,10 @@
 ---
 id: DOCS-051
-state: ⬜ planned
+state: 🟦 tested
 title: Cross-repo relative links cannot resolve in a single-repo checkout
 est: M
 doc: '[DOCS-051](slices/DOCS-051_Cross_repo_links_do_not_resolve_in_a_single_repo_checkout.md)'
-status: 'CI red for 8 runs; 9 of the 10 failures are the relative half of a twin link, the 10th has no twin and is genuinely dead'
+status: 'twin rule built: the 10 cross-repo links are counted not resolved, 9 twins pass, and the one twin-less link fails by name; identical verdict measured in a worktree, a sibling-present layout and an empty CI checkout, not yet run by CI itself'
 priority: high
 lane: links
 ---
@@ -64,6 +64,8 @@ Measured across the three failing documents: **of the 10 failing cross-repo targ
 relative half of a TWIN LINK whose GitHub half sits in the same reference block.** One is not.
 
 ```
+[ewc3-prefix-registry]:   ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md   <- checked, unverifiable here
+[ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/...          <- skipped by isExternal
 ```
 
 This is deliberate and documented: *"the relative one resolves for an agent reading the filesystem
@@ -109,6 +111,8 @@ outcomes and belongs behind `--online` or a scheduled job that can be red withou
 EQPE’s proposal, and it is the cheapest verification in this whole exchange:
 
 ```
+[x]:   ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
+[x-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
                               ^^^^^^^^^^^ repo   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ path
 ```
 
@@ -250,6 +254,53 @@ actually red. They are recorded for whoever builds one, not as an argument to bu
 - `check` walks gitignored files: `*/scratch/` is ignored, yet the main checkout reports 13 files
   and a fresh worktree 12. **The checked population depends on what is lying around.**
 
-[ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/...
-[x]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
-[x-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
+## The last twin, verified rather than written — and a property of every MedAR twin
+
+The one link that failed after the rule landed was `dt-045` in [the slice-document
+design][the-slice-document]: a relative link into MedAR DevTools with no GitHub twin at all. Its
+twin was **not constructed from convention**. `gh` here runs as `Wilson421`, which gets a 404 on
+`MedARMS/DevTools` — and that 404 means *not visible to this account*, not *missing*. A plausible
+URL would have passed the twin check while possibly pointing nowhere, converting an honest red into
+a false green.
+
+DT verified it on their side instead, against `origin/main` after a fetch:
+
+```text
+repo    MedARMS/DevTools @ 743ca8e
+path    docs/design/2026-08-09_dt-045_slice_registry_and_cictl_slice_cli.md
+check   git cat-file -e origin/main:<path>  -> exists
+blob    a03f8571ce68 · 368 lines · last touched b5bd604, 2026-08-09, never renamed
+```
+
+⚠️ **Every MedAR twin points into a PRIVATE repository**, so each one 404s for an account without
+access — `Wilson421` included. **That is expected, not a broken link; do not "fix" it.** The check
+is unaffected, because it compares repository name and path offline and never fetches.
+
+This belongs beside the twin convention itself, but that sentence lives in an `ewc3:effort` block
+copied identically into three design documents. Editing one copy would make it diverge from the
+other two, so the caveat is recorded here instead.
+
+## Known boundary: the twin check proves CONSISTENCY, not CORRECTNESS
+
+Codex (PR #5) found a twin that passes while naming the wrong repository:
+
+```text
+local   ../../Programs_MedAR/DevTools/docs/X.md
+twin    https://github.com/MedARMS/Programs_MedAR/blob/main/DevTools/docs/X.md
+```
+
+The URL puts a local **folder** in the repository slot. It passes because it is *consistent* with
+the local path: `Programs_MedAR` holding `DevTools/docs/X.md` and `DevTools` holding `docs/X.md` are
+two readings of the same string, and **nothing available offline says which is true**. Every correct
+twin is ambiguous in the same way — `DevTools/docs/X.md` also parses as a repository named `docs`
+holding `X.md` — so a rule forcing one reading would false-fail the correct twins the estate relies
+on. A false failure on a correct twin is worse than this false pass, because it trains people to
+distrust the check.
+
+What catches it is verifying the twin's **target**, not its consistency. That needs either a network
+fetch — ruled out above, because a slow runner, a rate limit or a private repository would read as a
+dead link — or a map from repository name to location, which is the later layer LabsHQ scoped when
+de-scoping HQ-2: *verifying a twin's target rather than its existence.* Until then, this is a stated
+limit of an offline check, not a gap nobody saw.
+
+[the-slice-document]: ../../design/the-slice-document-is-the-object.md
