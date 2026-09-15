@@ -535,6 +535,49 @@ test('[fence] links: a link inside a longer fence is not checked', () => {
 	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, []);
 });
 
+test('[links] a twin path must match in CASE - GitHub paths are case-sensitive', () => {
+	// Both halves were lowercased before comparing, so `docs/X.md` beside a URL ending `docs/x.md`
+	// passed while the web link was broken - the wrong-case defect `links` catches everywhere else.
+	// The REPOSITORY name is still compared without case: a local folder may be `devtools` for a
+	// repository named `DevTools`, and GitHub resolves repository names either way. Codex on PR #5.
+	const wrongCase = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/x.md\n');
+	assert.strictEqual(wrongCase.problems.length, 1, 'a path differing only in case is not a twin');
+
+	const repoCase = crossRepo('[x]: ../../Programs_MedAR/devtools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	assert.deepStrictEqual(repoCase.problems, [], 'but the repository NAME may differ in case');
+});
+
+test('[links] a file whose name starts with two dots is INSIDE the repository', () => {
+	// "Does this leave the repo" was a string prefix test on the relative path, so `..config.md` at the
+	// root read as outside it and failed for lacking a GitHub twin. Codex on PR #5.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, '..config.md'), '# config\n');
+	fs.writeFileSync(path.join(dir, 'a.md'), 'See [config](..config.md).\n');
+	const r = checkLinks(dir, { orphanRoot: 'nope' });
+	assert.deepStrictEqual(r.problems, [], 'checked on disk, not treated as cross-repo');
+	assert.strictEqual(r.unverified, 0);
+});
+
+test('[links] success never says an unresolved link resolved', () => {
+	// The run printed "N cross-repo link(s) ... not resolved" and then "All of them resolve", in the
+	// same output - a false, self-contradicting assurance in CI. Codex on PR #5.
+	const outer = tmpdir();
+	const repo = path.join(outer, 'this-repo');
+	fs.mkdirSync(path.join(repo, 'docs'), { recursive: true });
+	fs.writeFileSync(path.join(repo, 'README.md'), 'See [a](docs/a.md).\n');
+	fs.writeFileSync(path.join(repo, 'docs', 'a.md'), 'See [x][x].\n\n'
+		+ '[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'links'], { cwd: repo, encoding: 'utf8' });
+	const out = (r.stdout || '') + (r.stderr || '');
+	assert.strictEqual(r.status, 0, `a clean run should pass:\n${out}`);
+	assert.match(out, /cross-repo/, 'the twin-checked links are reported');
+	assert.doesNotMatch(out, /All of them resolve/, 'and the summary must not claim they resolved');
+});
+
 test('[links] twins compare DECODED paths, without a fragment', () => {
 	// The relative half is decoded and its #fragment dropped before it resolves; the GitHub half was
 	// compared raw, so identical twins read as having none. Codex on PR #5.
