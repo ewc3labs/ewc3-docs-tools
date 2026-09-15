@@ -430,6 +430,62 @@ test('accepts a defined reference', () => {
 	assert.deepStrictEqual(problems, []);
 });
 
+// DOCS-051. A repo sits inside an OUTER directory so a cross-repo relative link has somewhere to point.
+function crossRepo(markdown, { siblingExists = false } = {}) {
+	const outer = tmpdir();
+	const repo = path.join(outer, 'this-repo');
+	fs.mkdirSync(path.join(repo, 'docs'), { recursive: true });
+	if (siblingExists) {
+		fs.mkdirSync(path.join(outer, 'Programs_MedAR', 'DevTools', 'docs'), { recursive: true });
+		fs.writeFileSync(path.join(outer, 'Programs_MedAR', 'DevTools', 'docs', 'X.md'), '# X\n');
+	}
+	fs.writeFileSync(path.join(repo, 'docs', 'a.md'), markdown);
+	return checkLinks(repo, { orphanRoot: 'nope' });
+}
+
+test('[links] a cross-repo link WITH a GitHub twin is counted, not failed', () => {
+	const r = crossRepo('See [x][x].\n\n'
+		+ '[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	assert.deepStrictEqual(r.problems, [], 'a correct twin pair is clean from a single-repo checkout');
+	assert.strictEqual(r.unverified, 1, 'and it is COUNTED as unverified rather than silently passed');
+});
+
+test('[links] a twin matches on repository NAME, never on the local folder above it', () => {
+	// `Programs_MedAR` is where this machine keeps the repo; `MedARMS` is who owns it on GitHub.
+	// An owner comparison would fail every correct MedAR twin in the estate.
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	assert.deepStrictEqual(r.problems, []);
+});
+
+test('[links] a cross-repo link with NO twin fails, and names why', () => {
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n');
+	assert.strictEqual(r.problems.length, 1);
+	assert.match(r.problems[0].why, /no GitHub twin/);
+});
+
+test('[links] a twin that names a different repository or path is DRIFT, not a pass', () => {
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/SomethingElse/blob/main/docs/X.md\n');
+	assert.strictEqual(r.problems.length, 1);
+	assert.match(r.problems[0].why, /different repository or path/);
+});
+
+test('[links] the verdict is UNCONDITIONAL: a sibling on disk changes nothing', () => {
+	// The whole point. Resolving the link when the sibling happens to be cloned and skipping it when it
+	// is not would give one link two verdicts depending on whose machine asks. Measured across a
+	// worktree, a sibling-present layout and an empty CI checkout before this test was written; this
+	// pins it. The sibling EXISTS here, and a twin-less link must still fail - and a twinned one must
+	// still be counted rather than resolved.
+	const noTwin = '[x]: ../../Programs_MedAR/DevTools/docs/X.md\n';
+	const absent = crossRepo(noTwin);
+	const present = crossRepo(noTwin, { siblingExists: true });
+	assert.deepStrictEqual(present.problems.map((p) => p.why), absent.problems.map((p) => p.why),
+		'the same link must get the same verdict whether or not the sibling is on disk');
+	assert.strictEqual(present.unverified, 1, 'never resolved, even though it would have resolved');
+});
+
 test('ignores links inside code fences', () => {
 	const dir = tmpdir();
 	fs.writeFileSync(path.join(dir, 'a.md'), '```\n[x](does-not-exist.md)\n```\n');

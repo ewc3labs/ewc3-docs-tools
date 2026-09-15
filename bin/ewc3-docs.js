@@ -128,8 +128,14 @@ function cmdFormat(root, config, argv) {
 }
 
 function cmdLinks(root, config) {
-	const { checked, problems, orphans } = checkLinks(root, config.links || {});
+	const { checked, unverified, problems, orphans } = checkLinks(root, config.links || {});
 	console.log(`Checked ${checked} relative links across the docs.`);
+	// STATED AS A FACT, NOT AS A WARNING. A per-link warning fires on every run and becomes noise
+	// people learn to skip; saying nothing hides that these were never resolved. A count is visible,
+	// cannot alarm, and makes the reliance measurable. (LabsHQ and EQPE, reconciled - `DOCS-051`.)
+	if (unverified) {
+		console.log(`${unverified} cross-repo link(s) leave this repository: not resolved, twin-checked instead.`);
+	}
 
 	let code = 0;
 	if (problems.length) {

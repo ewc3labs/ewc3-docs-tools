@@ -1,10 +1,10 @@
 ---
 id: DOCS-051
-state: ⬜ planned
+state: 🟦 tested
 title: Cross-repo relative links cannot resolve in a single-repo checkout
 est: M
 doc: '[DOCS-051](slices/DOCS-051_Cross_repo_links_do_not_resolve_in_a_single_repo_checkout.md)'
-status: 'CI red for 8 runs; 9 of the 10 failures are the relative half of a twin link, the 10th has no twin and is genuinely dead'
+status: 'twin rule built: the 10 cross-repo links are counted not resolved, 9 twins pass, and the one twin-less link fails by name; identical verdict measured in a worktree, a sibling-present layout and an empty CI checkout, not yet run by CI itself'
 priority: high
 lane: links
 ---
