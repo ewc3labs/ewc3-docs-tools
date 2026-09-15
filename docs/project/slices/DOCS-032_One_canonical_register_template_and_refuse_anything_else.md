@@ -3,7 +3,7 @@ id: DOCS-032
 state: ⬜ planned
 title: One canonical register template, and refuse anything else
 est: M
-doc: '[DOCS-032](slices/DOCS-032_One_canonical_register_template_and_refuse_anything_else.md)'
+doc: '[DOCS-032](slices/DOCS-032_One_canonical_register_template_and_refuse_anything_else.md) · [One template beats three parsers][one-template-beats]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---

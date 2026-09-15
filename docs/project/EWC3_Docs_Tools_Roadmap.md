@@ -51,15 +51,15 @@ is never referenced from outside the repository it fixes.
 | DOCS-023 | ⬜ planned | Cross-repo collision check: a mention is not a mint | M | [DOCS-023][docs-023] |  |
 | DOCS-030 | ⬜ planned | Report an ID declared TWICE inside one repository | S | [DOCS-030][docs-030] |  |
 | DOCS-031 | ⬜ planned | Report a backlog that DECLARES an ID rather than citing one | S | [DOCS-031][docs-031] |  |
-| DOCS-036 | ⬜ planned | `fold`: git trailers become frontmatter state, idempotently | L | [DOCS-036][docs-036] |  |
-| DOCS-037 | 🟩 proven | `index`: regenerate the Delivery Index from the slice documents | M | [DOCS-037][docs-037] | ewc3-docs-tools: the live register has been generated from its slice documents since 2026-09-09, and it round-trips byte-for-byte on 4 of 6 estate registers |
-| DOCS-038 | ⬜ planned | Refuse a Slice: trailer naming an ID with no slice document | S | [DOCS-038][docs-038] |  |
-| DOCS-035 | ⬜ planned | Frontmatter is the ONLY declaring position in a slice or module doc | L | [DOCS-035][docs-035] |  |
-| DOCS-034 | ⬜ planned | `migrate-project` ACCEPTS the shapes `series` refuses | M | [DOCS-034][docs-034] |  |
-| DOCS-033 | ⬜ planned | Configurable template roots, with the builtin as the fallback | M | [DOCS-033][docs-033] |  |
-| DOCS-039 | ⬜ planned | A derived `Last Used` must refuse to reconcile DOWNWARD | S | [DOCS-039][docs-039] |  |
-| DOCS-040 | ⬜ planned | epo:slice qualified references, and a Registry column | M | [DOCS-040][docs-040] |  |
-| DOCS-041 | ⬜ planned | `slice new <PREFIX> "<title>"` — mint by creating the document | M | [DOCS-041][docs-041] |  |
+| DOCS-036 | ⬜ planned | `fold`: git trailers become frontmatter state, idempotently | L | [DOCS-036][docs-036] · [One thing to edit][one-thing-to-edit] |  |
+| DOCS-037 | 🟩 proven | `index`: regenerate the Delivery Index from the slice documents | M | [DOCS-037][docs-037] · [One thing to edit][one-thing-to-edit] | ewc3-docs-tools: the live register has been generated from its slice documents since 2026-09-09, and it round-trips byte-for-byte on 4 of 6 estate registers |
+| DOCS-038 | ⬜ planned | Refuse a Slice: trailer naming an ID with no slice document | S | [DOCS-038][docs-038] · [One thing to edit][one-thing-to-edit] |  |
+| DOCS-035 | ⬜ planned | Frontmatter is the ONLY declaring position in a slice or module doc | L | [DOCS-035][docs-035] · [Frontmatter is the declaration][frontmatter-is-the] |  |
+| DOCS-034 | ⬜ planned | `migrate-project` ACCEPTS the shapes `series` refuses | M | [DOCS-034][docs-034] · [One template beats three parsers][one-template-beats] |  |
+| DOCS-033 | ⬜ planned | Configurable template roots, with the builtin as the fallback | M | [DOCS-033][docs-033] · [One template beats three parsers][one-template-beats] |  |
+| DOCS-039 | ⬜ planned | A derived `Last Used` must refuse to reconcile DOWNWARD | S | [DOCS-039][docs-039] · [One template beats three parsers][one-template-beats] |  |
+| DOCS-040 | ⬜ planned | epo:slice qualified references, and a Registry column | M | [DOCS-040][docs-040] · [One template beats three parsers][one-template-beats] |  |
+| DOCS-041 | ⬜ planned | `slice new <PREFIX> "<title>"` — mint by creating the document | M | [DOCS-041][docs-041] · [Frontmatter is the declaration][frontmatter-is-the] |  |
 | DOCS-042 | 🟦 tested | Read the Delivery Index columns by HEADER NAME, not by position | S | [DOCS-042][docs-042] | unit-tested; not re-run against HDCTranslators, where the positional defect was found |
 | DOCS-043 | 🟦 tested | A heading declares only its LEADING RUN of IDs | S | [DOCS-043][docs-043] | unit-tested; not re-run against HDCTranslators, where the cross-repo mint was found |
 | DOCS-044 | 🟦 tested | ID padding is a convention of a PREFIX, not of a file | S | [DOCS-044][docs-044] | unit-tested; narrowed by DOCS-058 - shortest-id holds as a description of a register, not as a rewrite rule, and width is now declared in series.widths |
@@ -69,7 +69,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-049 | ⬜ planned | Read the canonical Number Series table, and derive `Next` from it | M | [DOCS-049][docs-049] |  |
 | DOCS-050 | 🟦 tested | STAGED slices must never write the LIVE roadmap, and three other findings that sat unread for six days | M | [DOCS-050][docs-050] | all four fixes unit-tested; staged-never-writes-live proven on ewc3-docs-tools 2026-09-09, but the duplicate-id guard has never met a real duplicate |
 | DOCS-048 | ⬜ planned | A Delivery Index ROW has no ownership gate, so a MIRROR is indistinguishable from a mint | M | [DOCS-048][docs-048] |  |
-| DOCS-032 | ⬜ planned | One canonical register template, and refuse anything else | M | [DOCS-032][docs-032] |  |
+| DOCS-032 | ⬜ planned | One canonical register template, and refuse anything else | M | [DOCS-032][docs-032] · [One template beats three parsers][one-template-beats] |  |
 | DOCS-026 | 🟥 cancelled | `migrate-project` emits from ONE source, so extra planning surfaces are dropped | M | [DOCS-026][docs-026] | refuted - did not reproduce: every repo has one roadmap, and the 34-of-41 gap on AIR was a stale preview read against a live register. Kept so the next report of it finds this |
 | DOCS-027 | 🟨 coded | Refuse an ID cell that ALMOST parses, instead of dropping it | S | [DOCS-027][docs-027] | doubt: the id grammar half is proven on SX_Coder, 566 of 566 parsed, but the title commitment - refuse an almost-parsing cell rather than drop it - is not built |
 | DOCS-051 | ⬜ planned | Cross-repo relative links cannot resolve in a single-repo checkout | M | [DOCS-051][docs-051] | CI red for 8 runs; 9 of the 10 failures are the relative half of a twin link, the 10th has no twin and is genuinely dead |

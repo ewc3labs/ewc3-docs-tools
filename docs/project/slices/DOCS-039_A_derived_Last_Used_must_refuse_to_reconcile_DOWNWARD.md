@@ -3,7 +3,7 @@ id: DOCS-039
 state: ⬜ planned
 title: A derived `Last Used` must refuse to reconcile DOWNWARD
 est: S
-doc: '[DOCS-039](slices/DOCS-039_A_derived_Last_Used_must_refuse_to_reconcile_DOWNWARD.md)'
+doc: '[DOCS-039](slices/DOCS-039_A_derived_Last_Used_must_refuse_to_reconcile_DOWNWARD.md) · [One template beats three parsers][one-template-beats]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---

@@ -3,7 +3,7 @@ id: DOCS-040
 state: ⬜ planned
 title: epo:slice qualified references, and a Registry column
 est: M
-doc: '[DOCS-040](slices/DOCS-040_epo_slice_qualified_references_and_a_Registry_column.md)'
+doc: '[DOCS-040](slices/DOCS-040_epo_slice_qualified_references_and_a_Registry_column.md) · [One template beats three parsers][one-template-beats]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---

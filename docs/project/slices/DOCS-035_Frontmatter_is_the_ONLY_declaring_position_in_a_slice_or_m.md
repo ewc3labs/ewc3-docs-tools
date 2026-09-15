@@ -3,7 +3,7 @@ id: DOCS-035
 state: ⬜ planned
 title: Frontmatter is the ONLY declaring position in a slice or module doc
 est: L
-doc: '[DOCS-035](slices/DOCS-035_Frontmatter_is_the_ONLY_declaring_position_in_a_slice_or_m.md)'
+doc: '[DOCS-035](slices/DOCS-035_Frontmatter_is_the_ONLY_declaring_position_in_a_slice_or_m.md) · [Frontmatter is the declaration][frontmatter-is-the]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
