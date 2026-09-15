@@ -253,3 +253,31 @@ actually red. They are recorded for whoever builds one, not as an argument to bu
   by a second route.
 - `check` walks gitignored files: `*/scratch/` is ignored, yet the main checkout reports 13 files
   and a fresh worktree 12. **The checked population depends on what is lying around.**
+
+## The last twin, verified rather than written — and a property of every MedAR twin
+
+The one link that failed after the rule landed was `dt-045` in [the slice-document
+design][the-slice-document]: a relative link into MedAR DevTools with no GitHub twin at all. Its
+twin was **not constructed from convention**. `gh` here runs as `Wilson421`, which gets a 404 on
+`MedARMS/DevTools` — and that 404 means *not visible to this account*, not *missing*. A plausible
+URL would have passed the twin check while possibly pointing nowhere, converting an honest red into
+a false green.
+
+DT verified it on their side instead, against `origin/main` after a fetch:
+
+```text
+repo    MedARMS/DevTools @ 743ca8e
+path    docs/design/2026-08-09_dt-045_slice_registry_and_cictl_slice_cli.md
+check   git cat-file -e origin/main:<path>  -> exists
+blob    a03f8571ce68 · 368 lines · last touched b5bd604, 2026-08-09, never renamed
+```
+
+⚠️ **Every MedAR twin points into a PRIVATE repository**, so each one 404s for an account without
+access — `Wilson421` included. **That is expected, not a broken link; do not "fix" it.** The check
+is unaffected, because it compares repository name and path offline and never fetches.
+
+This belongs beside the twin convention itself, but that sentence lives in an `ewc3:effort` block
+copied identically into three design documents. Editing one copy would make it diverge from the
+other two, so the caveat is recorded here instead.
+
+[the-slice-document]: ../../design/the-slice-document-is-the-object.md

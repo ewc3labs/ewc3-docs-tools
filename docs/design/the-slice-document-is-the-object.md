@@ -305,11 +305,11 @@ docs/project_v2/slices, already emitted and committed           383 documents
 
 ### §6 — C, and it is not a coin flip
 
-C is the **third** instance of a pattern this estate has already chosen twice. [DT-045][dt-045]
-decided it for slice numbers — *"the stored cell becomes a checksum, not a source… tools verify it
-and complain when it disagrees with reality."* [The prefix registry][prefix-registry-and] decided it
-for prefix ownership — hand-edit `owned`, generate `observed`, fail on divergence. C is the same
-move for `state:`.
+C is the **third** instance of a pattern this estate has already chosen twice. [DT-045][dt-045] ·
+[🔗][dt-045-2] decided it for slice numbers — *"the stored cell becomes a checksum, not a source…
+tools verify it and complain when it disagrees with reality."* [The prefix
+registry][prefix-registry-and] decided it for prefix ownership — hand-edit `owned`, generate
+`observed`, fail on divergence. C is the same move for `state:`.
 
 The objection that C stores a derivable fact twice does not land, and the distinction is worth
 stating precisely: **trailers are an event log, frontmatter is the fold.** The fold is
@@ -453,7 +453,7 @@ be unwound, and the two designs do not overlap once named:
 
 | | owns |
 | --- | --- |
-| [DT-045][dt-045] | **identity** — where a number comes from, who owns a series, how concurrent mints do not collide |
+| [DT-045][dt-045] · [🔗][dt-045-2] | **identity** — where a number comes from, who owns a series, how concurrent mints do not collide |
 | **This document** | **authority** — what the object is once it exists, and which surfaces are views of it |
 
 They meet at exactly one place, the commit, and §5 above resolves it. Worth noting they disagree on
@@ -538,6 +538,7 @@ lands, or the generated half is inert wherever it is written.
 [2026-08-24-llm-assis]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-24_LLM_assisted_docs_and_PHI_boundary.md
 [clerical-work]: clerical-work-belongs-to-ci.md
 [dt-045]: ../../../../../Programs_MedAR/DevTools/docs/design/2026-08-09_dt-045_slice_registry_and_cictl_slice_cli.md
+[dt-045-2]: https://github.com/MedARMS/DevTools/blob/main/docs/design/2026-08-09_dt-045_slice_registry_and_cictl_slice_cli.md
 [dt-15-note]: ../project/EWC3_Docs_Tools_Roadmap.md
 [ewc3-prefix-registry]: ../../../../ewc3labs-hq/docs/project/EWC3_Prefix_Registry.md
 [ewc3-prefix-registry-2]: https://github.com/ewc3labs/ewc3labs-hq/blob/main/docs/project/EWC3_Prefix_Registry.md
