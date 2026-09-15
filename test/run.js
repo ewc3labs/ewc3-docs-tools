@@ -493,6 +493,69 @@ test('ignores links inside code fences', () => {
 	assert.deepStrictEqual(problems, []);
 });
 
+// A LONGER FENCE HOLDING A SHORTER ONE - how a document shows what a fence looks like. Codex on PR #5.
+// Five places tracked a fence by its first three characters, so the inner ``` closed the outer block
+// and everything after it was treated as live prose. One grammar now, in lib/fence.js.
+const FOUR = '````';
+const NESTED = [`${FOUR}md`, '```', '[x]:   ../../a.md   <- an example definition', '```', FOUR].join('\n');
+
+test('[fence] the grammar: same character, at least as long, nothing else on the line', () => {
+	const { fenceOpener, closesFence, fencedLineSet } = require('../lib/fence');
+	assert.strictEqual(fenceOpener('```js'), '```', 'an info string is allowed');
+	assert.strictEqual(fenceOpener('````md'), '````', 'the WHOLE run is kept, not three characters');
+	assert.strictEqual(fenceOpener('~~~'), '~~~');
+	assert.strictEqual(fenceOpener('``` `inline` ```'), null, 'a backtick in a backtick info string is inline code');
+
+	assert.ok(closesFence('````', '````'));
+	assert.ok(closesFence('`````', '````'), 'a longer run still closes');
+	assert.ok(!closesFence('```', '````'), 'a SHORTER run does not close - the bug Codex found');
+	assert.ok(!closesFence('~~~~', '````'), 'the other character does not close');
+	assert.ok(!closesFence('```js', '```'), 'a line with an info string opens, it does not close');
+
+	const lines = ['a', '```', 'b', 'c'];
+	assert.deepStrictEqual([...fencedLineSet(lines)], [1, 2, 3], 'an unclosed fence runs to the end');
+});
+
+test('[fence] format: a shorter fence inside a longer one does not close it', () => {
+	const src = `# T\n\nProse before.\n\n${NESTED}\n\nProse after.\n`;
+	const out = format(src);
+	assert.ok(out.includes(NESTED), 'the nested example must survive byte for byte');
+	assert.ok(!/^\[x\]: /m.test(out.split(NESTED).join('')), 'and not be relocated out of it');
+});
+
+test('[fence] values: a marker inside a longer fence is still documentation', () => {
+	const src = `${FOUR}md\n\`\`\`\n<!--ewc3:tests-->1<!--/ewc3:tests-->\n\`\`\`\n${FOUR}\n`;
+	const r = applyToText(src, { tests: 136 });
+	assert.strictEqual(r.text, src, 'the example marker must not be substituted');
+});
+
+test('[fence] links: a link inside a longer fence is not checked', () => {
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'a.md'), `${FOUR}md\n\`\`\`\n[x](does-not-exist.md)\n\`\`\`\n${FOUR}\n`);
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, []);
+});
+
+test('[links] twins compare DECODED paths, without a fragment', () => {
+	// The relative half is decoded and its #fragment dropped before it resolves; the GitHub half was
+	// compared raw, so identical twins read as having none. Codex on PR #5.
+	const encoded = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/My%20File.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/My%20File.md\n');
+	assert.deepStrictEqual(encoded.problems, [], 'an encoded filename is the same file');
+
+	const fragment = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md#a-heading\n');
+	assert.deepStrictEqual(fragment.problems, [], 'a heading anchor does not change which file');
+});
+
+test('[links] a GitHub twin written as an INLINE link still counts', () => {
+	// Twins were collected only from reference definitions, so `[🔗](https://github.com/...)` was
+	// invisible and its relative half failed. `links` runs independently of `format`, which is what
+	// would otherwise have moved it into a definition. Codex on PR #5.
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n\n'
+		+ 'See [🔗](https://github.com/MedARMS/DevTools/blob/main/docs/X.md).\n');
+	assert.deepStrictEqual(r.problems, []);
+});
+
 test('reports an orphaned document', () => {
 	const dir = tmpdir();
 	fs.mkdirSync(path.join(dir, 'docs'));
