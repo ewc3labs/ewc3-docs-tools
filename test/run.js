@@ -523,6 +523,24 @@ test('[fence] format: a shorter fence inside a longer one does not close it', ()
 	assert.ok(!/^\[x\]: /m.test(out.split(NESTED).join('')), 'and not be relocated out of it');
 });
 
+test('[fence] a fence inside a BLOCK QUOTE is still a fence', () => {
+	// A REGRESSION this PR introduced, found by Codex's fifth pass. The old lazy regex in links matched
+	// ``` anywhere on a line, so a fence inside `> ` was stripped. lib/fence.js required the delimiter at
+	// the start of the line after whitespace, and `>` is not whitespace - so a block-quoted example
+	// link was checked as live. On main this reports nothing; on the branch it reported the example.
+	// Measured in the estate: ewc3labs-hq has 8 block-quoted fence lines, excel-power-query-editor 2.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'q.md'), '> ```md\n> [example](missing.md)\n> ```\n');
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, [], 'links ignores the quoted example');
+
+	const nested = '> > ```md\n> > [example](missing.md)\n> > ```\n';
+	fs.writeFileSync(path.join(dir, 'q.md'), nested);
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, [], 'and a nested quote too');
+
+	const marker = '> ```md\n> <!--ewc3:tests-->1<!--/ewc3:tests-->\n> ```\n';
+	assert.strictEqual(applyToText(marker, { tests: 136 }).text, marker, 'values leaves a quoted example marker alone');
+});
+
 test('[fence] values: a marker inside a longer fence is still documentation', () => {
 	const src = `${FOUR}md\n\`\`\`\n<!--ewc3:tests-->1<!--/ewc3:tests-->\n\`\`\`\n${FOUR}\n`;
 	const r = applyToText(src, { tests: 136 });
