@@ -3038,6 +3038,47 @@ test('[fold] --check fails when frontmatter is behind its newest trailer, naming
 	assert.strictEqual(fs.readFileSync(gateDoc(dir, 'VS-2'), 'utf8'), before);
 });
 
+test('[fold] DOCS-070: a dry run names every provenance update --write will make, not only state changes', () => {
+	// VS-1 is already planned, so a `State: planned` trailer changes no state - but --write records its sha and
+	// source. The dry run listed only changes, so --write reported writes the dry run never mentioned.
+	const dir = foldRepo();
+	const sha = trailerCommit(dir, 'confirm', ['Slice: VS-1', 'State: planned']);
+	const dry = cli(['fold'], dir);
+	assert.strictEqual(dry.code, 0, dry.out);
+	assert.ok(/VS-1: .*planned/.test(dry.out) && dry.out.includes(sha.slice(0, 12)), `the provenance update is named:\n${dry.out}`);
+	assert.ok(dry.out.includes('dry run'), dry.out);
+	const write = cli(['fold', '--write'], dir);
+	assert.ok(write.out.includes('0 state change(s) and 1 provenance update(s)'), write.out);
+	assert.ok(!cli(['fold', '--check'], dir).out.includes(sha.slice(0, 12)), '--check does not list provenance: it never fails on it');
+});
+
+test('DOCS-070: --help on any command prints that command\'s usage, exits 0, and RUNS NOTHING', () => {
+	// `fold --help` and `slice new --help` were refused as unknown options; worse, `format --help`, `values --help`
+	// and `fix --help` ignored the flag and ran - writing files - on a request for help.
+	const dir = foldRepo();
+	const long = `${'word '.repeat(40)}\n`;
+	fs.writeFileSync(path.join(dir, 'README.md'), `# R\n\n${long}`);
+	const snapshot = () => ['README.md', 'docs/project/R_Roadmap.md'].map((f) => fs.readFileSync(path.join(dir, f), 'utf8'));
+	const before = snapshot();
+	for (const args of [['format'], ['links'], ['values'], ['series'], ['migrate-project'], ['tables'], ['index'],
+		['slice', 'new'], ['fold'], ['fix'], ['check']]) {
+		for (const flag of ['--help', '-h']) {
+			const r = cli([...args, flag, '--write'], dir);
+			assert.strictEqual(r.code, 0, `${args.join(' ')} ${flag}:\n${r.out}`);
+			assert.ok(r.out.includes(`ewc3-docs ${args.join(' ')}`), `${args.join(' ')} ${flag} prints its usage:\n${r.out}`);
+		}
+	}
+	assert.deepStrictEqual(snapshot(), before, 'nothing was written');
+	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), 'migrate-project --help staged nothing');
+	// With no command, the flag IS the command slot (Codex, PR #19): usage, exit 0 - not "unknown command", 2.
+	for (const flag of ['--help', '-h']) {
+		const r = cli([flag], dir);
+		assert.strictEqual(r.code, 0, `ewc3-docs ${flag}:\n${r.out}`);
+		assert.ok(r.out.includes('ewc3-docs fold'), r.out);
+	}
+	assert.strictEqual(cli(['no-such-command'], dir).code, 2, 'an unknown command still did not run');
+});
+
 test('[fold] one commit may advance several slices; ids match padding-insensitively', () => {
 	const dir = foldRepo();
 	trailerCommit(dir, 'both', ['Slice: VS-001', 'State: coded', 'Slice: VS-2', 'State: deferred']);

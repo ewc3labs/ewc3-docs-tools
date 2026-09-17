@@ -1132,6 +1132,13 @@ function cmdFold(root, config, argv) {
 
 	console.log(`fold: states spelled from the ${plan.legendSource}`);
 	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
+	// A dry run says everything --write will do, provenance included; --check never fails on provenance, so it
+	// does not list it (DOCS-070).
+	if (!check) {
+		for (const p of plan.provenance) {
+			console.log(`  ${p.written}: ${p.to} unchanged - records state_sha ${p.sha}, state_source: trailer   (${rel(p.file)})`);
+		}
+	}
 	for (const c of plan.conflicts) {
 		console.log(`  ${c.written}: KEPT ${c.human} - state_source: human; the newest trailer says ${c.to || c.trailer} (${c.sha})`);
 	}
@@ -1273,6 +1280,17 @@ const repoFlag = process.argv.indexOf('--repo');
 const root = repoFlag > -1 && process.argv[repoFlag + 1]
 	? path.resolve(process.argv[repoFlag + 1])
 	: process.cwd();
+// HELP RUNS NOTHING. `format --help`, `values --help` and `fix --help` ignored the flag and wrote files; `fold` and
+// `slice new` refused it as unknown (DOCS-070). Answered here, before config is read or any command runs.
+// A flag's VALUE is not a request for help (`--state -h`).
+const VALUED_FLAGS = new Set(['--repo', '--config', '--owner', '--slices', '--since', '--state', '--set', '--table']);
+if (command && argv.some((a, i) => (a === '--help' || a === '-h') && !VALUED_FLAGS.has(argv[i - 1]))) {
+	const usage = fs.readFileSync(path.join(__dirname, '..', 'USAGE.txt'), 'utf8');
+	const block = usage.split(/\n\s*\n/).find((b) => new RegExp(`^\\s*ewc3-docs ${command}(\\s|$)`).test(b));
+	console.log(block ? `${block}\n\nEvery command takes --repo <dir> and --config <path>.` : usage);
+	process.exit(0);
+}
+
 const configFlag = process.argv.indexOf('--config');
 const config = loadConfig(root, configFlag > -1 ? process.argv[configFlag + 1] : null);
 
@@ -1306,6 +1324,6 @@ switch (command) {
 		break;
 	default:
 		console.log(fs.readFileSync(path.join(__dirname, '..', 'USAGE.txt'), 'utf8'));
-		code = command ? 2 : 0;
+		code = command && command !== '--help' && command !== '-h' ? 2 : 0;
 }
 process.exit(code);

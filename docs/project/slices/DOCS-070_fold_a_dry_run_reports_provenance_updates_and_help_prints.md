@@ -1,10 +1,12 @@
 ---
 id: DOCS-070
-state: ⬜ planned
+state: 🟦 tested
 title: "fold: a dry run reports provenance updates, and --help prints usage"
 est: S
 doc: "[DOCS-070](slices/DOCS-070_fold_a_dry_run_reports_provenance_updates_and_help_prints.md)"
 status: ""
+state_sha: 0a9363129f76
+state_source: trailer
 ---
 
 # DOCS-070 — fold: a dry run reports provenance updates, and --help prints usage
