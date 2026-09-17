@@ -1,10 +1,12 @@
 ---
 id: DOCS-075
-state: ⬜ planned
+state: 🟦 tested
 title: "migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice"
 est: M
 doc: "[DOCS-075](slices/DOCS-075_migrate_project_evidence_recorded_before_an_ID_was_minted.md)"
 status: ""
+state_sha: 32b791f0c091
+state_source: trailer
 ---
 
 # DOCS-075 — migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice
