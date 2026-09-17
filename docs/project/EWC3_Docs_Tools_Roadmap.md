@@ -83,7 +83,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-059 | ⬜ planned | `format` and `index --write` disagree about the register, stably and forever | S | [DOCS-059][docs-059] | each undoes the other on every run, so whether `check` passes depends on which command ran last - measured stable across three rounds |
 | DOCS-060 | ⬜ planned | Both register readers are blind to the other shape, and one comment claims otherwise | M | [DOCS-060][docs-060] | found by Copilot on PR #2: `readSeries` documents accepting `Prefix` OR `Series` and matches only `Prefix`, which is why 4 of 6 estate registers read as declaring nothing |
 | DOCS-061 | 🟦 tested | `format` lifts reference definitions out of fenced code and re-emits them as live links | S | [DOCS-061][docs-061] | unit-tested against the exact lines it destroyed, failing before and passing after; not yet re-run across another repo |
-| DOCS-062 | 🟦 tested | `migrate-project` regenerates over slice documents that predate frontmatter, and adoption deletes the kept ones | M | [DOCS-062][docs-062] | every existing document is inventoried and staged byte-for-byte (kept, or backed up to _legacy/ and linked); ids match padding-insensitively; unit-tested, not yet run on a MedAR repo |
+| DOCS-062 | 🟦 tested | `migrate-project` regenerates over slice documents that predate frontmatter, and adoption deletes the kept ones | M | [DOCS-062][docs-062] | every existing document is inventoried and staged byte-for-byte; ids match padding-insensitively; unit-tested, and a read-only census of all 57 MedAR repos found 33 older documents, 31 of them in MedFM_Docs, which migration cannot reach |
 
 ## Done
 

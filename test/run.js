@@ -2313,7 +2313,7 @@ test('[migrate-legacy] the inventory names EVERY existing document and what was 
 		['VS-3_malformed.md', /unreadable frontmatter/],
 		['VS-004_padded.md', /kept/],
 		['VS-5_proper.md', /kept/],
-		['design-notes.md', /no id/],
+		['design-notes.md', /no id.*not a slice document/],
 	]) {
 		const line = inv.split('\n').find((l) => l.includes(name));
 		assert.ok(line, `${name} missing from the inventory:\n${r.out}`);
@@ -2359,9 +2359,35 @@ test('[migrate-legacy] a kept document\'s filename is never overwritten by ANOTH
 test('[migrate-legacy] a second run leaves no stale backup behind', () => {
 	const { dir } = legacyRepo();
 	cli(['migrate-project', '--write'], dir);
-	fs.unlinkSync(path.join(dir, 'docs', 'project', 'slices', 'design-notes.md'));
+	assert.ok(fs.existsSync(path.join(stagedSlices(dir), '_legacy', 'VS-2-old-name.md')), 'fixture: backed up on the first run');
+	fs.unlinkSync(path.join(dir, 'docs', 'project', 'slices', 'VS-2-old-name.md'));
 	cli(['migrate-project', '--write'], dir);
-	assert.ok(!fs.existsSync(path.join(stagedSlices(dir), '_legacy', 'design-notes.md')));
+	assert.ok(!fs.existsSync(path.join(stagedSlices(dir), '_legacy', 'VS-2-old-name.md')));
+});
+
+test('[migrate-legacy] a document with no id ANYWHERE is not a slice - staged in place, not backed up as legacy', () => {
+	// PMO census, 2026-09-17: the slices folder README.md in SX_DW, SX_Coder, DevTools and AI Runtime went
+	// to _legacy/, so adopting the staged tree removed it from slices/. With no id in frontmatter or
+	// filename it is not a slice document at all; it is copied verbatim to where it was.
+	const readme = '# Slices\n\nOne document per slice. Edit the document, never the row.\n';
+	const { dir, docs } = legacyRepo({ 'README.md': readme });
+	const r = cli(['migrate-project', '--write'], dir);
+	const staged = stagedSlices(dir);
+	for (const name of ['README.md', 'design-notes.md']) {
+		assert.strictEqual(fs.readFileSync(path.join(staged, name), 'utf8'), docs[name], `${name} staged in place`);
+		assert.ok(!fs.existsSync(path.join(staged, '_legacy', name)), `${name} is not legacy`);
+	}
+	const line = r.out.split('\n').find((l) => l.includes('README.md') && l.includes('->'));
+	assert.ok(line && /not a slice document/.test(line), r.out);
+});
+
+test('[migrate-legacy] the inventory shows an id AS WRITTEN, so a grep for it finds the line', () => {
+	// PMO census: the inventory printed DW-12 while the filename, the row and the frontmatter all said
+	// DW-012. Matching stays padding-insensitive; only the display changes.
+	const { dir } = legacyRepo({ 'VS-0006_no_row.md': 'An older document, id in the filename only.\n' });
+	const r = cli(['migrate-project'], dir);
+	assert.ok(/VS-004_padded\.md\s+VS-004\s/.test(r.out), r.out);
+	assert.ok(/VS-0006_no_row\.md\s+VS-0006\s/.test(r.out), r.out);
 });
 
 test('[slices] a row links to its OWN document, not the anchor\'s', () => {

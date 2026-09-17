@@ -4,7 +4,7 @@ state: 🟦 tested
 title: '`migrate-project` regenerates over slice documents that predate frontmatter, and adoption deletes the kept ones'
 est: M
 doc: '[DOCS-062](slices/DOCS-062_Migration_regenerates_over_older_slice_documents.md)'
-status: 'every existing document is inventoried and staged byte-for-byte (kept, or backed up to _legacy/ and linked); ids match padding-insensitively; unit-tested, not yet run on a MedAR repo'
+status: 'every existing document is inventoried and staged byte-for-byte; ids match padding-insensitively; unit-tested, and a read-only census of all 57 MedAR repos found 33 older documents, 31 of them in MedFM_Docs, which migration cannot reach'
 priority: high
 lane: migrate
 ---
@@ -56,10 +56,45 @@ the live one.
 - **The staged tree is complete.** Adopting `docs/project_v2/` in one move now loses nothing a human
   wrote. A test pins this: every live document must appear byte-for-byte somewhere in staging.
 
+## Estate census (PMO, 2026-09-17, read-only)
+
+PMO ran the instrument at `8cd637c` without `--write` on committed exports. It covered all 56
+MedARMS org repos plus local-only PHPHDCTranslators, with paths taken from the GitHub tree API;
+where the instrument could not reach, a script using this tool's own `frontmatter.js` classified by
+hand. Full table with SHAs: `OneDrive scratch/docs-062-slice-census/RESULTS.md`.
+
+| repo | older slice documents | reachable by migration |
+| --- | --- | --- |
+| SX_DW | 2, no frontmatter, plus a slices README | yes |
+| MedFM_Docs | 31, no frontmatter | **no** |
+| SX_Coder, DevTools, MedAR_AI_Runtime | 0, plus a slices README each | yes |
+| the other 52 | 0, and no slice-like paths | nothing to reach |
+
+**The blast radius of the original defect was small.** The only reachable documents it would have
+regenerated over were SX_DW's two. Two things the census found are fixed here:
+
+- **A slices folder's `README.md` went to `_legacy/`** in all four repos that have one, so adoption
+  would have taken it out of `slices/`. A file with no id in its frontmatter *or* its filename is
+  not a slice document; it is now copied verbatim to where it was.
+- **The inventory printed the normalised id** (`DW-12`) where the filename, row and frontmatter all
+  say `DW-012`, so a grep for `DW-012` missed the line. It now prints the id as written. Matching is
+  unchanged.
+
+## Open, for Wilson
+
+- **MedFM_Docs cannot migrate at all**, for two independent reasons. Its planning surface lives at
+  `project/`, not `docs/project/`. And its roadmap is numbered lists under phase headings, with no
+  Delivery Index, so even a relocated copy returns before the inventory. Its 31 documents are safe
+  from this defect for the same reason. Migrating it would be a different template, not a fix here.
+- **MedFM_Docs has several documents per id:** `MAN-001` has 2 and `MAN-002` has 3. The shape looks
+  deliberate: one slice, several deliverables. Migration refuses exactly this shape, because the
+  slice-document model is one document declaring each id. Either those deliverables become
+  sub-slices or non-declaring attachments, or the model allows them.
+
 ## Not built
 
 - **Merging a legacy document's prose into the generated one.** Deliberately left as a manual step.
-- **Documents outside `docs/project/slices`**, such as design notes elsewhere that describe a slice,
-  are not inventoried.
-- **Not yet run on a MedAR repo.** The next evidence is a dry run of `migrate-project` against one
-  of them, reading the inventory before `--write`.
+- **Documents outside `docs/project/slices`.** The census found none in any reachable repo, and its
+  "slice-like" search sees only a folder named `slices` or a file named `PREFIX-digits...`.
+- **No `--write` on a real repo yet**, beyond PMO's test `--write` on a scratch copy of the SX_DW
+  export.

@@ -429,11 +429,13 @@ function cmdMigrateProject(root, config, argv) {
 		console.log(`  inventory: docs/project/slices (${inventory.length} existing document(s))`);
 		for (const e of inventory) {
 			const noRow = e.id && !rowIds.has(e.id) ? ' - no row carries this id' : '';
+			// No id in frontmatter OR filename: not a slice document at all - a folder README, a note. It was
+			// backed up to _legacy/, so adopting the staged tree took the README out of slices/ in four
+			// repos (PMO census, 2026-09-17). It is copied verbatim to where it was.
 			const action = e.frontmatter === 'ok' ? `kept, copied verbatim${noRow}`
-				: !e.id ? 'backed up to slices/_legacy/ - no id in frontmatter or filename'
+				: !e.id ? 'no id in frontmatter or filename - not a slice document, copied verbatim'
 					: `backed up to slices/_legacy/${noRow || ', new document generated and linked to it'}`;
-			const padded = e.written && e.written !== e.id ? ` (written ${e.written})` : '';
-			console.log(`    ${e.name.padEnd(width)}  ${(e.id || '-').padEnd(9)} ${FM[e.frontmatter]}${padded}`
+			console.log(`    ${e.name.padEnd(width)}  ${(e.written || '-').padEnd(9)} ${FM[e.frontmatter]}`
 				+ `${e.reason ? ` (${e.reason})` : ''}  ->  ${action}`);
 		}
 	}
@@ -497,7 +499,7 @@ function cmdMigrateProject(root, config, argv) {
 		sourceName: path.basename(from),
 		existing: authored,
 		legacy,
-		reserved: new Set(inventory.filter((e) => e.frontmatter === 'ok').map((e) => e.name.toLowerCase())),
+		reserved: new Set(inventory.filter((e) => e.frontmatter === 'ok' || !e.id).map((e) => e.name.toLowerCase())),
 	});
 
 	const outFile = path.join(outDir, path.basename(from));
@@ -535,8 +537,8 @@ function cmdMigrateProject(root, config, argv) {
 		// THE STAGED TREE IS COMPLETE, so adopting it in one move loses nothing a human wrote (DOCS-062).
 		// Kept documents used to stay only in the live tree - and the README below says to adopt by
 		// REPLACING docs/project/, which deleted every one of them. Copied byte-for-byte, never rewritten.
-		const backups = inventory.filter((e) => e.frontmatter !== 'ok');
-		for (const e of inventory.filter((x) => x.frontmatter === 'ok')) {
+		const backups = inventory.filter((e) => e.frontmatter !== 'ok' && e.id);
+		for (const e of inventory.filter((x) => x.frontmatter === 'ok' || !x.id)) {
 			fs.copyFileSync(path.join(liveSlices, e.name), path.join(sliceDir, e.name));
 		}
 		if (backups.length) {
