@@ -1284,6 +1284,112 @@ test('[frontmatter] a value that would not survive plain is re-quoted on write',
 		['plain', 'has # hash'], 'list items are quoted on the same rule');
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-066. GitHub renders frontmatter as YAML. `field()` chose plain output whenever THIS tool's lenient
+// parser read the value back, so `doc: [VS-1](slices/x.md)` (a flow sequence to YAML) and `title: a: b`
+// (a nested mapping) were written unquoted: every check passed, and GitHub showed an error box.
+
+// Values strict YAML would reject, or read back as something other than the same string.
+const YAML_UNSAFE = [
+	'[VS-1](slices/x.md)', 'a: b', 'trailing:', 'has #hash', '`code` first', '*star', '&amp', '!bang', '|pipe',
+	'>gt', '%pct', '@at', "'single", '"double', '#hash', '- dash', '-dash', '?q', ':colon', '{brace', '}close',
+	']close', ',comma', ' leading space', 'trailing space ', '', 'true', 'False', 'yes', 'No', 'on', 'OFF', 'null',
+	'~', '123', '-4.5', '0x1F', '1e3', '.inf', '2026-09-17', 'y', 'n',
+];
+// Values that are plain in strict YAML and read back as themselves.
+const YAML_SAFE = ['DOCS-001', '🟦 tested', 'M', 'a plain title (with parens)', 'x:y', 'a#b', 'coded; smoked 09-09', 'VS-004a'];
+
+test('[frontmatter] field quotes every value strict YAML would reject or retype', () => {
+	for (const v of YAML_UNSAFE) {
+		const line = frontmatter.field('title', v);
+		const raw = line.slice('title:'.length).trim();
+		assert.ok(/^".*"$/.test(raw), `${JSON.stringify(v)} must be quoted, got: ${line}`);
+		assert.strictEqual(frontmatter.parse(line).title, v, `${JSON.stringify(v)} round-trips`);
+	}
+	for (const v of YAML_SAFE) {
+		assert.strictEqual(frontmatter.field('title', v), `title: ${v}`, `${JSON.stringify(v)} stays plain`);
+	}
+});
+
+test('[frontmatter] a list element that is not flow-safe in YAML is quoted', () => {
+	assert.strictEqual(frontmatter.field('tags', ['alpha', 'beta']), 'tags: [alpha, beta]');
+	for (const bad of ['a, b', 'x]', '[y', '{z}', 'k: v', 'true']) {
+		const line = frontmatter.field('tags', ['alpha', bad]);
+		assert.ok(line.includes(`"${bad}"`), `${JSON.stringify(bad)} quoted in ${line}`);
+		assert.deepStrictEqual(frontmatter.parse(line).tags, ['alpha', bad]);
+	}
+});
+
+test('[frontmatter] migrate writes strict-YAML-safe frontmatter', () => {
+	// The doc pointer is the shape that broke every migrated document.
+	const src = ['## Delivery Index', '', '| ID | State | Slice | Doc | Status |', '| --- | --- | --- | --- | --- |',
+		'| VS-1 | coded | Title: with a colon | - | done |', ''].join('\n');
+	const doc = extractSlices(src, { width: 0 }).docs.find((d) => d.ids.includes('VS-1'));
+	const block = frontmatter.read(doc.content).block;
+	assert.ok(/^doc: "\[VS-1\]\(slices\/[^"]+\)"$/m.test(block), block);
+	assert.ok(/^title: "Title: with a colon"$/m.test(block), block);
+});
+
+test('[frontmatter] normalize re-quotes only unsafe lines, keeping comments, order and every safe line', () => {
+	const { normalize } = frontmatter;
+	const block = [
+		'id: VS-1',
+		'# a comment line',
+		'title: a: b   # trailing note',
+		"doc: '[VS-1](slices/x.md)'",
+		'status: [VS-1](slices/y.md)',
+		'tags: [alpha, beta]',
+		'depends_on:',
+		'  - VS-2',
+		'  - x: y',
+		'est: M',
+	].join('\n');
+	const out = normalize(block);
+	assert.strictEqual(out, [
+		'id: VS-1',
+		'# a comment line',
+		'title: "a: b"   # trailing note',
+		"doc: '[VS-1](slices/x.md)'",
+		'status: "[VS-1](slices/y.md)"',
+		'tags: [alpha, beta]',
+		'depends_on:',
+		'  - VS-2',
+		'  - "x: y"',
+		'est: M',
+	].join('\n'));
+	assert.deepStrictEqual(frontmatter.parse(out), frontmatter.parse(block), 'values unchanged');
+	assert.strictEqual(normalize(out), out, 'idempotent');
+});
+
+test('[format] frontmatter ALREADY quoted - double or single - is never churned', () => {
+	// A downstream repo re-quoted its unsafe values by hand before this fix, in both styles. `format --check`
+	// on it must report nothing for frontmatter, or the repair becomes a second round of churn.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yamlfm-'));
+	const file = path.join(dir, 'VS-1_x.md');
+	const text = [
+		'---', 'id: VS-1', 'title: "Title: with a colon"', "status: 'a # not a comment'", 'doc: "[VS-1](slices/VS-1_x.md)"',
+		"alt: '[VS-1](slices/VS-1_x.md)'", 'est: "3"', 'tags: ["a, b", \'[c]\']', '---', '', '# VS-1', '',
+	].join('\n');
+	fs.writeFileSync(file, text);
+	const { formatFiles } = require('../lib/format');
+	assert.deepStrictEqual(formatFiles([file], { check: true }), [], 'nothing to report');
+	assert.strictEqual(frontmatter.normalize(frontmatter.read(text).block), frontmatter.read(text).block);
+});
+
+test('[format] normalizes unsafe frontmatter, and --check reports it; the body is untouched', () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yamlfm-'));
+	const file = path.join(dir, 'VS-1_x.md');
+	const body = '\n# VS-1\n\nBody with title: text and [a](b.md).\n';
+	fs.writeFileSync(file, '---\nid: VS-1\ndoc: [VS-1](slices/VS-1_x.md)\n---\n' + body);
+	const { formatFiles } = require('../lib/format');
+	assert.strictEqual(formatFiles([file], { check: true }).length, 1, '--check flags unsafe frontmatter');
+	formatFiles([file], {});
+	const text = fs.readFileSync(file, 'utf8');
+	assert.ok(text.startsWith('---\nid: VS-1\ndoc: "[VS-1](slices/VS-1_x.md)"\n---\n'), text);
+	assert.ok(text.endsWith(body), 'body byte-identical');
+	assert.strictEqual(formatFiles([file], { check: true }).length, 0, 'clean after one pass');
+});
+
 test('[series] a longer fence is not closed by a shorter one inside it', () => {
 	// Found by codex. A four-backtick block documenting a three-backtick example was closed by the
 	// inner fence, so whatever followed leaked out and could be scanned as a mint - in a document

@@ -1,7 +1,7 @@
 ---
 id: DOCS-037
 state: 🟩 proven
-title: `index`: regenerate the Delivery Index from the slice documents
+title: "`index`: regenerate the Delivery Index from the slice documents"
 est: M
 doc: '[DOCS-037](slices/DOCS-037_index_regenerate_the_Delivery_Index_from_the_slice_documen.md) · [One thing to edit][one-thing-to-edit]'
 status: 'ewc3-docs-tools: the live register has been generated from its slice documents since 2026-09-09, and it round-trips byte-for-byte on 4 of 6 estate registers'

@@ -1,7 +1,7 @@
 ---
 id: DOCS-002
 state: ⬜ planned
-title: `format --check` should say WHAT would change
+title: "`format --check` should say WHAT would change"
 est: S
 doc: '[DOCS-002](slices/DOCS-002_format_check_should_say_WHAT_would_change.md)'
 status: ""
