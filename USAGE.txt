@@ -73,7 +73,8 @@ EWC3 Labs documentation tools
   ewc3-docs check                         All of the above in check mode. This is the CI command.
 
 Every command takes --repo <dir> to run against another repository (default: the current
-directory), and reads that repository's config.
+directory), and reads that repository's config. Every command answers --help (or -h) with its usage
+and runs nothing.
 
 Configuration: .ewc3-docs.json in the repository root, or config/ewc3-docs.json, or --config
 <path>. All fields optional. Two config files is an error, not a preference.
