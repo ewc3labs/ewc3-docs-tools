@@ -79,6 +79,13 @@ formatted form for every row. A register that was `format`-clean before a mint i
 again after the row is inserted, and `format` never changes a word. Downstream verification had
 passed because that register is not kept `format`-clean. A test pins both shapes.
 
+### Unknown flags
+
+Reviewing a downstream skill that drives this command turned up one more silent path: **an unknown
+flag was ignored**. `slice new ... --slices elsewhere` minted into `docs/project/slices` with exit
+0, and a misspelled `--write` would quietly dry-run. An unknown option or a stray argument now exits
+2 and writes nothing.
+
 ### Not built
 
 - **A mint interrupted between writing the document and the row** leaves a document `index` reports
