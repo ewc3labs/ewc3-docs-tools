@@ -94,7 +94,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-070 | 🟦 tested | fold: a dry run reports provenance updates, and --help prints usage | S | [DOCS-070][docs-070] |  |
 | DOCS-071 | ⬜ planned | fold --check --since: say out-of-range trailers were not checked | S | [DOCS-071][docs-071] |  |
 | DOCS-072 | ⬜ planned | One frontmatter shape: migrate writes doc only for a Doc column, and no source | S | [DOCS-072][docs-072] |  |
-| DOCS-073 | ⬜ planned | fold --check-message: validate a commit message's trailers before it is committed | M | [DOCS-073][docs-073] |  |
+| DOCS-073 | 🟦 tested | fold --check-message: validate a commit message's trailers before it is committed | M | [DOCS-073][docs-073] |  |
 | DOCS-074 | 🟦 tested | fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend | S | [DOCS-074][docs-074] |  |
 | DOCS-075 | 🟦 tested | migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice | M | [DOCS-075][docs-075] |  |
 | DOCS-076 | ⬜ planned | slice new: a first mint into an empty register declared slice-documents creates slices/ | S | [DOCS-076][docs-076] |  |

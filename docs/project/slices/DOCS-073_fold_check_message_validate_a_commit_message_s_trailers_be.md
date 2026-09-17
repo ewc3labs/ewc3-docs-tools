@@ -1,10 +1,12 @@
 ---
 id: DOCS-073
-state: ⬜ planned
+state: 🟦 tested
 title: "fold --check-message: validate a commit message's trailers before it is committed"
 est: M
 doc: "[DOCS-073](slices/DOCS-073_fold_check_message_validate_a_commit_message_s_trailers_be.md)"
 status: ""
+state_sha: 7974accbe33a
+state_source: trailer
 ---
 
 # DOCS-073 — fold --check-message: validate a commit message's trailers before it is committed
