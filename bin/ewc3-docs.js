@@ -26,7 +26,7 @@ const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
 const gitbase = require('../lib/gitbase');
 const { planMint } = require('../lib/mint');
-const { planFold, applyFold } = require('../lib/fold');
+const { planFold, applyFold, checkMessage } = require('../lib/fold');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -1097,8 +1097,8 @@ function cmdIndex(root, config, argv) {
  * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
  */
 function cmdFold(root, config, argv) {
-	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config']);
-	const VALUED = new Set(['--since', '--repo', '--config']);
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged']);
+	const VALUED = new Set(['--since', '--repo', '--config', '--check-message']);
 	for (const [i, a] of argv.entries()) {
 		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
 		if (VALUED.has(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) { console.error(`fold: ${a} needs a value`); return 2; }
@@ -1109,6 +1109,22 @@ function cmdFold(root, config, argv) {
 	if (write && check) { console.error('fold: --write and --check are exclusive.'); return 2; }
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
 	const repo = path.resolve(flag('--repo') || root);
+
+	// --check-message <file> [--staged]: a message checked before its commit exists (DOCS-073).
+	const messageFile = flag('--check-message');
+	const staged = argv.includes('--staged');
+	if (messageFile !== undefined && (write || check || argv.includes('--since'))) {
+		console.error('fold: --check-message stands alone - not with --write, --check or --since.');
+		return 2;
+	}
+	if (staged && messageFile === undefined) { console.error('fold: --staged needs --check-message <file>.'); return 2; }
+	let message = null;
+	if (messageFile !== undefined) {
+		try { message = fs.readFileSync(path.resolve(messageFile), 'utf8'); } catch (err) {
+			console.error(`fold: did not run: cannot read the message file ${messageFile} (${err.code || err.message})`);
+			return 2;
+		}
+	}
 
 	// History is the input, so git is required; a tree with unresolved conflicts is not read, and --write also
 	// refuses mid-operation because it renders rows through the index gate.
@@ -1148,6 +1164,29 @@ function cmdFold(root, config, argv) {
 	if (mode === 'roadmap-rows') { console.log('fold: rows register: nothing to fold - the Delivery Index is kept as rows, not slice documents'); return 0; }
 	if (!mode) { console.log('fold: no register: nothing to fold - no Delivery Index and no slice documents; Slice: trailers here are evidence only'); return 0; }
 
+	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
+	// A legend fold cannot fully read is a register defect, not a stale document: did not run, never exit 1 (DOCS-074).
+	const legendUnreadable = (u) => {
+		console.error(`fold: did not run: the State Legend at ${rel(u.file)}:${u.line} could not be read:`);
+		console.error(`    ${u.text.trim()}`);
+		console.error('  expected one state per bullet: - <glyph> `word` — meaning');
+		return 2;
+	};
+
+	if (message !== null) {
+		const r = checkMessage({ repo, sliceDir, roadmaps, message, staged });
+		if (r.unreadable) { return legendUnreadable(r.unreadable); }
+		if (r.failed) { console.error(`fold: did not run: ${r.failed}`); return 2; }
+		r.notes.forEach((n) => console.log(`fold --check-message: ${n}`));
+		if (r.problems.length) {
+			console.error(`fold --check-message: refused - ${r.problems.length} problem(s):`);
+			r.problems.forEach((p) => console.error(`  ${p}`));
+			return 1;
+		}
+		console.log(`fold --check-message: ok - ${r.pairs} Slice: trailer(s)${staged ? `, ${r.stagedDocs} staged slice document(s) checked` : ''}`);
+		return 0;
+	}
+
 	let sinceShas = null;
 	const since = flag('--since');
 	if (since) {
@@ -1156,15 +1195,7 @@ function cmdFold(root, config, argv) {
 	}
 
 	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas });
-	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
-	// A legend fold cannot fully read is a register defect, not a stale document: did not run, never exit 1 (DOCS-074).
-	if (plan.unreadable) {
-		const u = plan.unreadable;
-		console.error(`fold: did not run: the State Legend at ${rel(u.file)}:${u.line} could not be read:`);
-		console.error(`    ${u.text.trim()}`);
-		console.error('  expected one state per bullet: - <glyph> `word` — meaning');
-		return 2;
-	}
+	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
 	const errors = plan.issues.filter((i) => i.inScope);
 	const warnings = plan.issues.filter((i) => !i.inScope);
 

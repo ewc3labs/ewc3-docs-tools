@@ -53,6 +53,11 @@ EWC3 Labs documentation tools
                                           state_source: human is never overwritten. --check fails
                                           when a state is behind its trailer; malformed trailers
                                           after --since are errors. Dry run without --write.
+    [--check-message <file> [--staged]]   Check a commit message BEFORE committing, by the same
+                                          grammar: every Slice: names a document, every State:
+                                          is a legend word. --staged: every staged slice document
+                                          is named, and a changed state carries its State:.
+                                          No-Slice: <reason> exempts naming. For commit-msg hooks.
 
   ewc3-docs slice new <PREFIX> "<title>"   Mint a slice in an adopted repository: the next id (past
     [--state <state>]                     every row, slice document, archived document and Last
