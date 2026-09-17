@@ -2384,6 +2384,27 @@ test('[migrate-legacy] a backup never overwrites a live _legacy/ file of the sam
 		docs['VS-1_no_frontmatter_at_all.md'], 'and the link reaches THIS document\'s prose');
 });
 
+test('[migrate-legacy] roadmap narrative for a slice with a KEPT document is backed up, not replaced by a link', () => {
+	// Codex P1, PR #7. A kept document is never regenerated, so the Slice Notes narrative that would have
+	// gone into the generated one went nowhere - yet the section was still replaced by a link. Adoption
+	// lost the prose. Padded (VS-004 for row VS-4) and exact (VS-5) matches both.
+	const { dir, docs } = legacyRepo();
+	fs.appendFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), [
+		'### VS-4 — id padded differently', '', 'ROADMAP NARRATIVE FOUR.', '',
+		'### VS-5 — proper frontmatter', '', 'ROADMAP NARRATIVE FIVE.', '',
+	].join('\n'));
+	cli(['migrate-project', '--write'], dir);
+	const staged = filesUnder(stagedSlices(dir)).map((f) => ({ f, text: fs.readFileSync(f, 'utf8') }));
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8');
+	for (const [prose, kept] of [['ROADMAP NARRATIVE FOUR.', 'VS-004_padded.md'], ['ROADMAP NARRATIVE FIVE.', 'VS-5_proper.md']]) {
+		const holder = staged.find((s) => s.text.includes(prose) && !s.f.endsWith(kept));
+		assert.ok(holder, `${prose} is not in the staged tree`);
+		const rel = path.relative(stagedSlices(dir), holder.f).split(path.sep).join('/');
+		assert.ok(roadmap.includes(`slices/${rel}`), `the roadmap links the backup ${rel}:\n${roadmap}`);
+		assert.strictEqual(fs.readFileSync(path.join(stagedSlices(dir), kept), 'utf8'), docs[kept], `${kept} untouched`);
+	}
+});
+
 test('[index] a slice document with an uppercase .MD extension is read', () => {
 	// Codex P2, PR #7: migration keeps VS-1_one.MD, but index enumerated `.md` case-sensitively, so after
 	// adoption the slice read as undeclared.

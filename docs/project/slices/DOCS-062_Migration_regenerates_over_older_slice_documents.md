@@ -63,6 +63,12 @@ the live one.
   earlier adoption, gets a `-2` suffix, and the generated document links to that name. `index` also
   reads `.md` in any case, so a kept `.MD` document still declares its slice after adoption. Both
   found by Codex on PR #7.
+- **Roadmap narrative for a slice with a kept document is backed up, not dropped.** A kept document
+  is never rewritten, so the Slice Notes prose that would have gone into a generated one had nowhere
+  to go, yet its section was still replaced by a link. The section is now backed up verbatim to
+  `_legacy/<ID>_roadmap_notes.md`, and the roadmap line links both files. This predates DOCS-062 (it
+  applied to any DOCS-054 kept document); padding-insensitive matching made it reachable more often.
+  Found by Codex on PR #7.
 
 ## Estate census (PMO, 2026-09-17, read-only)
 

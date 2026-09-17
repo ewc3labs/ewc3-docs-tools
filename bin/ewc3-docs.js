@@ -529,6 +529,15 @@ function cmdMigrateProject(root, config, argv) {
 		existing: authored,
 		legacy,
 		reserved: new Set(inventory.filter((e) => e.frontmatter === 'ok' || !e.id).map((e) => e.name.toLowerCase())),
+		// The same allocator as the backups above, so a narrative backup cannot take a staged path either.
+		reservePath: (rel) => {
+			const ext = path.extname(rel);
+			const base = rel.slice(0, rel.length - ext.length);
+			let out = rel;
+			for (let n = 2; taken.has(out.toLowerCase()); n++) { out = `${base}-${n}${ext}`; }
+			taken.add(out.toLowerCase());
+			return out;
+		},
 	});
 
 	const outFile = path.join(outDir, path.basename(from));
@@ -578,6 +587,14 @@ function cmdMigrateProject(root, config, argv) {
 		if (otherFiles.length) {
 			console.log(`  copied: ${otherFiles.length} other file(s) under slices/ verbatim, at the same path `
 				+ '(not markdown, or in a subfolder)');
+		}
+		for (const n of extracted.narratives) {
+			fs.mkdirSync(path.dirname(path.join(sliceDir, n.file)), { recursive: true });
+			fs.writeFileSync(path.join(sliceDir, n.file), n.content);
+		}
+		if (extracted.narratives.length) {
+			console.log(`  backed up: ${extracted.narratives.length} roadmap narrative section(s) whose slice already has `
+				+ 'a kept document, verbatim, to docs/project_v2/slices/_legacy/ - NOT merged');
 		}
 	}
 
