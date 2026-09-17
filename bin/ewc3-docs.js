@@ -128,8 +128,14 @@ function cmdFormat(root, config, argv) {
 }
 
 function cmdLinks(root, config) {
-	const { checked, problems, orphans } = checkLinks(root, config.links || {});
+	const { checked, unverified, problems, orphans } = checkLinks(root, config.links || {});
 	console.log(`Checked ${checked} relative links across the docs.`);
+	// STATED AS A FACT, NOT AS A WARNING. A per-link warning fires on every run and becomes noise
+	// people learn to skip; saying nothing hides that these were never resolved. A count is visible,
+	// cannot alarm, and makes the reliance measurable. (LabsHQ and EQPE, reconciled - `DOCS-051`.)
+	if (unverified) {
+		console.log(`${unverified} cross-repo link(s) leave this repository: not resolved, twin-checked instead.`);
+	}
 
 	let code = 0;
 	if (problems.length) {
@@ -143,7 +149,15 @@ function cmdLinks(root, config) {
 		console.error('\nLink them from your documentation index, or delete them.');
 		code = 1;
 	}
-	if (!code) { console.log('All of them resolve, and every document is reachable.'); }
+	// SAY EXACTLY WHAT PASSED. "All of them resolve" followed a line saying some were NOT resolved, in the
+	// same output - a false, self-contradicting assurance in CI (Codex, PR #5). The checked links
+	// resolved; the cross-repo ones were twin-checked, which is a different claim and is named as one.
+	if (!code) {
+		console.log(unverified
+			? `All ${checked} checked link(s) resolve, every cross-repo link has a matching GitHub twin, `
+				+ 'and every document is reachable.'
+			: 'All of them resolve, and every document is reachable.');
+	}
 	return code;
 }
 

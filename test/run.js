@@ -92,6 +92,33 @@ test('does not touch fenced code', () => {
 	assert.strictEqual(format(src), src);
 });
 
+test('a reference DEFINITION inside fenced code is an example, not a definition to relocate', () => {
+	// The test above was named for this guarantee and passed the whole time it was broken. It fences
+	// an INLINE link, which the wrapper already skipped. It never fenced a DEFINITION line - and the
+	// definition paths harvest and strip by their own set, which fences were not in. So an example
+	// was lifted out of its block, lost its trailing annotation, and came back at the foot as a live
+	// link, leaving an empty fence. `DOCS-051` lost two illustrations that way. A guarantee is only
+	// as good as the path it exercises.
+	const example = [
+		'```',
+		'[twin]:   ../../../../elsewhere/docs/X.md   <- the relative half',
+		'[twin-2]: https://github.com/org/elsewhere/blob/main/docs/X.md',
+		'```',
+	].join('\n');
+	const src = `# Example\n\nProse before.\n\n${example}\n\nProse after.\n`;
+	const out = format(src);
+
+	assert.ok(out.includes(example), 'the fenced example must survive byte for byte');
+	assert.ok(!/^\[twin(-2)?\]: /m.test(out.split(example).join('')),
+		'and must not ALSO appear outside the fence as a live definition');
+
+	// The ordinary behaviour must still happen next to it: a long link in prose still moves.
+	const mixed = `${example}\n\nSee [a long link](https://example.com/a-long-enough-url-to-be-harvested).\n`;
+	const moved = format(mixed);
+	assert.ok(moved.includes(example), 'fence still intact beside real harvesting');
+	assert.match(moved, /^\[a-long-link\]: https:\/\/example\.com\//m, 'the prose link still relocates');
+});
+
 test('does not wrap tables', () => {
 	const row = '| a very long cell | another very long cell | a third one that pushes past 100 columns |';
 	assert.ok(format(`${row}\n`).includes(row));
@@ -403,11 +430,235 @@ test('accepts a defined reference', () => {
 	assert.deepStrictEqual(problems, []);
 });
 
+// DOCS-051. A repo sits inside an OUTER directory so a cross-repo relative link has somewhere to point.
+function crossRepo(markdown, { siblingExists = false } = {}) {
+	const outer = tmpdir();
+	const repo = path.join(outer, 'this-repo');
+	fs.mkdirSync(path.join(repo, 'docs'), { recursive: true });
+	if (siblingExists) {
+		fs.mkdirSync(path.join(outer, 'Programs_MedAR', 'DevTools', 'docs'), { recursive: true });
+		fs.writeFileSync(path.join(outer, 'Programs_MedAR', 'DevTools', 'docs', 'X.md'), '# X\n');
+	}
+	fs.writeFileSync(path.join(repo, 'docs', 'a.md'), markdown);
+	return checkLinks(repo, { orphanRoot: 'nope' });
+}
+
+test('[links] a cross-repo link WITH a GitHub twin is counted, not failed', () => {
+	const r = crossRepo('See [x][x].\n\n'
+		+ '[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	assert.deepStrictEqual(r.problems, [], 'a correct twin pair is clean from a single-repo checkout');
+	assert.strictEqual(r.unverified, 1, 'and it is COUNTED as unverified rather than silently passed');
+});
+
+test('[links] a twin matches on repository NAME, never on the local folder above it', () => {
+	// `Programs_MedAR` is where this machine keeps the repo; `MedARMS` is who owns it on GitHub.
+	// An owner comparison would fail every correct MedAR twin in the estate.
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	assert.deepStrictEqual(r.problems, []);
+});
+
+test('[links] a cross-repo link with NO twin fails, and names why', () => {
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n');
+	assert.strictEqual(r.problems.length, 1);
+	assert.match(r.problems[0].why, /no GitHub twin/);
+});
+
+test('[links] a twin that names a different repository or path is DRIFT, not a pass', () => {
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/SomethingElse/blob/main/docs/X.md\n');
+	assert.strictEqual(r.problems.length, 1);
+	assert.match(r.problems[0].why, /different repository or path/);
+});
+
+test('[links] the verdict is UNCONDITIONAL: a sibling on disk changes nothing', () => {
+	// The whole point. Resolving the link when the sibling happens to be cloned and skipping it when it
+	// is not would give one link two verdicts depending on whose machine asks. Measured across a
+	// worktree, a sibling-present layout and an empty CI checkout before this test was written; this
+	// pins it. The sibling EXISTS here, and a twin-less link must still fail - and a twinned one must
+	// still be counted rather than resolved.
+	const noTwin = '[x]: ../../Programs_MedAR/DevTools/docs/X.md\n';
+	const absent = crossRepo(noTwin);
+	const present = crossRepo(noTwin, { siblingExists: true });
+	assert.deepStrictEqual(present.problems.map((p) => p.why), absent.problems.map((p) => p.why),
+		'the same link must get the same verdict whether or not the sibling is on disk');
+	assert.strictEqual(present.unverified, 1, 'never resolved, even though it would have resolved');
+});
+
 test('ignores links inside code fences', () => {
 	const dir = tmpdir();
 	fs.writeFileSync(path.join(dir, 'a.md'), '```\n[x](does-not-exist.md)\n```\n');
 	const { problems } = checkLinks(dir, { orphanRoot: 'nope' });
 	assert.deepStrictEqual(problems, []);
+});
+
+// A LONGER FENCE HOLDING A SHORTER ONE - how a document shows what a fence looks like. Codex on PR #5.
+// Five places tracked a fence by its first three characters, so the inner ``` closed the outer block
+// and everything after it was treated as live prose. One grammar now, in lib/fence.js.
+const FOUR = '````';
+const NESTED = [`${FOUR}md`, '```', '[x]:   ../../a.md   <- an example definition', '```', FOUR].join('\n');
+
+test('[fence] the grammar: same character, at least as long, nothing else on the line', () => {
+	const { fenceOpener, closesFence, fencedLineSet } = require('../lib/fence');
+	assert.strictEqual(fenceOpener('```js'), '```', 'an info string is allowed');
+	assert.strictEqual(fenceOpener('````md'), '````', 'the WHOLE run is kept, not three characters');
+	assert.strictEqual(fenceOpener('~~~'), '~~~');
+	assert.strictEqual(fenceOpener('``` `inline` ```'), null, 'a backtick in a backtick info string is inline code');
+
+	assert.ok(closesFence('````', '````'));
+	assert.ok(closesFence('`````', '````'), 'a longer run still closes');
+	assert.ok(!closesFence('```', '````'), 'a SHORTER run does not close - the bug Codex found');
+	assert.ok(!closesFence('~~~~', '````'), 'the other character does not close');
+	assert.ok(!closesFence('```js', '```'), 'a line with an info string opens, it does not close');
+
+	const lines = ['a', '```', 'b', 'c'];
+	assert.deepStrictEqual([...fencedLineSet(lines)], [1, 2, 3], 'an unclosed fence runs to the end');
+});
+
+test('[fence] format: a shorter fence inside a longer one does not close it', () => {
+	const src = `# T\n\nProse before.\n\n${NESTED}\n\nProse after.\n`;
+	const out = format(src);
+	assert.ok(out.includes(NESTED), 'the nested example must survive byte for byte');
+	assert.ok(!/^\[x\]: /m.test(out.split(NESTED).join('')), 'and not be relocated out of it');
+});
+
+test('[fence] a fence inside a BLOCK QUOTE is still a fence', () => {
+	// A REGRESSION this PR introduced, found by Codex's fifth pass. The old lazy regex in links matched
+	// ``` anywhere on a line, so a fence inside `> ` was stripped. lib/fence.js required the delimiter at
+	// the start of the line after whitespace, and `>` is not whitespace - so a block-quoted example
+	// link was checked as live. On main this reports nothing; on the branch it reported the example.
+	// Measured in the estate: ewc3labs-hq has 8 block-quoted fence lines, excel-power-query-editor 2.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'q.md'), '> ```md\n> [example](missing.md)\n> ```\n');
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, [], 'links ignores the quoted example');
+
+	const nested = '> > ```md\n> > [example](missing.md)\n> > ```\n';
+	fs.writeFileSync(path.join(dir, 'q.md'), nested);
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, [], 'and a nested quote too');
+
+	const marker = '> ```md\n> <!--ewc3:tests-->1<!--/ewc3:tests-->\n> ```\n';
+	assert.strictEqual(applyToText(marker, { tests: 136 }).text, marker, 'values leaves a quoted example marker alone');
+});
+
+test('[fence] values: a marker inside a longer fence is still documentation', () => {
+	const src = `${FOUR}md\n\`\`\`\n<!--ewc3:tests-->1<!--/ewc3:tests-->\n\`\`\`\n${FOUR}\n`;
+	const r = applyToText(src, { tests: 136 });
+	assert.strictEqual(r.text, src, 'the example marker must not be substituted');
+});
+
+test('[fence] links: a link inside a longer fence is not checked', () => {
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'a.md'), `${FOUR}md\n\`\`\`\n[x](does-not-exist.md)\n\`\`\`\n${FOUR}\n`);
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems, []);
+});
+
+test('[format] a file with NO trailing newline does not crash', () => {
+	// Removing splitBlocks' fence variable left one reference behind, in the branch that flushes a
+	// final prose buffer - reached only when a file does not end in a newline. Every test input and
+	// every document in this repository ends in one, so the suite and CI both passed while
+	// `format('plain text')` threw ReferenceError. Codex on PR #5. A crash on valid input aborts both
+	// `fix` and `check` for anyone whose files lack a final newline.
+	assert.strictEqual(format('plain text'), 'plain text\n');
+	assert.strictEqual(format('# Heading\n\nlast paragraph, no newline'), '# Heading\n\nlast paragraph, no newline\n');
+});
+
+test('[fence] an UNCLOSED opener indented four spaces is indented code, not a fence to the end', () => {
+	// `    ~~~` in an indented-code example opened an unclosed fence, blankFences erased the rest of the
+	// document, and a real link below it was never checked. Codex on PR #5.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, 'a.md'), 'Indented code:\n\n    ~~~\n    example\n\nThen [a real link](missing.md).\n');
+	const r = checkLinks(dir, { orphanRoot: 'nope' });
+	assert.strictEqual(r.problems.length, 1, 'the dead link after the indented example must still be found');
+	assert.match(r.problems[0].target, /missing\.md/);
+});
+
+test('[fence] an UNCLOSED list-nested fence is protected by format and values', () => {
+	// Codex's fourth pass, and the direct counterpart of the test above: the look-ahead rule made an
+	// unclosed four-space opener "indented code", so an unclosed fence under a list item had its
+	// example joined into prose and its example marker substituted. The two cases cannot be told apart
+	// without a list-container parser - so each consumer takes its OWN safe default. For format and
+	// values that is to protect: verbatim cannot corrupt anything.
+	const src = '- Example:\n\n    ```md\n    [x]:   ../../a.md   <- an example definition\n'
+		+ '    <!--ewc3:tests-->1<!--/ewc3:tests-->\n';
+	const out = format(src);
+	assert.ok(out.includes('    [x]:   ../../a.md   <- an example definition'), 'format keeps the example verbatim');
+	assert.ok(!/^\[x\]: /m.test(out), 'and does not relocate it');
+	assert.strictEqual(applyToText(src, { tests: 136 }).text, src, 'values does not substitute the example marker');
+});
+
+test('[fence] a CLOSED fence nested in a list item is still protected', () => {
+	// The regression the obvious fix would cause. CommonMark measures a fence's indent from its list
+	// item's content, so list-nested fences sit four or more spaces in - and capping every opener at
+	// three spaces would turn their contents back into prose, reopening DOCS-061 for exactly those.
+	const block = ['- a step:', '', '    ```', '    [x]:   ../../a.md   <- example', '    ```'].join('\n');
+	const out = format(`# T\n\n${block}\n\nProse after.\n`);
+	assert.ok(out.includes(block), 'a list-nested closed fence keeps its example');
+	assert.ok(!/^\[x\]: /m.test(out.split(block).join('')), 'and nothing is relocated out of it');
+});
+
+test('[links] a twin path must match in CASE - GitHub paths are case-sensitive', () => {
+	// Both halves were lowercased before comparing, so `docs/X.md` beside a URL ending `docs/x.md`
+	// passed while the web link was broken - the wrong-case defect `links` catches everywhere else.
+	// The REPOSITORY name is still compared without case: a local folder may be `devtools` for a
+	// repository named `DevTools`, and GitHub resolves repository names either way. Codex on PR #5.
+	const wrongCase = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/x.md\n');
+	assert.strictEqual(wrongCase.problems.length, 1, 'a path differing only in case is not a twin');
+
+	const repoCase = crossRepo('[x]: ../../Programs_MedAR/devtools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	assert.deepStrictEqual(repoCase.problems, [], 'but the repository NAME may differ in case');
+});
+
+test('[links] a file whose name starts with two dots is INSIDE the repository', () => {
+	// "Does this leave the repo" was a string prefix test on the relative path, so `..config.md` at the
+	// root read as outside it and failed for lacking a GitHub twin. Codex on PR #5.
+	const dir = tmpdir();
+	fs.writeFileSync(path.join(dir, '..config.md'), '# config\n');
+	fs.writeFileSync(path.join(dir, 'a.md'), 'See [config](..config.md).\n');
+	const r = checkLinks(dir, { orphanRoot: 'nope' });
+	assert.deepStrictEqual(r.problems, [], 'checked on disk, not treated as cross-repo');
+	assert.strictEqual(r.unverified, 0);
+});
+
+test('[links] success never says an unresolved link resolved', () => {
+	// The run printed "N cross-repo link(s) ... not resolved" and then "All of them resolve", in the
+	// same output - a false, self-contradicting assurance in CI. Codex on PR #5.
+	const outer = tmpdir();
+	const repo = path.join(outer, 'this-repo');
+	fs.mkdirSync(path.join(repo, 'docs'), { recursive: true });
+	fs.writeFileSync(path.join(repo, 'README.md'), 'See [a](docs/a.md).\n');
+	fs.writeFileSync(path.join(repo, 'docs', 'a.md'), 'See [x][x].\n\n'
+		+ '[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md\n');
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'links'], { cwd: repo, encoding: 'utf8' });
+	const out = (r.stdout || '') + (r.stderr || '');
+	assert.strictEqual(r.status, 0, `a clean run should pass:\n${out}`);
+	assert.match(out, /cross-repo/, 'the twin-checked links are reported');
+	assert.doesNotMatch(out, /All of them resolve/, 'and the summary must not claim they resolved');
+});
+
+test('[links] twins compare DECODED paths, without a fragment', () => {
+	// The relative half is decoded and its #fragment dropped before it resolves; the GitHub half was
+	// compared raw, so identical twins read as having none. Codex on PR #5.
+	const encoded = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/My%20File.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/My%20File.md\n');
+	assert.deepStrictEqual(encoded.problems, [], 'an encoded filename is the same file');
+
+	const fragment = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n'
+		+ '[x-2]: https://github.com/MedARMS/DevTools/blob/main/docs/X.md#a-heading\n');
+	assert.deepStrictEqual(fragment.problems, [], 'a heading anchor does not change which file');
+});
+
+test('[links] a GitHub twin written as an INLINE link still counts', () => {
+	// Twins were collected only from reference definitions, so `[🔗](https://github.com/...)` was
+	// invisible and its relative half failed. `links` runs independently of `format`, which is what
+	// would otherwise have moved it into a definition. Codex on PR #5.
+	const r = crossRepo('[x]: ../../Programs_MedAR/DevTools/docs/X.md\n\n'
+		+ 'See [🔗](https://github.com/MedARMS/DevTools/blob/main/docs/X.md).\n');
+	assert.deepStrictEqual(r.problems, []);
 });
 
 test('reports an orphaned document', () => {

@@ -3,7 +3,7 @@ id: DOCS-041
 state: ⬜ planned
 title: `slice new <PREFIX> "<title>"` — mint by creating the document
 est: M
-doc: '[DOCS-041](slices/DOCS-041_slice_new_PREFIX_title_mint_by_creating_the_document.md)'
+doc: '[DOCS-041](slices/DOCS-041_slice_new_PREFIX_title_mint_by_creating_the_document.md) · [Frontmatter is the declaration][frontmatter-is-the]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---

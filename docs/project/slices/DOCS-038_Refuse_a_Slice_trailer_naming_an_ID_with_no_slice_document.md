@@ -3,7 +3,7 @@ id: DOCS-038
 state: ⬜ planned
 title: Refuse a Slice: trailer naming an ID with no slice document
 est: S
-doc: '[DOCS-038](slices/DOCS-038_Refuse_a_Slice_trailer_naming_an_ID_with_no_slice_document.md)'
+doc: '[DOCS-038](slices/DOCS-038_Refuse_a_Slice_trailer_naming_an_ID_with_no_slice_document.md) · [One thing to edit][one-thing-to-edit]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---

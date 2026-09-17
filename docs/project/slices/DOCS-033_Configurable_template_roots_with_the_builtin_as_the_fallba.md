@@ -3,7 +3,7 @@ id: DOCS-033
 state: ⬜ planned
 title: Configurable template roots, with the builtin as the fallback
 est: M
-doc: '[DOCS-033](slices/DOCS-033_Configurable_template_roots_with_the_builtin_as_the_fallba.md)'
+doc: '[DOCS-033](slices/DOCS-033_Configurable_template_roots_with_the_builtin_as_the_fallba.md) · [One template beats three parsers][one-template-beats]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
 ---
