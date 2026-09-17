@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-067<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-070<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -89,6 +89,9 @@ is never referenced from outside the repository it fixes.
 | DOCS-065 | 🟦 tested | `migrate-project` and `index` disagree about every row of the register migrate writes, and the moved prose breaks links | M | [DOCS-065][docs-065] | migrate renders its register with index's own renderer; every row's Status moves to its body; moved links are repointed and evidence is quoted; unit-tested end to end on both register shapes, awaiting a downstream re-run |
 | DOCS-066 | 🟦 tested | Frontmatter is written in a form strict YAML rejects, so GitHub shows an error on every migrated document | S | [DOCS-066][docs-066] | plain only when strict YAML agrees; format re-quotes existing unsafe values without churning quoted ones; verified out-of-band with js-yaml, awaiting a downstream PyYAML gate |
 | DOCS-067 | ⬜ planned | slice new: match a bare --state word to the register's own spelling | S | [DOCS-067][docs-067] |  |
+| DOCS-068 | 🟦 tested | migrate-project: an off-canon register's links and an existing Prefix register | M | [DOCS-068][docs-068] |  |
+| DOCS-069 | ⬜ planned | Anchors: migrate retargets moved headings, links checks fragments | M | [DOCS-069][docs-069] |  |
+| DOCS-070 | ⬜ planned | fold: a dry run reports provenance updates, and --help prints usage | S | [DOCS-070][docs-070] |  |
 
 ## Done
 
@@ -177,6 +180,9 @@ caught.
 [docs-065]: slices/DOCS-065_Migrate_and_index_disagree_about_the_register.md
 [docs-066]: slices/DOCS-066_Frontmatter_written_that_strict_YAML_rejects.md
 [docs-067]: slices/DOCS-067_slice_new_match_a_bare_state_word_to_the_register_s_own_sp.md
+[docs-068]: slices/DOCS-068_migrate_project_an_off_canon_register_s_links_and_an_exist.md
+[docs-069]: slices/DOCS-069_Anchors_migrate_retargets_moved_headings_links_checks_frag.md
+[docs-070]: slices/DOCS-070_fold_a_dry_run_reports_provenance_updates_and_help_prints.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md

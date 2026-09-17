@@ -19,7 +19,7 @@ const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
-const { extractSlices, inventorySlices, normalizeId } = require('../lib/slices');
+const { extractSlices, inventorySlices, normalizeId, rebaseRelative } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
@@ -395,7 +395,17 @@ function cmdMigrateProject(root, config, argv) {
 		console.log(`  NOTE:   off-canon path. The canonical home is ${CANON}/, one level up.`);
 	}
 
-	const result = migrateText(fs.readFileSync(from, 'utf8'), { owner });
+	// An OFF-CANON source moves up to docs/project/ on adoption, so its own relative links are re-expressed from
+	// there first. Everything after this - rows, narrative moved into slices/ - then starts from the directory it
+	// will really live in; without it every moved link landed one level too deep (a downstream pilot).
+	const sourceDir = path.relative(repo, path.dirname(from)).split(path.sep).join('/');
+	const sourceText = sourceDir === CANON
+		? fs.readFileSync(from, 'utf8')
+		: rebaseRelative(fs.readFileSync(from, 'utf8'), { from: sourceDir, to: CANON });
+	const result = migrateText(sourceText, {
+		owner,
+		width: { ...detectWidths(sourceText), ...((config.series || {}).widths || {}) },
+	});
 	if (!result.ok) {
 		console.log('  no ID register table found, so there is nothing to reshape yet.');
 		for (const r of result.rows) {
@@ -407,7 +417,7 @@ function cmdMigrateProject(root, config, argv) {
 	for (const r of result.rows) {
 		const owned = r.owner === null ? 'UNCLAIMED' : r.owner;
 		console.log(`    ${r.prefix.padEnd(6)} ${r.scope.padEnd(11)} ${String(r.lastUsed).padStart(6)}  ${owned}`
-			+ (r.stale ? `  STALE: register said ${r.registered}` : ''));
+			+ (r.stale ? `  STALE: register said ${r.registered === null ? 'none' : r.registered}` : ''));
 	}
 
 	const problems = result.rows.filter((r) => r.owner === null || r.stale);
