@@ -52,8 +52,10 @@ table is the one place to look.
   definitions for generated slice documents. Apply it to both kinds of backup.
 - **7:** percent-encode the path, as `sliceHref` now does for register pointers (`DOCS-065`).
 - **9:** skip a `[` preceded by an odd run of backslashes when matching links to repoint.
-- **10:** fall back to the widths written in the legacy register's cells, then any declaring position, before zero.
-- **11:** give `readSeriesText` the same full-schema header test `canonicalRegister` uses, so both read one table.
+- **10:** fall back to the widths written in the legacy register's cells, then any declaring
+  position, before zero.
+- **11:** give `readSeriesText` the same full-schema header test `canonicalRegister` uses, so both
+  read one table.
 
 ## The lesson worth keeping
 
