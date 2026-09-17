@@ -2215,6 +2215,102 @@ test('[index-gate] --write and --check together is a usage error', () => {
 // a word, and adopting the staged tree overwrote or orphaned the prose. Nothing a human wrote may be lost:
 // every existing document is inventoried, and every one reaches the staged tree byte-for-byte.
 
+// ---------------------------------------------------------------------------
+// DOCS-065. `migrate-project` and `index` must agree about the register migrate writes. A downstream
+// cutover rehearsal found every row diverged at the same SHA: migrate wrote a pointer into the Status
+// cell, index rendered the (empty, or paragraph-long) frontmatter `status:`. And the moved prose broke
+// links: evidence lines read as reference links, and relative targets were not repointed one folder down.
+
+/** A register, WITH or WITHOUT a Doc column, whose rows and narrative carry every link shape at risk. */
+function agreeRepo({ docColumn }) {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agree-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	const head = docColumn ? '| ID | State | Slice | Doc | Status |' : '| ID | State | Slice | Status |';
+	const sep = docColumn ? '| --- | --- | --- | --- | --- |' : '| --- | --- | --- | --- |';
+	const row = (id, state, title, status) => (docColumn ? `| ${id} | ${state} | ${title} | - | ${status} |` : `| ${id} | ${state} | ${title} | ${status} |`);
+	w('README.md', 'See [the roadmap](docs/project/R_Roadmap.md).\n');
+	w('docs/project/R_Roadmap.md', [
+		'# R', '',
+		'## Delivery Index', '',
+		head, sep,
+		row('VS-1', 'coded', 'first', 'Built. See [the design](../design/first.md) and [notes](notes.md). Smoked twice.'),
+		row('VS-2', 'planned', 'second', 'Two sentences here. And [a ref][design-ref].'),
+		row('VS-3', 'planned', 'third', 'A follower\'s own paragraph. It is long enough to matter.'),
+		row('VS-4', 'planned', 'fourth', 'short'),
+		'',
+		'## Slice Notes', '',
+		'### VS-2 through VS-3 — second and third', '',
+		'Narrative with [a relative link](../design/second.md), a sibling [handoff](Handoff_01.md),',
+		'an ![image](diagram.png), and a [site](https://example.com/x).', '',
+		'```', 'not a link to rebase: [x](../design/second.md)', '```', '',
+		'[design-ref]: ../design/ref.md', '',
+	].join('\n'));
+	for (const f of ['docs/design/first.md', 'docs/design/second.md', 'docs/design/ref.md', 'docs/project/notes.md',
+		'docs/project/Handoff_01.md']) {
+		w(f, '# doc\n\nSee [the roadmap](../project/R_Roadmap.md).\n'.replace('../project/R_Roadmap.md', path.relative(path.dirname(f), 'docs/project/R_Roadmap.md').split(path.sep).join('/')));
+	}
+	w('docs/project/diagram.png', 'png');
+	w('config/STATUS.yaml', [
+		'done:', "  - '[VS-1][FIX-9] Mint the first thing'", "  - 'VS-2 shipped, see [the log](log.md) and (parens)'", '',
+	].join('\n'));
+	return dir;
+}
+
+/** The cutover's adoption step: the staged register and slices replace the live ones. */
+function adopt(dir) {
+	const live = path.join(dir, 'docs', 'project');
+	const staged = path.join(dir, 'docs', 'project_v2');
+	fs.rmSync(path.join(live, 'slices'), { recursive: true, force: true });
+	fs.cpSync(path.join(staged, 'slices'), path.join(live, 'slices'), { recursive: true });
+	fs.copyFileSync(path.join(staged, 'R_Roadmap.md'), path.join(live, 'R_Roadmap.md'));
+	fs.rmSync(staged, { recursive: true, force: true });
+}
+
+for (const docColumn of [false, true]) {
+	const shape = docColumn ? 'WITH a Doc column' : 'with NO Doc column';
+
+	test(`[migrate-index] index --check passes on migrate's own output, ${shape}`, () => {
+		const dir = agreeRepo({ docColumn });
+		cli(['migrate-project', '--write'], dir);
+		adopt(dir);
+		const r = cli(['index', '--check'], dir);
+		assert.strictEqual(r.code, 0, r.out);
+	});
+
+	test(`[migrate-index] migrating adds no link problems, ${shape}`, () => {
+		const dir = agreeRepo({ docColumn });
+		const before = checkLinks(dir, { orphanRoot: 'nope' }).problems;
+		cli(['migrate-project', '--write'], dir);
+		adopt(dir);
+		const after = checkLinks(dir, { orphanRoot: 'nope' }).problems;
+		assert.deepStrictEqual(after.map((p) => `${p.file} -> ${p.target} (${p.why})`), before.map((p) => `${p.file} -> ${p.target} (${p.why})`));
+	});
+}
+
+test('[migrate-index] EVERY row\'s Status moves to its document body, followers included; frontmatter status is empty', () => {
+	const dir = agreeRepo({ docColumn: false });
+	cli(['migrate-project', '--write'], dir);
+	const slices = path.join(dir, 'docs', 'project_v2', 'slices');
+	for (const [id, text] of [['VS-1', 'Smoked twice.'], ['VS-3', 'It is long enough to matter.'], ['VS-4', 'short']]) {
+		const name = fs.readdirSync(slices).find((n) => n.startsWith(`${id}_`));
+		const { data, body } = frontmatter.read(fs.readFileSync(path.join(slices, name), 'utf8'));
+		assert.strictEqual(data.status, '', `${id} frontmatter status`);
+		assert.ok(body.includes(text), `${id} body carries its Status:\n${body}`);
+	}
+});
+
+test('[migrate-index] a register with no Doc column renders its pointer from ONE place', () => {
+	// Empty `status:` in a register with no Doc column renders the same pointer migrate writes, so an
+	// adopted register links every row to its document instead of rendering blank.
+	const dir = agreeRepo({ docColumn: false });
+	cli(['migrate-project', '--write'], dir);
+	adopt(dir);
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	const rows = roadmap.split('\n').filter((l) => /^\| VS-/.test(l));
+	assert.strictEqual(rows.length, 4);
+	for (const r of rows) { assert.ok(/See \[slice notes\]\(slices\/VS-\d+_[^)]+\.md\)\./.test(r), r); }
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
