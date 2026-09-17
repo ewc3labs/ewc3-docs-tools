@@ -58,6 +58,11 @@ the live one.
   in a subfolder), copied verbatim at the same path. Codex found both gaps on PR #7. The staged
   slices folder is rebuilt from nothing on every run. A test walks every live file, binary included,
   and requires each to appear byte-for-byte somewhere in staging.
+- **No staged write can overwrite another.** Every path is decided before anything is written. A
+  backup whose name is already taken, for example by a live `slices/_legacy/` file left from an
+  earlier adoption, gets a `-2` suffix, and the generated document links to that name. `index` also
+  reads `.md` in any case, so a kept `.MD` document still declares its slice after adoption. Both
+  found by Codex on PR #7.
 
 ## Estate census (PMO, 2026-09-17, read-only)
 
