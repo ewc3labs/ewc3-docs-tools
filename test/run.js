@@ -3458,6 +3458,24 @@ test('[fold-message] DOCS-073: --staged - every staged slice document is named, 
 	assert.ok(/state changed .*planned.* -> .*coded/.test(noState.out), noState.out);
 	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1', 'State: smoked'), ['--staged']).code, 1, 'a State: for a different value');
 	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1', 'State: coded'), ['--staged']).code, 0);
+
+	// Codex, PR #22: a document whose id was removed was skipped as "not a slice document" and passed unchecked.
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace(/^id: VS-1\n/m, ''));
+	git(dir, 'add', '-A');
+	const lost = checkMessage(dir, msg('Slice: VS-1', 'State: coded'), ['--staged']);
+	assert.strictEqual(lost.code, 1, lost.out);
+	assert.ok(/VS-1_first\.md: .*no readable id/.test(lost.out), lost.out);
+});
+
+test('[fold-message] DOCS-073: a backup under slices/_legacy/ is not a live slice document', () => {
+	// Copilot, PR #22: the slice directory was read recursively, so an id only a backup carried was accepted.
+	// `index` reads only the files directly in slices/; so does fold.
+	const dir = foldRepo();
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices', '_legacy'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', '_legacy', 'VS-9_old.md'), GATE_DOC('VS-9', 'planned', 'old', ''));
+	const r = checkMessage(dir, msg('Slice: VS-9'));
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/Slice: VS-9 names no slice document/.test(r.out), r.out);
 });
 
 test('[fold-message] DOCS-073: --staged - fold\'s own write needs no trailer, but only when its state_sha agrees', () => {
