@@ -49,6 +49,10 @@ the live one.
   a decision nobody made.
 - **Two existing documents for one slice** (padding included) **refuse the migration**, naming both,
   before anything is written. Which one is the slice is not a tool decision.
+- **A kept document's filename is reserved.** When another row would generate that exact name, the
+  generated document is renamed with a `_generated` suffix. The authored one is never replaced.
+  Found by Codex on PR #7: a doc named `VS-2_...md` declaring `VS-5` replaced VS-2's generated
+  document, and both rows pointed at one file.
 - **The staged tree is complete.** Adopting `docs/project_v2/` in one move now loses nothing a human
   wrote. A test pins this: every live document must appear byte-for-byte somewhere in staging.
 

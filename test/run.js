@@ -2336,6 +2336,26 @@ test('[migrate-legacy] two documents for ONE slice refuse the migration, naming 
 	}
 });
 
+test('[migrate-legacy] a kept document\'s filename is never overwritten by ANOTHER slice\'s generated one', () => {
+	// Codex, PR #7. A kept document keeps its freely chosen name; when that name is exactly what another
+	// row generates (VS-2_frontmatter_without_id.md declaring VS-5 here), the verbatim copy replaced the
+	// generated document and both rows pointed at one file. The generated one is renamed instead.
+	const { dir, docs } = legacyRepo({
+		'VS-5_proper.md': null,
+		'VS-2_frontmatter_without_id.md': '---\nid: VS-5\ntitle: proper frontmatter\n---\n\nPROSE FIVE, ODDLY NAMED.\n',
+		'VS-2-old-name.md': null,
+	});
+	cli(['migrate-project', '--write'], dir);
+	const staged = stagedSlices(dir);
+	assert.strictEqual(fs.readFileSync(path.join(staged, 'VS-2_frontmatter_without_id.md'), 'utf8'),
+		docs['VS-2_frontmatter_without_id.md'], 'the kept document is staged verbatim');
+	const two = fs.readdirSync(staged).filter((n) => /^VS-0*2_/.test(n) && n !== 'VS-2_frontmatter_without_id.md');
+	assert.strictEqual(two.length, 1, `VS-2 still gets its own document: ${fs.readdirSync(staged).join(' ')}`);
+	assert.ok(/^id: VS-0*2$/m.test(fs.readFileSync(path.join(staged, two[0]), 'utf8')));
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8');
+	assert.ok(roadmap.includes(`slices/${two[0]}`), 'row VS-2 points at the renamed document');
+});
+
 test('[migrate-legacy] a second run leaves no stale backup behind', () => {
 	const { dir } = legacyRepo();
 	cli(['migrate-project', '--write'], dir);

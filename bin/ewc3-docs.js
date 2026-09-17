@@ -497,6 +497,7 @@ function cmdMigrateProject(root, config, argv) {
 		sourceName: path.basename(from),
 		existing: authored,
 		legacy,
+		reserved: new Set(inventory.filter((e) => e.frontmatter === 'ok').map((e) => e.name.toLowerCase())),
 	});
 
 	const outFile = path.join(outDir, path.basename(from));
