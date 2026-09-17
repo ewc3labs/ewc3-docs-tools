@@ -1,10 +1,10 @@
 ---
 id: DOCS-056
-state: ⬜ planned
+state: 🟦 tested
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
 doc: '[DOCS-056](slices/DOCS-056_After_adoption_editing_the_register_is_silently_futile.md)'
-status: 'the register becomes generated and nothing says so, so a row edited by hand is overwritten with no warning and exit 0; PMO had 9952 characters of live reasoning standing in exactly that position'
+status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 24 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
 priority: high
 lane: index
 ---
@@ -177,3 +177,45 @@ been quoted for a year and been wrong.
 missing *"one row invalidated"*, which it carries in capitals. They did not send it — **a single NO
 among YESes is more likely the instrument than the file.** Fourth naive-predicate false positive in
 the estate in two days.
+
+## Built, 2026-09-16 — two gates, and where they depart from the fix above
+
+The fix above was drafted before review. PMO specified it, LabsHQ reviewed it adversarially, and
+what was built differs in three places, each for a stated reason:
+
+| drafted | built | why |
+| --- | --- | --- |
+| `--force` to overwrite | **no `--force`** | a document edit alone never refuses, because the baseline is git and not the render. The only thing `--force` could overwrite is a hand edit, and `git checkout` already does that visibly |
+| `check` reports the divergence | **`index --check`** | `check` is red wholesale on SX_Coder (788 format, 272 links), so a gate inside it would be ignored with the rest |
+| compare the row with its render | **compare cells, against git** | a row cannot say whether it was typed or rendered, but its history can |
+
+- **L1, `index --write`**, refuses a row whose cells match neither the committed version at HEAD nor
+  the version `index` last wrote since HEAD, stored per worktree under
+  `git rev-parse --git-path ewc3-docs/index-last.json`. That second baseline is LabsHQ finding 3.
+  Without it, render, edit the document, render again refuses its own output. A row with no history
+  is allowed, because minting a placeholder row is how a person adds one. The decision covers every
+  roadmap before any is written.
+- **L2, `index --check`**, fails on a diverged row, a row with no document, a document with no row,
+  and one ID on two rows. It needs no git history. **Only L2 catches a hand edit that was
+  committed.**
+- **Exit contract, every command:** 0 consistent, 1 diverged (always named), 2 did not run. A crash
+  exits 2. It used to exit 1 with a stack trace, and the first control run counted every crash as a
+  catch.
+
+### Found by dogfooding: formatting alone made every row diverge
+
+The first `index --check` on this repository failed **all 43 rows**. `index` renders
+`[DOCS-001](slices/...)`, and `format` then rewrites that to `[DOCS-001][docs-001]` plus a
+definition. GitHub renders the two identically. The same DOCS-059 disagreement that the cell
+comparison already absorbed for padding came back through link style. The comparison now resolves a
+reference link to its definition, which is what GitHub does. A definition pointing elsewhere, or
+sitting inside a fence, still differs, so the comparison hides no real change. Control L pins all
+three cases.
+
+### Not built
+
+- **The generated-file banner** is still worth its one line and is still missing.
+- **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
+  the churn in `git diff` remains.
+- **Not yet run on an estate register.** 24 controls, one repository, green locally. The next
+  evidence is `index --check` on an adopted MedAR register.

@@ -35,6 +35,12 @@ EWC3 Labs documentation tools
                                           no tool can tell a literal pipe from a lost column.
                                           Reads docs/project/slices/, else docs/project_v2/
                                           slices/. Dry run without --write.
+    [--check]                             Fail if any row differs from what its document
+                                          renders, or a row and a document do not pair up.
+                                          Writes nothing; the CI command for an adopted
+                                          register. --write refuses a row edited by hand
+                                          since it was last committed or written - edit the
+                                          slice document instead.
 
   ewc3-docs tables                        Table rows whose cell count does not match their header -
                                           almost always a pipe inside a cell that needs escaping
