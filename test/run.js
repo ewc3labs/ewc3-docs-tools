@@ -3397,6 +3397,162 @@ test('[fold] outside a git work tree, fold does not run', () => {
 	assert.strictEqual(cli(['fold', '--check'], dir).code, 2);
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-073. `fold --check-message`: a commit message's trailers validated BEFORE the commit exists, by fold's own
+// grammar, so a commit command and a commit-msg hook refuse what fold would later only warn about.
+
+/** Write a commit message file into the repository's scratch area and check it. */
+function checkMessage(dir, message, extra = []) {
+	const file = path.join(dir, '.git', 'TEST_EDITMSG');
+	fs.writeFileSync(file, message);
+	return cli(['fold', '--check-message', file, ...extra], dir);
+}
+const msg = (...trailers) => `[VS-1] do the work\n\nWhy it matters.\n\n${trailers.join('\n')}\n`;
+
+test('[fold-message] DOCS-073: a valid trailer block is accepted - legend word, any case, any padding', () => {
+	const dir = foldRepo();
+	const r = checkMessage(dir, msg('Slice: VS-001', 'State: Coded', 'Slice: VS-2', 'Co-Authored-By: t <t@t>'));
+	assert.strictEqual(r.code, 0, r.out);
+});
+
+test('[fold-message] DOCS-073: each malformed trailer is refused, naming the trailer', () => {
+	const dir = foldRepo();
+	for (const [trailers, why] of [
+		[['Slice: VS-9', 'State: coded'], /Slice: VS-9 names no slice document/],
+		[['Slice: VS-1', 'State: shipped'], /State: shipped is not in the legend/],
+		[['State: coded'], /State: with no Slice:/],
+		[['Slice: VS-1', 'State: coded', 'State: go'], /a second State:/],
+	]) {
+		const r = checkMessage(dir, msg(...trailers));
+		assert.strictEqual(r.code, 1, `${trailers.join(' / ')}:\n${r.out}`);
+		assert.ok(why.test(r.out), `${trailers.join(' / ')}:\n${r.out}`);
+	}
+	const both = checkMessage(dir, msg('Slice: VS-9', 'State: shipped'));
+	assert.ok(/2 problem/.test(both.out), `a bad id does not hide a bad state word:\n${both.out}`);
+});
+
+test('[fold-message] DOCS-073: the message is read as git will store it - comments, scissors, and only the last paragraph', () => {
+	const dir = foldRepo();
+	assert.strictEqual(checkMessage(dir, `${msg('Slice: VS-1', 'State: coded')}# Slice: VS-9\n`).code, 0, 'a comment line is stripped');
+	assert.strictEqual(checkMessage(dir, `${msg('Slice: VS-1')}# ------------------------ >8 ------------------------\ndiff\nSlice: VS-9\n`).code, 0,
+		'everything below the scissors is stripped');
+	assert.strictEqual(checkMessage(dir, '[VS-1] subject\n\nSlice: VS-9\n\nA closing paragraph that is prose.\n').code, 0,
+		'trailer-looking text outside the last paragraph is not a trailer');
+});
+
+test('[fold-message] DOCS-073: --staged - every staged slice document is named, and a changed state carries its State:', () => {
+	const dir = foldRepo();
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, `${fs.readFileSync(doc, 'utf8')}\nMore notes.\n`);
+	git(dir, 'add', '-A');
+	const unnamed = checkMessage(dir, msg('Co-Authored-By: t <t@t>'), ['--staged']);
+	assert.strictEqual(unnamed.code, 1, unnamed.out);
+	assert.ok(unnamed.out.includes('VS-1_first.md') && /not named by a Slice: trailer/.test(unnamed.out), unnamed.out);
+	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1'), ['--staged']).code, 0);
+	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1'), []).code, 0, 'without --staged the index is not read');
+
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace('state: ⬜ planned', 'state: 🟦 coded'));
+	git(dir, 'add', '-A');
+	const noState = checkMessage(dir, msg('Slice: VS-1'), ['--staged']);
+	assert.strictEqual(noState.code, 1, noState.out);
+	assert.ok(/state changed .*planned.* -> .*coded/.test(noState.out), noState.out);
+	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1', 'State: smoked'), ['--staged']).code, 1, 'a State: for a different value');
+	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1', 'State: coded'), ['--staged']).code, 0);
+
+	// Codex, PR #22: a document whose id was removed was skipped as "not a slice document" and passed unchecked.
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace(/^id: VS-1\n/m, ''));
+	git(dir, 'add', '-A');
+	const lost = checkMessage(dir, msg('Slice: VS-1', 'State: coded'), ['--staged']);
+	assert.strictEqual(lost.code, 1, lost.out);
+	assert.ok(/VS-1_first\.md: .*no readable id/.test(lost.out), lost.out);
+});
+
+test('[fold-message] DOCS-073: a backup under slices/_legacy/ is not a live slice document', () => {
+	// Copilot, PR #22: the slice directory was read recursively, so an id only a backup carried was accepted.
+	// `index` reads only the files directly in slices/; so does fold.
+	const dir = foldRepo();
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices', '_legacy'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', '_legacy', 'VS-9_old.md'), GATE_DOC('VS-9', 'planned', 'old', ''));
+	const r = checkMessage(dir, msg('Slice: VS-9'));
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/Slice: VS-9 names no slice document/.test(r.out), r.out);
+});
+
+test('[fold-message] DOCS-073: --staged - fold\'s own write needs no trailer, but only when its state_sha agrees', () => {
+	const dir = foldRepo();
+	const sha = trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	git(dir, 'add', '-A');
+	const r = checkMessage(dir, 'fold: record states\n', ['--staged']);
+	assert.strictEqual(r.code, 0, r.out);
+
+	const other = foldRepo();
+	const coded = trailerCommit(other, 'work', ['Slice: VS-1', 'State: coded']);
+	const doc = gateDoc(other, 'VS-1');
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace('state: ⬜ planned', `state: 💨 smoked\nstate_sha: ${coded.slice(0, 12)}\nstate_source: trailer`));
+	git(other, 'add', '-A');
+	const lie = checkMessage(other, 'fold: record states\n', ['--staged']);
+	assert.strictEqual(lie.code, 1, `a state_sha whose trailer says coded does not exempt smoked:\n${lie.out}`);
+	void sha;
+});
+
+test('[fold-message] DOCS-073: No-Slice: <reason> exempts naming; an empty reason, or one beside Slice:, is refused', () => {
+	const dir = foldRepo();
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, `${fs.readFileSync(doc, 'utf8')}\nReflowed.\n`);
+	git(dir, 'add', '-A');
+	assert.strictEqual(checkMessage(dir, msg('No-Slice: format sweep across slice documents'), ['--staged']).code, 0);
+	const empty = checkMessage(dir, msg('No-Slice:'), ['--staged']);
+	assert.strictEqual(empty.code, 1, empty.out);
+	assert.ok(/No-Slice: needs a reason/.test(empty.out), empty.out);
+	const both = checkMessage(dir, msg('Slice: VS-1', 'No-Slice: also this'), ['--staged']);
+	assert.strictEqual(both.code, 1, both.out);
+	assert.ok(/No-Slice: .*with Slice:/.test(both.out), both.out);
+});
+
+test('[fold-message] DOCS-073: a merge in progress skips --staged and says so', () => {
+	const dir = foldRepo();
+	const main = git(dir, 'rev-parse', '--abbrev-ref', 'HEAD');
+	git(dir, 'checkout', '-qb', 'side');
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, `${fs.readFileSync(doc, 'utf8')}\nSide notes.\n`);
+	git(dir, 'commit', '-qam', 'side', '-m', 'Slice: VS-1');
+	git(dir, 'checkout', '-q', main);
+	fs.writeFileSync(path.join(dir, 'README.md'), 'main moved\n');
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'main');
+	git(dir, 'merge', '--no-commit', '--no-ff', 'side');
+	const r = checkMessage(dir, "Merge branch 'side'\n", ['--staged']);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/merge in progress/.test(r.out), r.out);
+});
+
+test('[fold-message] DOCS-073: not applicable exits 0 with its reason; a broken input did not run', () => {
+	const rows = stagedRepo();
+	git(rows, 'init', '-q');
+	fs.rmSync(path.join(rows, 'docs', 'project', 'slices'), { recursive: true, force: true });
+	const r = checkMessage(rows, msg('Slice: VS-1', 'State: coded'));
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/rows register/.test(r.out), r.out);
+
+	const dir = foldRepo();
+	assert.strictEqual(cli(['fold', '--check-message', path.join(dir, 'no-such-file')], dir).code, 2);
+	assert.strictEqual(cli(['fold', '--check-message', path.join(dir, 'x'), '--write'], dir).code, 2, 'exclusive with --write');
+	assert.strictEqual(cli(['fold', '--staged'], dir).code, 2, '--staged needs --check-message');
+	const bad = legendRepo(['## State Legend', '', '- ⬜ `planned` · 🟦 `coded`']);
+	assert.strictEqual(checkMessage(bad, msg('Slice: VS-1', 'State: coded')).code, 2, 'an unreadable legend did not run');
+});
+
+test('[fold-message] DOCS-073: ONE grammar - the pairs a message passes with are the pairs fold reads once committed', () => {
+	const dir = foldRepo();
+	const message = msg('Slice: VS-1', 'State: smoked', 'Slice: VS-2', 'State: go', 'Co-Authored-By: t <t@t>');
+	assert.strictEqual(checkMessage(dir, message).code, 0);
+	fs.writeFileSync(path.join(dir, '.git', 'M'), message);
+	git(dir, 'commit', '--allow-empty', '-qF', path.join(dir, '.git', 'M'));
+	const r = cli(['fold'], dir);
+	assert.ok(r.out.includes('VS-1: ⬜ planned -> 💨 smoked') && r.out.includes('VS-2: ⬜ planned -> 🟩 go'), r.out);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');

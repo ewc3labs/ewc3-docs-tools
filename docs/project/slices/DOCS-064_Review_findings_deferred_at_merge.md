@@ -37,6 +37,8 @@ Every blocking finding was fixed before merge. These were not:
 | 10 | #16 | P2 | A synthesised register pads a prefix with no Delivery Index row at width zero, so `TS-02` is written `TS-2` | cosmetic: the original register is kept verbatim beneath the new one, and ids elsewhere are untouched |
 | 11 | #16 | P2 | With an unrelated `\| Prefix \|` table above the real register, `readSeriesText` seeds heading declarations from the wrong table, so a heading-only id past Last Used is missed | needs an unrelated Prefix table ahead of the register **and** an id declared only by a heading |
 | 12 | #21 | P2 | `mintDates` scans added patch lines, so a table row inside a code fence or HTML comment, committed before the real row, dates the mint too early and evidence between the two is not set apart | the failure is the behaviour before DOCS-075, never worse; it needs a fenced example of that exact id committed ahead of the row |
+| 13 | #22 | P1 | `--check-message --staged` reads the register (slice documents, legend) from the **working tree**, so partly staged legend or document changes are checked against a tree the commit will not contain | a false pass or a false refusal in the hook only; `fold --check` in CI reads the committed tree and catches it loudly |
+| 14 | #22 | P2 | `core.commentChar=auto` is read as `#`, so a comment line git will strip with another character is checked as a trailer, or one it keeps is stripped | `auto` is rare, and git picks a character that starts no line of the message, so the trailer block is unaffected unless someone writes a trailer-shaped comment |
 
 Row 8 is a design decision, not a defect, and belongs to `DOCS-062`. It is listed here only so this
 table is the one place to look.
@@ -60,6 +62,10 @@ table is the one place to look.
 - **12:** list commits and paths with `git log --name-only`, read each version through one
   `git cat-file --batch`, and take rows from `withoutFences` of the whole file, not from patch
   lines.
+- **13:** in staged mode, build the register from index blobs (`git ls-files -s` plus one
+  `git cat-file --batch`) instead of the working tree.
+- **14:** resolve the effective comment character the way git does for `auto`, or refuse to guess
+  and say so, rather than assuming `#`.
 
 ## The lesson worth keeping
 
