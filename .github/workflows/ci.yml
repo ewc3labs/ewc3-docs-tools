@@ -34,3 +34,7 @@ jobs:
       # pointed at anyone else's.
       - name: Check
         run: node bin/ewc3-docs.js check
+      # This register is generated from docs/project/slices. A row typed into by hand, and committed,
+      # is caught here and nowhere else (DOCS-056).
+      - name: Delivery Index matches its slice documents
+        run: node bin/ewc3-docs.js index --check

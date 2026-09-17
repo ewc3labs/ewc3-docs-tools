@@ -14,7 +14,7 @@ that is a bug — there is a test asserting this page covers the code's surface.
 | `fix` | yes | `values` then `format`, in write mode. **The pre-commit button.** |
 | `tables` | never | Table rows whose cell count disagrees with their header - an unescaped pipe. |
 | `check` | never | All of the above in check mode. **The CI command.** |
-| `index [--repo <dir>] [--slices <dir>] [--write]` | the Delivery Index table only | Regenerates a Delivery Index from the slice documents that declare its rows. Renders rows and refuses everything else: an unminted ID is reported not added, an unclaimed row is left alone, and a row with more cells than its header has columns is refused. Column schema and ID padding are read off the register itself. |
+| `index [--repo <dir>] [--slices <dir>] [--write \| --check]` | the Delivery Index table only | Regenerates a Delivery Index from the slice documents that declare its rows. Renders rows and refuses everything else: an unminted ID is reported not added, an unclaimed row is left alone, and a row with more cells than its header has columns is refused. Column schema and ID padding are read off the register itself. `--write` refuses a row edited by hand; `--check` fails on any row that differs from its document. See [the index gate](#the-index-gate). |
 | `migrate-project [--write]` | into `docs/project_v2/` only | Emits a migrated planning surface beside the live one. Never touches `docs/project/`. |
 
 `fix` and `check` are mirrors of each other: one makes it right, one asks whether it is.
@@ -26,7 +26,7 @@ the wrap has to see the result. Running `format` then `values` can leave a line 
 
 | | |
 | --- | --- |
-| `--check` | Report what would change and exit non-zero. Writes nothing. `format` and `values` only. |
+| `--check` | Report what would change and exit non-zero. Writes nothing. `format`, `values` and `index`. |
 | `--config <path>` | Use this config instead of searching. |
 | `--slices <dir>` | Where the slice documents live. `index` only; defaults to docs/project/slices/ then docs/project_v2/slices/. |
 | `[files...]` | Positional globs override `include` for this run. `format` and `values` only. |
@@ -40,9 +40,43 @@ the wrap has to see the result. Running `format` then `values` can leave a line 
 | --- | --- |
 | `0` | clean |
 | `1` | something is wrong with the documents |
-| `2` | something is wrong with the invocation — bad config, unknown command, missing file |
+| `2` | the check did not run — bad config, unknown command, missing file, or the tool itself failed |
 
-The split matters in CI: `1` means fix your docs, `2` means fix your setup.
+The split matters in CI: `1` means fix your docs, `2` means fix your setup. A `1` always names at
+least one file or ID. A crash exits `2`, never `1`, so a failure is never counted as a finding. Set
+`EWC3_DOCS_DEBUG=1` to get the stack trace.
+
+### The index gate
+
+Once a repository has slice documents that declare IDs, its Delivery Index is **generated**. Edit
+the slice document, never the row. Two gates keep that true:
+
+| | refuses or fails when | needs |
+| --- | --- | --- |
+| `index --write` | a row was edited by hand since it was last committed or last written by `index`. It writes nothing, and names each row with its current, previous and rendered cells. | git |
+| `index --check` | any row differs from what its document renders, a row has no document, a document has no row, or one ID has two rows. Writes nothing. **The CI command for an adopted register.** | nothing |
+
+Only `--check` catches a hand edit that was **committed**, so an adopted repository runs it in CI.
+Both commands compare **cells as GitHub renders them**, not bytes: padding at a cell's edges and
+`\|` versus a pipe are the same cell. Nothing else is folded. A no-break space or a variation
+selector is a real difference.
+
+**No link syntax is parsed.** A row is consistent when its cells exactly equal what `index` writes,
+**or** exactly equal what `format` makes of that. The second form matters because `format` rewrites
+the Doc cell's inline link as a reference. A re-pointed definition is still caught: `format` gives
+the rendered target its own label, so the row's label no longer matches. The cost is that a
+reference `format` would not have written, such as a short link hand-converted to a reference, reads
+as diverged even though GitHub renders the same link. That fails loudly and never passes a change.
+The gate is exactly as correct about links as `format` is.
+
+`--write` exits `2` without a git work tree, mid-merge, mid-rebase, mid-cherry-pick or mid-revert,
+and when the roadmap has never been committed. Without a commit there is nothing to tell a hand edit
+from a render. `--check` needs no history and runs mid-operation, but both exit `2` while any
+conflict is unresolved, because the tree may hold conflict markers. A row with no committed or
+written history is written only if that loses nothing: every non-empty cell other than the ID must
+already match its render. A blank placeholder row, which is how a person mints one, passes. A row
+whose ID was renamed while its cells were edited is refused. A slice document whose frontmatter
+cannot be read exits `1` and names the file.
 
 ## Configuration
 

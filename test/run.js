@@ -1732,6 +1732,10 @@ function stagedRepo() {
 	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), index);
 	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-1_first.md'),
 		'---\nid: VS-1\nstate: coded\ntitle: CHANGED\n---\n\n# VS-1\n');
+	// Committed, because `index --write` takes its hand-edit baseline from git (DOCS-056).
+	git(dir, 'init', '-q');
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'staged');
 	return dir;
 }
 
@@ -1754,6 +1758,17 @@ test('[index] STAGED slices never write the LIVE roadmap', () => {
 	assert.ok(r.out.includes('project_v2'), 'and the staged copy is what it renders into');
 	assert.ok(fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8')
 		.includes('CHANGED'), 'which it did write');
+});
+
+test('[index] VS-4 and VS-004 declared by two documents are ONE id, and refused', () => {
+	// Codex P1, PR #6. The duplicate check compared ids as written, so VS-001 and VS-1 passed it - and
+	// renderIndex, which normalises, kept only one of the two documents and exited 0.
+	const dir = stagedRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-001_again.md'),
+		'---\nid: VS-001\nstate: planned\ntitle: OTHER\n---\n\n# VS-001\n');
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(r.out.includes('VS-1_first.md') && r.out.includes('VS-001_again.md'), r.out);
 });
 
 test('[index] two documents declaring one id is REFUSED', () => {
@@ -1779,6 +1794,418 @@ test('[index] rendering NO Delivery Index at all is not a success', () => {
 	const r = cli(['index'], dir);
 	assert.strictEqual(r.code, 2);
 	assert.ok(/no roadmap in that tree carries a recognised Delivery Index/.test(r.out));
+});
+
+// ---------------------------------------------------------------------------
+// DOCS-056. Once a repository adopts slice documents its Delivery Index is GENERATED. Two gates keep
+// it that way: `index --write` refuses a row hand-edited since it was last committed or written (L1),
+// and `index --check` fails when a row differs from what its document renders (L2). Each control
+// below is a lettered case from the agreed table, and each was run against the ungated command first.
+
+function git(dir, ...args) {
+	const r = require('child_process').spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+		'-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', ...args], { cwd: dir, encoding: 'utf8' });
+	if (r.status !== 0) { throw new Error(`git ${args.join(' ')}: ${r.stderr}`); }
+	return r.stdout.trim();
+}
+
+const GATE_DOC = (id, state, title, status) =>
+	`---\nid: ${id}\nstate: ${state}\ntitle: ${title}\nstatus: ${status}\n---\n\n# ${id}\n`;
+
+/** An adopted repository, committed and consistent: two rows, two documents that render them. */
+function gateRepo() {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| VS-1 | planned | first | x |', '| VS-2 | coded | second | y |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'VS-1_first.md'), GATE_DOC('VS-1', 'planned', 'first', 'x'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'VS-2_second.md'), GATE_DOC('VS-2', 'coded', 'second', 'y'));
+	git(dir, 'init', '-q');
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'adopted');
+	return dir;
+}
+const gateRoadmap = (dir) => path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+const gateDoc = (dir, id) => path.join(dir, 'docs', 'project', 'slices',
+	fs.readdirSync(path.join(dir, 'docs', 'project', 'slices')).find((n) => n.startsWith(`${id}_`)));
+function swap(file, from, to) {
+	const text = fs.readFileSync(file, 'utf8');
+	assert.ok(text.includes(from), `fixture: ${from} not in ${file}`);
+	fs.writeFileSync(file, text.replace(from, to));
+}
+const handEdit = (dir) => swap(gateRoadmap(dir), '| VS-1 | planned | first | x |', '| VS-1 | planned | typed by hand | x |');
+const docEdit = (dir, title = 'renamed') => swap(gateDoc(dir, 'VS-1'), 'title: first', `title: ${title}`);
+
+test('[index-gate] a consistent adopted repository passes --check', () => {
+	const r = cli(['index', '--check'], gateRepo());
+	assert.strictEqual(r.code, 0, r.out);
+});
+
+test('[index-gate] A: document edited, row untouched - --write renders it, --check fails until it does', () => {
+	const dir = gateRepo();
+	docEdit(dir);
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1, check.out);
+	assert.ok(check.out.includes('VS-1'), 'a failure names the id');
+	assert.ok(!check.out.includes('VS-2'), 'and only the id that diverged');
+	assert.ok(!fs.readFileSync(gateRoadmap(dir), 'utf8').includes('renamed'), '--check never writes');
+
+	const write = cli(['index', '--write'], dir);
+	assert.strictEqual(write.code, 0, write.out);
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-1 | planned | renamed | x |'));
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+});
+
+test('[index-gate] B: row hand-edited, document untouched - --write REFUSES, --check fails', () => {
+	const dir = gateRepo();
+	handEdit(dir);
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const write = cli(['index', '--write'], dir);
+	assert.strictEqual(write.code, 1, write.out);
+	assert.ok(/VS-1/.test(write.out) && /hand-edited/.test(write.out), write.out);
+	assert.ok(write.out.includes('R_Roadmap.md:7'), 'the refusal names file and line');
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before, 'the edit is not discarded');
+
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1);
+	assert.ok(check.out.includes('VS-1') && check.out.includes('typed by hand'), check.out);
+});
+
+test('[index-gate] C: row AND document edited - --write refuses, --check fails', () => {
+	const dir = gateRepo();
+	handEdit(dir);
+	docEdit(dir);
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 1);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 1);
+});
+
+test('[index-gate] D: a hand edit that was COMMITTED - --write renders over it, --check is what catches it', () => {
+	const dir = gateRepo();
+	handEdit(dir);
+	git(dir, 'commit', '-qam', 'typed into the register');
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1, 'this is the case L2 exists for: L1 cannot see a committed edit');
+	assert.ok(check.out.includes('VS-1'));
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-1 | planned | first | x |'));
+});
+
+test('[index-gate] E: document edited and committed, never rendered - --write renders, --check fails', () => {
+	const dir = gateRepo();
+	docEdit(dir);
+	git(dir, 'commit', '-qam', 'doc only');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 1);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('renamed'));
+});
+
+test('[index-gate] F: render, edit the document again, render again - NOT a hand edit', () => {
+	// LabsHQ finding 3. With HEAD as the only baseline the second render refuses: the first one already
+	// moved the row away from HEAD, and HEAD cannot tell a render from a typist.
+	const dir = gateRepo();
+	docEdit(dir, 'renamed');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	swap(gateDoc(dir, 'VS-1'), 'title: renamed', 'title: again');
+	const second = cli(['index', '--write'], dir);
+	assert.strictEqual(second.code, 0, second.out);
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-1 | planned | again | x |'));
+	// A typist editing the row the tool just wrote is still a typist.
+	swap(gateRoadmap(dir), '| VS-1 | planned | again | x |', '| VS-1 | planned | typed | x |');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 1);
+});
+
+test('[index-gate] P: a row that differs ONLY in padding is not an edit, and not a divergence', () => {
+	// Cells, not bytes. `format` and `index` disagree about column padding (DOCS-059); a gate comparing
+	// bytes would fail every repository that ran both.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-1 | planned | first | x |', '|  VS-1 |\tplanned   | first |x|');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'uncommitted padding');
+	git(dir, 'commit', '-qam', 'padding');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'committed padding');
+	swap(gateDoc(dir, 'VS-2'), 'title: second', 'title: moved');
+	const write = cli(['index', '--write'], dir);
+	assert.strictEqual(write.code, 0, write.out);
+});
+
+test('[index-gate] P: an edge character GFM does NOT trim is still a difference', () => {
+	// LabsHQ finding 7. `.trim()` strips a no-break space, and GitHub renders one - every extra
+	// normalisation is a place a real change can hide.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| first |', '| first |');
+	git(dir, 'commit', '-qam', 'nbsp');
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1, check.out);
+});
+
+test('[index-gate] L: a row as `format` rewrote it is consistent - with no link syntax parsed at all', () => {
+	// Found dogfooding: `index` renders `[DOCS-001](slices/...)` and `format` rewrites it to
+	// `[DOCS-001][docs-001]` plus a definition, so all 43 rows here read as diverged. Six review rounds
+	// on PR #6 then found six ways a hand-rolled reference resolver let a REAL change compare equal. So
+	// nothing is resolved: a row is consistent when its cells are exactly what `index` writes, or exactly
+	// what `format` makes of that.
+	const dir = gateRepo();
+	const target = 'slices/VS-1_a_path_long_enough_that_format_moves_it.md';
+	swap(gateDoc(dir, 'VS-1'), 'status: x', `status: see [VS-1](${target})`);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	const formatted = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	assert.ok(!formatted.includes(`](${target})`), 'fixture: format moved the link into a definition');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'the formatted row is consistent');
+
+	// Render, format, render: the formatted row is what the tool last wrote, once formatted.
+	swap(gateDoc(dir, 'VS-1'), 'title: first', 'title: again');
+	const again = cli(['index', '--write'], dir);
+	assert.strictEqual(again.code, 0, again.out);
+
+	// A definition re-pointed by hand is a different link. `format` gives the rendered target its own
+	// label, so the row's label no longer matches - caught without reading the definition at all.
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	const label = /\[VS-1\]\[([^\]]+)\]/.exec(fs.readFileSync(gateRoadmap(dir), 'utf8'))[1];
+	swap(gateRoadmap(dir), `[${label}]: ${target}`, `[${label}]: slices/VS-1_somewhere_else_entirely_by_hand.md`);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 1, 'a re-pointed definition');
+});
+
+test('[index-gate] a formatted row whose DEFINITION is gone is not consistent', () => {
+	// Codex, PR #6. Only the formatted ROW was compared, so `[VS-1][label]` with its definition deleted
+	// still matched - and GitHub renders literal brackets. The formatted form now counts only when the
+	// roadmap outside its rows is exactly what `format` writes, which is where the definitions live.
+	const dir = gateRepo();
+	const target = 'slices/VS-1_a_path_long_enough_that_format_moves_it.md';
+	swap(gateDoc(dir, 'VS-1'), 'status: x', `status: see [VS-1](${target})`);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'fixture: consistent while the definition exists');
+	const text = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const def = text.split('\n').find((l) => l.endsWith(`: ${target}`));
+	assert.ok(def, 'fixture: format wrote a definition');
+	fs.writeFileSync(gateRoadmap(dir), text.replace(`${def}\n`, ''));
+	const r = cli(['index', '--check'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('VS-1'), r.out);
+});
+
+test('[index-gate] J: one id in TWO roadmaps is a duplicate too', () => {
+	// Codex, PR #6: rows were grouped per file, so VS-1 once in each of two registers passed --check and
+	// --write rendered the one document into both.
+	const dir = gateRepo();
+	fs.copyFileSync(gateRoadmap(dir), path.join(dir, 'docs', 'project', 'S_Roadmap.md'));
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'second register');
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1, check.out);
+	assert.ok(check.out.includes('R_Roadmap.md:7') && check.out.includes('S_Roadmap.md:7'), check.out);
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	swap(gateDoc(dir, 'VS-1'), 'title: first', 'title: renamed');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 1);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before, 'nothing written');
+});
+
+test('[index-gate] a reference link `format` would NOT write is compared literally - loud, never silent', () => {
+	// The cost of parsing no link syntax, pinned so it is a decision and not a surprise: a short target
+	// `format` leaves inline, hand-written as a reference, reads as diverged even though GitHub renders
+	// the same link. Every one of the six resolver bugs was the opposite failure - silent.
+	const dir = gateRepo();
+	swap(gateDoc(dir, 'VS-1'), 'status: x', 'status: see [VS-1](slices/u.md)');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	swap(gateRoadmap(dir), '[VS-1](slices/u.md)', '[VS-1][u]');
+	fs.appendFileSync(gateRoadmap(dir), '\n[u]: slices/u.md\n');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 1);
+});
+
+test('[index-gate] R: row and document BOTH absent is consistent', () => {
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-2 | coded | second | y |\n', '');
+	fs.unlinkSync(gateDoc(dir, 'VS-2'));
+	git(dir, 'commit', '-qam', 'archived VS-2');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+});
+
+test('[index-gate] S/M: a row whose document is gone FAILS --check - adoption is the documents, not a marker', () => {
+	// Nothing in this fixture says "adopted" except that slice documents declare ids. Deleting a marker
+	// line must never be the way to turn CI green (LabsHQ finding 6).
+	const dir = gateRepo();
+	fs.unlinkSync(gateDoc(dir, 'VS-2'));
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1, check.out);
+	assert.ok(check.out.includes('VS-2'));
+});
+
+test('[index-gate] a document claiming an id with no row fails --check', () => {
+	const dir = gateRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'VS-9_ghost.md'), GATE_DOC('VS-9', 'planned', 'ghost', 'z'));
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1);
+	assert.ok(check.out.includes('VS-9'));
+});
+
+test('[index-gate] T: no document declares an id - did not run', () => {
+	const dir = gateRepo();
+	for (const id of ['VS-1', 'VS-2']) { swap(gateDoc(dir, id), `id: ${id}\n`, ''); }
+	assert.strictEqual(cli(['index', '--check'], dir).code, 2);
+});
+
+test('[index-gate] G: a linked worktree, where .git is a FILE, gates exactly like the main checkout', () => {
+	const dir = gateRepo();
+	const wt = `${dir}-wt`;
+	git(dir, 'worktree', 'add', '-q', wt);
+	assert.ok(fs.statSync(path.join(wt, '.git')).isFile(), 'fixture: a real linked worktree');
+	assert.strictEqual(cli(['index', '--check'], wt).code, 0);
+	// F inside the worktree: the last-written record must live per worktree and be found there.
+	docEdit(wt);
+	assert.strictEqual(cli(['index', '--write'], wt).code, 0);
+	swap(gateDoc(wt, 'VS-1'), 'title: renamed', 'title: again');
+	assert.strictEqual(cli(['index', '--write'], wt).code, 0);
+	swap(gateRoadmap(wt), '| VS-1 | planned | again | x |', '| VS-1 | planned | typed | x |');
+	assert.strictEqual(cli(['index', '--write'], wt).code, 1);
+	// And the main checkout's record is not the worktree's.
+	docEdit(dir);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+});
+
+test('[index-gate] H: unresolved merge conflicts - neither command runs', () => {
+	// The tree may hold conflict markers, and ids named from one are a diagnosis of the wrong thing.
+	const dir = gateRepo();
+	git(dir, 'checkout', '-q', '-b', 'other');
+	swap(gateRoadmap(dir), '| first |', '| theirs |');
+	git(dir, 'commit', '-qam', 'theirs');
+	git(dir, 'checkout', '-q', '-');
+	swap(gateRoadmap(dir), '| first |', '| ours |');
+	git(dir, 'commit', '-qam', 'ours');
+	assert.throws(() => git(dir, 'merge', 'other'), 'fixture: a real conflict');
+	for (const mode of ['--write', '--check']) {
+		const r = cli(['index', mode], dir);
+		assert.strictEqual(r.code, 2, `${mode}: ${r.out}`);
+		assert.ok(/unresolved conflicts/.test(r.out), r.out);
+		assert.ok(!r.out.includes('VS-1'), 'no id diagnosis');
+	}
+});
+
+test('[index-gate] H: an operation in progress with NO conflicts - --write refuses, --check still runs', () => {
+	// Codex, PR #6. --check compares the tree with itself; what makes a tree unreadable is conflict
+	// markers, not the operation. --write is different: mid-operation, HEAD is the wrong baseline.
+	for (const [name, what] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert'], ['rebase-merge', 'rebase']]) {
+		const dir = gateRepo();
+		const at = git(dir, 'rev-parse', '--path-format=absolute', '--git-path', name);
+		if (name === 'rebase-merge') { fs.mkdirSync(at); } else { fs.writeFileSync(at, git(dir, 'rev-parse', 'HEAD')); }
+		const w = cli(['index', '--write'], dir);
+		assert.strictEqual(w.code, 2, `${what} --write: ${w.out}`);
+		assert.ok(w.out.includes(`${what} in progress`), w.out);
+		const c = cli(['index', '--check'], dir);
+		assert.strictEqual(c.code, 0, `${what} --check: ${c.out}`);
+	}
+});
+
+test('[index-gate] I: a rebase in progress refuses WITHOUT diagnosing ids', () => {
+	// Mid-rebase HEAD is the commit being replayed onto, so every row of the commit being applied looks
+	// hand-edited. Naming them would be a confident diagnosis of the wrong thing.
+	const dir = gateRepo();
+	handEdit(dir);
+	fs.mkdirSync(git(dir, 'rev-parse', '--path-format=absolute', '--git-path', 'rebase-merge'));
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(/rebase in progress/.test(r.out));
+	assert.ok(!r.out.includes('VS-1'), 'no id diagnosis');
+});
+
+test('[index-gate] J: one id with two rows fails, naming BOTH lines', () => {
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-2 | coded | second | y |\n', '| VS-2 | coded | second | y |\n| VS-1 | planned | first | x |\n');
+	const r = cli(['index', '--check'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('R_Roadmap.md:7') && r.out.includes('R_Roadmap.md:9'), r.out);
+});
+
+test('[index-gate] J: one id with two rows REFUSES --write - both rows would be rendered from one document', () => {
+	// Codex, PR #6. Both committed rows matched their baseline, so the gate let them through and both were
+	// overwritten with the same document's values - exit 1, after the content was already gone.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-2 | coded | second | y |\n', '| VS-2 | coded | second | y |\n| VS-001 | planned | a different row | z |\n');
+	git(dir, 'commit', '-qam', 'duplicate, committed');
+	swap(gateDoc(dir, 'VS-1'), 'title: first', 'title: renamed');
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('R_Roadmap.md:7') && r.out.includes('R_Roadmap.md:9'), r.out);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before, 'nothing written');
+});
+
+test('[index-gate] K1: malformed slice frontmatter exits 1 NAMING THE FILE, and writes nothing', () => {
+	// Expected bad input is a finding, not a crash - a raw stack trace exiting 1 names nothing.
+	const dir = gateRepo();
+	docEdit(dir);
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'VS-3_bad.md'), '---\nid: VS-3\n  nested: x\n---\n');
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	for (const mode of ['--check', '--write']) {
+		const r = cli(['index', mode], dir);
+		assert.strictEqual(r.code, 1, `${mode}: ${r.out}`);
+		assert.ok(r.out.includes('VS-3_bad.md'), r.out);
+		assert.ok(!/\n\s+at /.test(r.out), 'no stack trace');
+	}
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before);
+});
+
+test('[index-gate] K2: a genuinely unexpected throw exits 2, never 1', () => {
+	const dir = gateRepo();
+	const r = cli(['index', '--check', '--slices', 'docs/project/R_Roadmap.md'], dir);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(/did not run/.test(r.out), r.out);
+});
+
+test('[index-gate] --write outside a git work tree does not run; --check does not need git', () => {
+	const dir = gateRepo();
+	fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });
+	const w = cli(['index', '--write'], dir);
+	assert.strictEqual(w.code, 2, w.out);
+	assert.ok(/not a git work tree/.test(w.out));
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'the comparison needs no history');
+});
+
+test('[index-gate] --write on a roadmap that was never committed does not run', () => {
+	const dir = gateRepo();
+	git(dir, 'rm', '-q', '--cached', 'docs/project/R_Roadmap.md');
+	git(dir, 'commit', '-qm', 'untrack');
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(/not committed/.test(r.out), r.out);
+});
+
+test('[index-gate] a NEW row has no baseline, so it is minted, not refused', () => {
+	// A human mints the row (a placeholder); the document fills it. Refusing a row with no history
+	// would make minting impossible.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-2 | coded | second | y |\n', '| VS-2 | coded | second | y |\n| VS-3 | | | |\n');
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'VS-3_third.md'), GATE_DOC('VS-3', 'planned', 'third', 'z'));
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-3 | planned | third | z |'));
+});
+
+test('[index-gate] renaming a row\'s id does not launder a hand edit through the new-row exemption', () => {
+	// Codex P1, PR #6. A row with no history is exempt so a placeholder can be minted - but VS-1 renamed to
+	// VS-9 has no history either, and whatever was typed into it was overwritten with exit 0. The
+	// exemption is for a row whose writing loses nothing typed: every non-empty cell already renders.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-1 | planned | first | x |', '| VS-9 | planned | typed by hand | x |');
+	swap(gateDoc(dir, 'VS-1'), 'id: VS-1', 'id: VS-9');
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('VS-9') && r.out.includes('typed by hand'), r.out);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before);
+
+	// A minted row that already says what its document says loses nothing, so it is still allowed.
+	const mint = gateRepo();
+	swap(gateRoadmap(mint), '| VS-2 | coded | second | y |\n', '| VS-2 | coded | second | y |\n| VS-3 | planned | third | |\n');
+	fs.writeFileSync(path.join(mint, 'docs', 'project', 'slices', 'VS-3_third.md'), GATE_DOC('VS-3', 'planned', 'third', 'z'));
+	const m = cli(['index', '--write'], mint);
+	assert.strictEqual(m.code, 0, m.out);
+});
+
+test('[index-gate] --write and --check together is a usage error', () => {
+	assert.strictEqual(cli(['index', '--write', '--check'], gateRepo()).code, 2);
 });
 
 test('[slices] a row links to its OWN document, not the anchor\'s', () => {
