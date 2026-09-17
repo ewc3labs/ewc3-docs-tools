@@ -1324,6 +1324,6 @@ switch (command) {
 		break;
 	default:
 		console.log(fs.readFileSync(path.join(__dirname, '..', 'USAGE.txt'), 'utf8'));
-		code = command ? 2 : 0;
+		code = command && command !== '--help' && command !== '-h' ? 2 : 0;
 }
 process.exit(code);

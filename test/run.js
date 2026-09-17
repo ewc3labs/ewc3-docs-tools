@@ -3070,6 +3070,13 @@ test('DOCS-070: --help on any command prints that command\'s usage, exits 0, and
 	}
 	assert.deepStrictEqual(snapshot(), before, 'nothing was written');
 	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), 'migrate-project --help staged nothing');
+	// With no command, the flag IS the command slot (Codex, PR #19): usage, exit 0 - not "unknown command", 2.
+	for (const flag of ['--help', '-h']) {
+		const r = cli([flag], dir);
+		assert.strictEqual(r.code, 0, `ewc3-docs ${flag}:\n${r.out}`);
+		assert.ok(r.out.includes('ewc3-docs fold'), r.out);
+	}
+	assert.strictEqual(cli(['no-such-command'], dir).code, 2, 'an unknown command still did not run');
 });
 
 test('[fold] one commit may advance several slices; ids match padding-insensitively', () => {
