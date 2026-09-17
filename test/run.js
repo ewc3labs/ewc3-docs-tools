@@ -2572,6 +2572,17 @@ test('[migrate-offcanon] a canonical register is STALE when any declaring positi
 	assert.strictEqual(row.stale, true);
 });
 
+test('[migrate-offcanon] a canonical register with NO Last Used is stale once ids are in use', () => {
+	// Codex P2, PR #16: `_none yet_` read as unknown rather than zero, so XY-010 in use still reported clean.
+	const { migrateText } = require('../lib/migrate');
+	const text = ['## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| XY | global | this-repo | _none yet_ | slices |', '| RF | reference-only | elsewhere | _none yet_ | cited |', '',
+		'## Delivery Index', '', '| ID | State | Slice |', '| --- | --- | --- |', '| XY-010 | planned | tenth |', '| RF-004 | planned | cited |', ''].join('\n');
+	const rows = migrateText(text, { owner: 'this-repo' }).rows;
+	assert.strictEqual(rows.find((x) => x.prefix === 'XY').stale, true);
+	assert.strictEqual(rows.find((x) => x.prefix === 'RF').stale, false, 'a reference-only row is never stale here');
+});
+
 test('[migrate-offcanon] a SYNTHESISED register writes markers values can read, at the width the ids are written', () => {
 	// The bootstrap wrote `<!--/-->` - a close `values` never matches - and padded to five digits regardless.
 	const dir = offCanonRepo({ register: false });

@@ -34,6 +34,8 @@ Every blocking finding was fixed before merge. These were not:
 | 7 | #7 | P2 | A backup filename with a space, `)` or `#` is interpolated into the generated link unescaped | the link is malformed; the prose and the backup are intact |
 | 8 | #7 | — | Several documents per id are refused outright (raised by the downstream census, not Codex) | a model question, recorded as open in `DOCS-062` |
 | 9 | #8 | P2 | `rebaseRelative` repoints link-shaped text that is escaped (`\[x](a.md)`), which was never a link | literal example text shifts by `../`; nothing is lost, and the example is still readable |
+| 10 | #16 | P2 | A synthesised register pads a prefix with no Delivery Index row at width zero, so `TS-02` is written `TS-2` | cosmetic: the original register is kept verbatim beneath the new one, and ids elsewhere are untouched |
+| 11 | #16 | P2 | With an unrelated `\| Prefix \|` table above the real register, `readSeriesText` seeds heading declarations from the wrong table, so a heading-only id past Last Used is missed | needs an unrelated Prefix table ahead of the register **and** an id declared only by a heading |
 
 Row 8 is a design decision, not a defect, and belongs to `DOCS-062`. It is listed here only so this
 table is the one place to look.
@@ -50,6 +52,8 @@ table is the one place to look.
   definitions for generated slice documents. Apply it to both kinds of backup.
 - **7:** percent-encode the path, as `sliceHref` now does for register pointers (`DOCS-065`).
 - **9:** skip a `[` preceded by an odd run of backslashes when matching links to repoint.
+- **10:** fall back to the widths written in the legacy register's cells, then any declaring position, before zero.
+- **11:** give `readSeriesText` the same full-schema header test `canonicalRegister` uses, so both read one table.
 
 ## The lesson worth keeping
 

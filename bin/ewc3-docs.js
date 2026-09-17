@@ -417,7 +417,7 @@ function cmdMigrateProject(root, config, argv) {
 	for (const r of result.rows) {
 		const owned = r.owner === null ? 'UNCLAIMED' : r.owner;
 		console.log(`    ${r.prefix.padEnd(6)} ${r.scope.padEnd(11)} ${String(r.lastUsed).padStart(6)}  ${owned}`
-			+ (r.stale ? `  STALE: register said ${r.registered}` : ''));
+			+ (r.stale ? `  STALE: register said ${r.registered === null ? 'none' : r.registered}` : ''));
 	}
 
 	const problems = result.rows.filter((r) => r.owner === null || r.stale);
