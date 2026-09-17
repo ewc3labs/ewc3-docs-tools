@@ -2435,6 +2435,118 @@ test('[migrate-index] EVERY row\'s Status moves to its document body, followers 
 	}
 });
 
+// ---------------------------------------------------------------------------
+// A downstream pilot migrated a register kept OFF-CANON in docs/project/roadmap/, which already had a register in
+// the canonical `| Prefix |` shape. Two defects: every moved link was rebased as though the source sat in
+// docs/project/ (one level too deep), and the existing register went unrecognised, so a second one was synthesised.
+
+/** A register in docs/project/roadmap/ with a canonical ownership table, links of every depth, and a sibling repo. */
+function offCanonRepo({ register = true } = {}) {
+	const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'offcanon-'));
+	const dir = path.join(outer, 'this-repo');
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	w('README.md', 'See [the roadmap](docs/project/roadmap/R_Roadmap.md) and [the analysis](docs/analysis/x.md).\n');
+	w('docs/analysis/x.md', '# x\n\nBack to [the roadmap](../project/roadmap/R_Roadmap.md).\n');
+	const sibling = '../../../../Sibling/docs/y.md';
+	const twin = 'https://github.com/example-org/Sibling/blob/main/docs/y.md';
+	w('docs/project/roadmap/R_Roadmap.md', [
+		'# R', '',
+		'Planning prose linking [the analysis](../../analysis/x.md).', '',
+		...(register ? ['## ID Ownership Register', '',
+			'| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+			'| XY | global | this-repo | XY-003 | our slices |',
+			'| TS | reference-only, frozen at TS-02 | other | TS-02 | cited |',
+			'| VS | reference-only | other | - | cited |', ''] : []),
+		'## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		`| XY-001 | coded | first | Built per [the analysis](../../analysis/x.md), sibling [y](${sibling}) and its [twin](${twin}). |`,
+		'| XY-003 | planned | third | short |', '',
+		'## Slice Notes', '',
+		'### XY-001 — first', '',
+		`Narrative citing [the analysis](../../analysis/x.md) and [y](${sibling}) ([twin](${twin})).`, '',
+	].join('\n'));
+	return dir;
+}
+
+/** Adoption for an off-canon source: the staged register replaces the one in docs/project/roadmap/, one level up. */
+function adoptOffCanon(dir) {
+	const live = path.join(dir, 'docs', 'project');
+	const staged = path.join(dir, 'docs', 'project_v2');
+	fs.cpSync(path.join(staged, 'slices'), path.join(live, 'slices'), { recursive: true });
+	fs.copyFileSync(path.join(staged, 'R_Roadmap.md'), path.join(live, 'R_Roadmap.md'));
+	fs.rmSync(path.join(live, 'roadmap'), { recursive: true, force: true });
+	fs.rmSync(staged, { recursive: true, force: true });
+	fs.writeFileSync(path.join(dir, 'README.md'), 'See [the roadmap](docs/project/R_Roadmap.md) and [the analysis](docs/analysis/x.md).\n');
+	fs.writeFileSync(path.join(dir, 'docs', 'analysis', 'x.md'), '# x\n\nBack to [the roadmap](../project/R_Roadmap.md).\n');
+}
+
+test('[migrate-offcanon] links moved from a roadmap in docs/project/roadmap/ resolve after adoption - no new problems', () => {
+	const dir = offCanonRepo();
+	const show = (p) => `${p.file} -> ${p.target} (${p.why})`;
+	const before = checkLinks(dir, { orphanRoot: 'nope' }).problems.map(show);
+	assert.deepStrictEqual(before, [], 'fixture: clean before migrating');
+	cli(['migrate-project', '--write'], dir);
+	adoptOffCanon(dir);
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems.map(show), before);
+	const doc = fs.readFileSync(path.join(dir, 'docs', 'project', 'slices', fs.readdirSync(path.join(dir, 'docs', 'project', 'slices')).find((n) => n.startsWith('XY-001'))), 'utf8');
+	assert.ok(doc.includes('](../../analysis/x.md)') && doc.includes('](../../../../Sibling/docs/y.md)'), doc);
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	assert.ok(roadmap.includes('[the analysis](../analysis/x.md)'), 'the roadmap\'s OWN links move up a level too');
+});
+
+test('[migrate-offcanon] a link carried into FRONTMATTER renders correctly from the roadmap\'s new home', () => {
+	// A downstream pilot: a `Cross-repo anchor` cell was copied into frontmatter at the SOURCE depth, and index
+	// rendered it into the roadmap at docs/project/ one level too deep - 22 of 27 rows diverged. The source is
+	// rebased to docs/project/ before anything is carried, so a carried cell is already right where it renders.
+	const dir = offCanonRepo();
+	const file = path.join(dir, 'docs', 'project', 'roadmap', 'R_Roadmap.md');
+	const sibling = '../../../../Sibling/docs/y.md';
+	const twin = 'https://github.com/example-org/Sibling/blob/main/docs/y.md';
+	fs.writeFileSync(file, fs.readFileSync(file, 'utf8')
+		.replace('| ID | State | Slice | Status |\n| --- | --- | --- | --- |', '| ID | State | Slice | Anchor | Status |\n| --- | --- | --- | --- | --- |')
+		.replace('| XY-001 | coded | first |', `| XY-001 | coded | first | [anchor](${sibling}) [t](${twin}) · [a](../../analysis/x.md) |`)
+		.replace('| XY-003 | planned | third |', '| XY-003 | planned | third | - |'));
+	const show = (p) => `${p.file} -> ${p.target} (${p.why})`;
+	const before = checkLinks(dir, { orphanRoot: 'nope' }).problems.map(show);
+	assert.deepStrictEqual(before, [], 'fixture: clean');
+	cli(['migrate-project', '--write'], dir);
+	adoptOffCanon(dir);
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 0, check.out);
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	assert.ok(roadmap.includes('[anchor](../../../Sibling/docs/y.md)') && roadmap.includes('[a](../analysis/x.md)'), roadmap);
+	assert.deepStrictEqual(checkLinks(dir, { orphanRoot: 'nope' }).problems.map(show), before, 'and it resolves');
+});
+
+test('[migrate-offcanon] rebaseRelative computes each link from where it WAS to where it WILL BE', () => {
+	const { rebaseRelative } = require('../lib/slices');
+	const text = '[a](../../analysis/x.md) [b](../../../../Sib/y.md#h) [c](<../my file.md>) [d](https://e.com/x) [e](#local)';
+	assert.strictEqual(rebaseRelative(text, { from: 'docs/project/roadmap', to: 'docs/project' }),
+		'[a](../analysis/x.md) [b](../../../Sib/y.md#h) [c](<my file.md>) [d](https://e.com/x) [e](#local)');
+	assert.strictEqual(rebaseRelative('[s](Sib.md) [u](../d/x.md)'), '[s](../Sib.md) [u](../../d/x.md)', 'the default is docs/project to its slices');
+});
+
+test('[migrate-offcanon] a register already in the canonical Prefix shape is kept as-is - no second register', () => {
+	const dir = offCanonRepo();
+	const source = fs.readFileSync(path.join(dir, 'docs', 'project', 'roadmap', 'R_Roadmap.md'), 'utf8');
+	const block = source.slice(source.indexOf('| Prefix |'), source.indexOf('## Delivery Index'));
+	const r = cli(['migrate-project', '--write'], dir);
+	assert.ok(!/UNCLAIMED/.test(r.out), r.out);
+	const staged = fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8');
+	assert.strictEqual(staged.split('\n').filter((l) => /^\|\s*Prefix\s*\|/.test(l)).length, 1, 'exactly one register');
+	assert.ok(!staged.includes('## Number Series'), 'nothing synthesised');
+	assert.ok(staged.includes(block), 'the register, reference-only and frozen rows included, byte-for-byte');
+});
+
+test('[migrate-offcanon] a SYNTHESISED register writes markers values can read, at the width the ids are written', () => {
+	// The bootstrap wrote `<!--/-->` - a close `values` never matches - and padded to five digits regardless.
+	const dir = offCanonRepo({ register: false });
+	cli(['migrate-project', '--write'], dir);
+	const staged = fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8');
+	assert.ok(staged.includes('<!--ewc3:lastXY-->XY-003<!--/ewc3:lastXY-->'), staged.split('\n').filter((l) => l.includes('XY') && l.includes('ewc3')).join('\n'));
+	assert.ok(!staged.includes('<!--/-->'));
+});
+
 test('[migrate-index] rebaseRelative repoints a link whose TEXT is a code span, and nothing inside a code span', () => {
 	// A downstream re-run: `[\`docs/x.md\`](../x.md)` stayed at the old depth, because the code-span guard
 	// split the line before links were matched and hid the target along with the text.
