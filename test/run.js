@@ -2138,16 +2138,30 @@ test('[index-gate] renaming a row\'s id does not launder a hand edit through the
 	assert.strictEqual(m.code, 0, m.out);
 });
 
-test('[index-gate] an ESCAPED bracket is literal text, not a reference to resolve', () => {
-	// Codex P2, PR #6. `\[foo][x]` renders as the characters, so it must not compare equal to a link.
+test('[index-gate] a cell with a BACKSLASH is compared as written, so an escaped bracket cannot pass as a link', () => {
+	// Codex P2, PR #6: `\[foo][x]` resolved as if its first bracket were live. The first fix counted
+	// backslashes; the fifth review round replaced that with the whitelist - no backslash, no resolving.
 	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
 	const defs = defsOf('[x]: slices/u.md\n');
-	// `\[foo` is literal; the `[x]` after it is still a shortcut reference, exactly as GitHub reads it.
-	assert.deepStrictEqual(cells('| a | \\[foo][x] |', 2, defs), ['a', '\\[foo][x](slices/u.md)']);
-	assert.deepStrictEqual(cells('| a | \\[foo] |', 2, defs), ['a', '\\[foo]']);
+	assert.deepStrictEqual(cells('| a | \\[foo][x] |', 2, defs), ['a', '\\[foo][x]']);
+	assert.deepStrictEqual(cells('| a | \\\\[foo][x] |', 2, defs), ['a', '\\\\[foo][x]']);
 	assert.deepStrictEqual(cells('| a | [foo][x] |', 2, defs), ['a', '[foo](slices/u.md)']);
-	// An escaped BACKSLASH leaves the bracket live.
-	assert.deepStrictEqual(cells('| a | \\\\[foo][x] |', 2, defs), ['a', '\\\\[foo](slices/u.md)']);
+});
+
+test('[index-gate] ONLY the full reference form format writes is resolved - footnotes, HTML, shortcuts are not', () => {
+	// Codex, PR #6 fifth pass: a footnote definition was stored as a link target, and reference-shaped
+	// text inside an HTML attribute was rewritten. Both from defining the subset by exclusion. It is now
+	// defined by inclusion: `[text][label]`, plain, in a cell with no backtick, `<` or backslash.
+	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
+	const defs = defsOf('[x]: docs/u.md\n[^1]: explanation\n');
+	assert.deepStrictEqual(cells('| see[^1] |', 1, defs), ['see[^1]'], 'a footnote marker');
+	assert.deepStrictEqual(cells('| [t][^1] |', 1, defs), ['[t][^1]'], 'a footnote label');
+	assert.deepStrictEqual(cells('| <span title="[t][x]">same</span> |', 1, defs), ['<span title="[t][x]">same</span>'], 'inline HTML');
+	assert.deepStrictEqual(cells('| [x] |', 1, defs), ['[x]'], 'a shortcut reference');
+	assert.deepStrictEqual(cells('| [x][] |', 1, defs), ['[x][]'], 'a collapsed reference');
+	assert.deepStrictEqual(cells('| [[t][x]] |', 1, defs), ['[[t][x]]'], 'nested in brackets');
+	assert.deepStrictEqual(cells('| ![t][x] |', 1, defs), ['![t][x]'], 'an image');
+	assert.deepStrictEqual(cells('| [t][x] · [u][x] |', 1, defs), ['[t](docs/u.md) · [u](docs/u.md)'], 'the form format writes');
 });
 
 test('[index-gate] references resolve only in the SIMPLE subset; anything else is compared as written', () => {

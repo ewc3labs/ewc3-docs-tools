@@ -4,7 +4,7 @@ state: 🟦 tested
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
 doc: '[DOCS-056](slices/DOCS-056_After_adoption_editing_the_register_is_silently_futile.md)'
-status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 28 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
+status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 29 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
 priority: high
 lane: index
 ---
@@ -230,10 +230,16 @@ resolution was **narrowed to the subset `format` emits**: a bare destination, no
 the cell. Everything else is compared as written, which can only fail loudly. A definition outside
 the subset still claims its label, so a later simple definition can't take it over.
 
+The fifth round found footnotes and HTML attributes, and exposed the real mistake: **the subset was
+defined by exclusion**, so every form nobody thought of was allowed through. It is now defined by
+inclusion. Only the one form `format` writes resolves: a full `[text][label]` touching no other
+bracket, `!` or `(`, with no leading `^`, in a cell with no backtick, `<` or backslash. A form
+nobody thought of is now compared as written, the loud direction, instead of passing.
+
 ### Not built
 
 - **The generated-file banner** is still worth its one line and is still missing.
 - **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
   the churn in `git diff` remains.
-- **Not yet run on an estate register.** 28 controls, one repository, green locally. The next
+- **Not yet run on an estate register.** 29 controls, one repository, green locally. The next
   evidence is `index --check` on an adopted MedAR register.

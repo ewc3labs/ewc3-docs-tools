@@ -59,10 +59,11 @@ the slice document, never the row. Two gates keep that true:
 Only `--check` catches a hand edit that was **committed**, so an adopted repository runs it in CI.
 Both commands compare **cells as GitHub renders them**, not bytes: padding at a cell's edges, `\|`
 versus a pipe, and a reference link versus the inline link it resolves to are all the same cell. A
-reference resolves only in the simple form `format` writes: a bare destination with no title, in a
-cell with no code. Anything else is compared as written, so it can fail loudly but never pass a
-change. Nothing else is folded. A no-break space, a variation selector or a definition pointing
-somewhere else is a real difference.
+reference resolves only in the one form `format` writes: a full `[text][label]` with a bare
+destination and no title, in a cell with no backtick, `<` or backslash. Footnotes, shortcut
+references and images are never resolved. Anything else is compared as written, so it can fail
+loudly but never pass a change. Nothing else is folded. A no-break space, a variation selector or a
+definition pointing somewhere else is a real difference.
 
 `--write` exits `2` without a git work tree, mid-merge, mid-rebase, mid-cherry-pick or mid-revert,
 and when the roadmap has never been committed. Without a commit there is nothing to tell a hand edit
