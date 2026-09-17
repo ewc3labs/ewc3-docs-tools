@@ -540,8 +540,22 @@ function cmdMigrateProject(root, config, argv) {
 		},
 	});
 
+	// THE REGISTER MIGRATE WRITES IS RENDERED BY INDEX'S OWN RENDERER. DOCS-065.
+	//
+	// Migrate used to rewrite each row by hand and index rendered it from frontmatter, so the two disagreed
+	// about every row at the same commit: a pointer in one, an empty or paragraph-long Status in the other.
+	// Rendering the rows from the very documents being staged - generated ones, and kept ones as they are -
+	// makes `index --check` on migrate's output agree by construction rather than by keeping two copies of
+	// a string in step.
+	const staged = [
+		...extracted.docs.map((d) => ({ ...d.data, __file: d.file })),
+		...inventory.filter((e) => e.frontmatter === 'ok').map((e) => ({
+			...frontmatter.read(fs.readFileSync(path.join(liveSlices, e.name), 'utf8')).data, __file: e.name,
+		})),
+	];
+	const rendered = renderIndex(extracted.text, staged);
 	const outFile = path.join(outDir, path.basename(from));
-	fs.writeFileSync(outFile, extracted.text);
+	fs.writeFileSync(outFile, rendered.ok ? rendered.text : extracted.text);
 	console.log(`  wrote:  docs/project_v2/${path.basename(from)}`);
 
 	// Silently extracting nothing looks exactly like a roadmap with no narrative to extract. Say
@@ -792,7 +806,7 @@ function cmdIndex(root, config, argv) {
 		// A slice document with no `id:` declares nothing. Guessing one from the filename is exactly
 		// the kind of help that writes a wrong row and looks deliberate doing it.
 		if (!data || !data.id) { undeclared.push(name); continue; }
-		records.push(data);
+		records.push({ ...data, __file: name });
 		byFile.set(name, String(data.id).trim());
 	}
 
