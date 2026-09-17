@@ -57,13 +57,17 @@ the slice document, never the row. Two gates keep that true:
 | `index --check` | any row differs from what its document renders, a row has no document, a document has no row, or one ID has two rows. Writes nothing. **The CI command for an adopted register.** | nothing |
 
 Only `--check` catches a hand edit that was **committed**, so an adopted repository runs it in CI.
-Both commands compare **cells as GitHub renders them**, not bytes: padding at a cell's edges, `\|`
-versus a pipe, and a reference link versus the inline link it resolves to are all the same cell. A
-reference resolves only in the one form `format` writes: a full `[text][label]` with a bare
-destination and no title, in a cell with no backtick, `<` or backslash. Footnotes, shortcut
-references and images are never resolved. Anything else is compared as written, so it can fail
-loudly but never pass a change. Nothing else is folded. A no-break space, a variation selector or a
-definition pointing somewhere else is a real difference.
+Both commands compare **cells as GitHub renders them**, not bytes: padding at a cell's edges and
+`\|` versus a pipe are the same cell. Nothing else is folded. A no-break space or a variation
+selector is a real difference.
+
+**No link syntax is parsed.** A row is consistent when its cells exactly equal what `index` writes,
+**or** exactly equal what `format` makes of that. The second form matters because `format` rewrites
+the Doc cell's inline link as a reference. A re-pointed definition is still caught: `format` gives
+the rendered target its own label, so the row's label no longer matches. The cost is that a
+reference `format` would not have written, such as a short link hand-converted to a reference, reads
+as diverged even though GitHub renders the same link. That fails loudly and never passes a change.
+The gate is exactly as correct about links as `format` is.
 
 `--write` exits `2` without a git work tree, mid-merge, mid-rebase, mid-cherry-pick or mid-revert,
 and when the roadmap has never been committed. Without a commit there is nothing to tell a hand edit

@@ -14,7 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { formatFiles } = require('../lib/format');
+const { formatFiles, format } = require('../lib/format');
 const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
@@ -22,7 +22,7 @@ const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
-const { renderIndex, detectWidths, gfmCells, indexRows, referenceDefs } = require('../lib/deliveryindex');
+const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
 const gitbase = require('../lib/gitbase');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
@@ -540,7 +540,7 @@ function cmdMigrateProject(root, config, argv) {
 function gateWrite(repo, head, plans, sameCells, showCells) {
 	const last = gitbase.loadLastWritten(repo, head);
 	const edited = [];
-	for (const { file, rel, res, defs } of plans) {
+	for (const { file, rel, res, forms } of plans) {
 		const committed = gitbase.headText(repo, file);
 		if (committed === null) {
 			console.error(`index: did not run: ${rel} is not committed, so there is no baseline to tell a`
@@ -548,28 +548,24 @@ function gateWrite(repo, head, plans, sameCells, showCells) {
 			return 2;
 		}
 		// Every baseline a row may legitimately equal, labelled, so a refusal says WHICH it departed from.
-		// Definitions are read once per file: per row, they re-parsed the whole register for each of
-		// SX_Coder's 619 rows (Copilot, PR #6).
 		const baselines = new Map();
 		const add = (id, label, cells) => { (baselines.get(id) || baselines.set(id, []).get(id)).push({ label, cells }); };
-		const committedDefs = referenceDefs(committed);
-		for (const row of indexRows(committed)) { add(row.id, 'committed', gfmCells(row.raw, res.columns, committedDefs)); }
+		for (const row of indexRows(committed)) { add(row.id, 'committed', gfmCells(row.raw, res.columns)); }
 		for (const [id, list] of Object.entries(last[rel] || {})) { list.forEach((cells) => add(id, 'last written', cells)); }
 
-		for (const row of res.rows) {
-			if (row.rendered === null) { continue; }
-			const now = gfmCells(row.raw, res.columns, defs);
-			const want = gfmCells(row.rendered, res.columns, defs);
+		res.rows.forEach((row, k) => {
+			if (row.rendered === null) { return; }
+			const now = gfmCells(row.raw, res.columns);
 			const known = baselines.get(row.id) || [];
-			if (sameCells(now, want) || known.some((b) => sameCells(b.cells, now))) { continue; }
+			if (forms[k].some((w) => sameCells(now, w)) || known.some((b) => sameCells(b.cells, now))) { return; }
 			// No history is how a minted placeholder row looks - and also how a row looks after its id was
 			// renamed, with whatever was typed into it (Codex P1, PR #6). So the exemption is not "no
 			// history" but "writing loses nothing typed": every non-empty cell besides the id already
-			// renders. A renamed row that also changed is refused, which is loud rather than lossy.
-			const loses = now.some((c, i) => i !== res.idColumn && c !== '' && c !== want[i]);
-			if (!known.length && !loses) { continue; }
-			edited.push({ rel, row, now, want, known });
-		}
+			// renders, in either form. A renamed row that also changed is refused - loud rather than lossy.
+			const loses = now.some((c, i) => i !== res.idColumn && c !== '' && forms[k].every((w) => c !== w[i]));
+			if (!known.length && !loses) { return; }
+			edited.push({ rel, row, now, want: forms[k][0], known });
+		});
 	}
 	if (!edited.length) { return 0; }
 
@@ -756,7 +752,17 @@ function cmdIndex(root, config, argv) {
 		anyIndex = true;
 
 		const changed = res.text !== text;
-		plans.push({ file, rel, res, changed, defs: referenceDefs(text) });
+		// The forms a row may take and still BE its render: what `index` writes, and what `format` makes
+		// of that - which rewrites the Doc cell's inline link as a reference. Both are exact; no link syntax
+		// is parsed. A resolver did that for six review rounds on PR #6, and each round found another
+		// CommonMark corner where it let a real change compare equal. Rows are paired by position, and
+		// only while `format` kept the row count, which it does not touch.
+		const formatted = indexRows(format(res.text, { ...(config.format || {}) }));
+		const forms = res.rows.map((row, k) => (row.rendered === null ? null : [
+			gfmCells(row.rendered, res.columns),
+			...(formatted.length === res.rows.length ? [gfmCells(formatted[k].raw, res.columns)] : []),
+		]));
+		plans.push({ file, rel, res, changed, forms });
 		console.log(`${rel}`);
 		console.log(`  ${res.rendered} row(s) rendered from ${records.length} slice document(s)`
 			+ `${res.rendered && !changed ? ' - already current' : ''}`);
@@ -775,16 +781,18 @@ function cmdIndex(root, config, argv) {
 		}
 
 		if (check) {
-			for (const row of res.rows) {
-				if (row.rendered === null) { continue; }
-				const now = gfmCells(row.raw, res.columns, plans[plans.length - 1].defs);
-				const want = gfmCells(row.rendered, res.columns, plans[plans.length - 1].defs);
-				if (sameCells(now, want)) { continue; }
+			res.rows.forEach((row, k) => {
+				if (row.rendered === null) { return; }
+				const now = gfmCells(row.raw, res.columns);
+				if (forms[k].some((w) => sameCells(now, w))) { return; }
 				code = 1;
 				console.log(`  DIVERGED ${row.id} at ${rel}:${row.line + 1}`);
-				console.log(`    row:      ${showCells(now)}`);
-				console.log(`    renders:  ${showCells(want)}`);
-			}
+				console.log(`    row:        ${showCells(now)}`);
+				console.log(`    renders:    ${showCells(forms[k][0])}`);
+				if (forms[k][1] && !sameCells(forms[k][0], forms[k][1])) {
+					console.log(`    formatted:  ${showCells(forms[k][1])}`);
+				}
+			});
 		}
 
 		if (res.malformed.length) {
@@ -827,16 +835,17 @@ function cmdIndex(root, config, argv) {
 		const gate = gateWrite(repo, repoState.head, plans, sameCells, showCells);
 		if (gate) { return gate; }
 		const last = gitbase.loadLastWritten(repo, repoState.head);
-		for (const { file, rel, res, changed, defs } of plans) {
+		for (const { file, rel, res, changed, forms } of plans) {
 			if (changed) {
 				fs.writeFileSync(file, res.text);
 				console.log(`${rel}: written`);
 			}
+			// Both forms, so render -> `fix` -> render is not read as a hand edit of the formatted row.
 			last[rel] = {};
-			for (const row of res.rows) {
-				if (row.rendered === null) { continue; }
-				(last[rel][row.id] = last[rel][row.id] || []).push(gfmCells(row.rendered, res.columns, defs));
-			}
+			res.rows.forEach((row, k) => {
+				if (row.rendered === null) { return; }
+				(last[rel][row.id] = last[rel][row.id] || []).push(...forms[k]);
+			});
 		}
 		gitbase.saveLastWritten(repo, repoState.head, last);
 	} else if (check && !code) {

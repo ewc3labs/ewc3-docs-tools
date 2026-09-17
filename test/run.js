@@ -1929,38 +1929,44 @@ test('[index-gate] P: an edge character GFM does NOT trim is still a difference'
 	assert.strictEqual(check.code, 1, check.out);
 });
 
-test('[index-gate] L: a REFERENCE link and an inline link to the same target are the same cell', () => {
-	// Found dogfooding on this repository: `index` renders `[DOCS-001](slices/...)`, `format` rewrites it
-	// to `[DOCS-001][docs-001]` plus a definition, and all 43 rows read as diverged. GitHub renders the
-	// two identically, so comparing what GitHub renders means resolving the reference.
+test('[index-gate] L: a row as `format` rewrote it is consistent - with no link syntax parsed at all', () => {
+	// Found dogfooding: `index` renders `[DOCS-001](slices/...)` and `format` rewrites it to
+	// `[DOCS-001][docs-001]` plus a definition, so all 43 rows here read as diverged. Six review rounds
+	// on PR #6 then found six ways a hand-rolled reference resolver let a REAL change compare equal. So
+	// nothing is resolved: a row is consistent when its cells are exactly what `index` writes, or exactly
+	// what `format` makes of that.
 	const dir = gateRepo();
-	swap(gateDoc(dir, 'VS-1'), 'status: x', 'status: see [VS-1](slices/VS-1_first.md)');
+	const target = 'slices/VS-1_a_path_long_enough_that_format_moves_it.md';
+	swap(gateDoc(dir, 'VS-1'), 'status: x', `status: see [VS-1](${target})`);
 	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
-	swap(gateRoadmap(dir), '[VS-1](slices/VS-1_first.md)', '[VS-1][vs-1]');
-	fs.appendFileSync(gateRoadmap(dir), '\n[VS-1]: slices/VS-1_first.md\n');
-	const check = cli(['index', '--check'], dir);
-	assert.strictEqual(check.code, 0, check.out);
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	const formatted = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	assert.ok(!formatted.includes(`](${target})`), 'fixture: format moved the link into a definition');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'the formatted row is consistent');
 
-	// But a definition pointing ELSEWHERE is a different link, and so is one only inside a fence.
-	swap(gateRoadmap(dir), '[VS-1]: slices/VS-1_first.md', '[VS-1]: slices/VS-1_other.md');
-	assert.strictEqual(cli(['index', '--check'], dir).code, 1, 'a definition pointing elsewhere');
-	swap(gateRoadmap(dir), '[VS-1]: slices/VS-1_other.md', '```\n[VS-1]: slices/VS-1_first.md\n```');
-	assert.strictEqual(cli(['index', '--check'], dir).code, 1, 'a definition inside a fence');
-	swap(gateRoadmap(dir), '```\n[VS-1]: slices/VS-1_first.md\n```', '[VS-1]: slices/VS-1_first.md');
+	// Render, format, render: the formatted row is what the tool last wrote, once formatted.
+	swap(gateDoc(dir, 'VS-1'), 'title: first', 'title: again');
+	const again = cli(['index', '--write'], dir);
+	assert.strictEqual(again.code, 0, again.out);
 
-	// Codex, PR #6: a definition inside raw HTML defines nothing on GitHub. First-wins made a commented-out
-	// old target shadow the live one, so --check passed a link GitHub renders somewhere else.
-	// The third: fences are not recognised INSIDE an HTML block, so a fence-looking pair there must not end
-	// the block early and leak the definition after it (Codex, second pass).
-	for (const block of ['<!--\n[VS-1]: slices/VS-1_first.md\n-->', '<details>\n[VS-1]: slices/VS-1_first.md\n</details>',
-		'<!--\n```\n```\n[VS-1]: slices/VS-1_first.md\n-->']) {
-		swap(gateRoadmap(dir), '[VS-1]: slices/VS-1_first.md', `${block}\n\n[VS-1]: slices/VS-1_other.md`);
-		assert.strictEqual(cli(['index', '--check'], dir).code, 1, `a definition inside ${block.split('\n')[0]}`);
-		swap(gateRoadmap(dir), `${block}\n\n[VS-1]: slices/VS-1_other.md`, '[VS-1]: slices/VS-1_first.md');
-	}
+	// A definition re-pointed by hand is a different link. `format` gives the rendered target its own
+	// label, so the row's label no longer matches - caught without reading the definition at all.
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	const label = /\[VS-1\]\[([^\]]+)\]/.exec(fs.readFileSync(gateRoadmap(dir), 'utf8'))[1];
+	swap(gateRoadmap(dir), `[${label}]: ${target}`, `[${label}]: slices/VS-1_somewhere_else_entirely_by_hand.md`);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 1, 'a re-pointed definition');
+});
 
-	// Render, format, render: the formatted row equals the last write, so it is not a hand edit.
-	assert.strictEqual(cli(['index', '--write'], dir).code, 0, 'render, format, render is not a hand edit');
+test('[index-gate] a reference link `format` would NOT write is compared literally - loud, never silent', () => {
+	// The cost of parsing no link syntax, pinned so it is a decision and not a surprise: a short target
+	// `format` leaves inline, hand-written as a reference, reads as diverged even though GitHub renders
+	// the same link. Every one of the six resolver bugs was the opposite failure - silent.
+	const dir = gateRepo();
+	swap(gateDoc(dir, 'VS-1'), 'status: x', 'status: see [VS-1](slices/u.md)');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	swap(gateRoadmap(dir), '[VS-1](slices/u.md)', '[VS-1][u]');
+	fs.appendFileSync(gateRoadmap(dir), '\n[u]: slices/u.md\n');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 1);
 });
 
 test('[index-gate] R: row and document BOTH absent is consistent', () => {
@@ -2136,52 +2142,6 @@ test('[index-gate] renaming a row\'s id does not launder a hand edit through the
 	fs.writeFileSync(path.join(mint, 'docs', 'project', 'slices', 'VS-3_third.md'), GATE_DOC('VS-3', 'planned', 'third', 'z'));
 	const m = cli(['index', '--write'], mint);
 	assert.strictEqual(m.code, 0, m.out);
-});
-
-test('[index-gate] a cell with a BACKSLASH is compared as written, so an escaped bracket cannot pass as a link', () => {
-	// Codex P2, PR #6: `\[foo][x]` resolved as if its first bracket were live. The first fix counted
-	// backslashes; the fifth review round replaced that with the whitelist - no backslash, no resolving.
-	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
-	const defs = defsOf('[x]: slices/u.md\n');
-	assert.deepStrictEqual(cells('| a | \\[foo][x] |', 2, defs), ['a', '\\[foo][x]']);
-	assert.deepStrictEqual(cells('| a | \\\\[foo][x] |', 2, defs), ['a', '\\\\[foo][x]']);
-	assert.deepStrictEqual(cells('| a | [foo][x] |', 2, defs), ['a', '[foo](slices/u.md)']);
-});
-
-test('[index-gate] ONLY the full reference form format writes is resolved - footnotes, HTML, shortcuts are not', () => {
-	// Codex, PR #6 fifth pass: a footnote definition was stored as a link target, and reference-shaped
-	// text inside an HTML attribute was rewritten. Both from defining the subset by exclusion. It is now
-	// defined by inclusion: `[text][label]`, plain, in a cell with no backtick, `<` or backslash.
-	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
-	const defs = defsOf('[x]: docs/u.md\n[^1]: explanation\n');
-	assert.deepStrictEqual(cells('| see[^1] |', 1, defs), ['see[^1]'], 'a footnote marker');
-	assert.deepStrictEqual(cells('| [t][^1] |', 1, defs), ['[t][^1]'], 'a footnote label');
-	assert.deepStrictEqual(cells('| <span title="[t][x]">same</span> |', 1, defs), ['<span title="[t][x]">same</span>'], 'inline HTML');
-	assert.deepStrictEqual(cells('| [x] |', 1, defs), ['[x]'], 'a shortcut reference');
-	assert.deepStrictEqual(cells('| [x][] |', 1, defs), ['[x][]'], 'a collapsed reference');
-	assert.deepStrictEqual(cells('| [[t][x]] |', 1, defs), ['[[t][x]]'], 'nested in brackets');
-	assert.deepStrictEqual(cells('| ![t][x] |', 1, defs), ['![t][x]'], 'an image');
-	assert.deepStrictEqual(cells('| [t][x] · [u][x] |', 1, defs), ['[t](docs/u.md) · [u](docs/u.md)'], 'the form format writes');
-});
-
-test('[index-gate] references resolve only in the SIMPLE subset; anything else is compared as written', () => {
-	// Codex, PR #6 fourth pass - the third round of CommonMark corners in a hand-rolled resolver. Rather
-	// than chase the grammar, resolve only what `format` emits (a bare destination, no title, no code in
-	// the cell) and compare everything else literally, which can only fail loudly.
-	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
-
-	// An angle-bracketed destination may hold a space; `[t](docs/my file.md)` is not a link on GitHub.
-	const angle = defsOf('[x]: <docs/my file.md>\n[x]: docs/simple.md\n');
-	assert.deepStrictEqual(cells('| [t][x] |', 1, angle), ['[t][x]'], 'unresolved');
-	// ...and it still CLAIMS its label, so the later simple definition does not win.
-	assert.deepStrictEqual(cells('| [x] |', 1, angle), ['[x]']);
-
-	assert.deepStrictEqual(cells('| [t][x] |', 1, defsOf('[x]: docs/u.md "a title"\n')), ['[t][x]'], 'a title');
-
-	// Code spans need matching backtick runs; a cell with any backtick is not resolved at all.
-	const simple = defsOf('[x]: docs/u.md\n');
-	assert.deepStrictEqual(cells('| `` `[foo][x]` `` |', 1, simple), ['`` `[foo][x]` ``']);
-	assert.deepStrictEqual(cells('| [foo][x] |', 1, simple), ['[foo](docs/u.md)'], 'the simple case still resolves');
 });
 
 test('[index-gate] --write and --check together is a usage error', () => {

@@ -4,7 +4,7 @@ state: 🟦 tested
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
 doc: '[DOCS-056](slices/DOCS-056_After_adoption_editing_the_register_is_silently_futile.md)'
-status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 29 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
+status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 27 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
 priority: high
 lane: index
 ---
@@ -213,33 +213,38 @@ what was built differs in three places, each for a stated reason:
 The first `index --check` on this repository failed **all 43 rows**. `index` renders
 `[DOCS-001](slices/...)`, and `format` then rewrites that to `[DOCS-001][docs-001]` plus a
 definition. GitHub renders the two identically. The same DOCS-059 disagreement that the cell
-comparison already absorbed for padding came back through link style. The comparison now resolves a
-reference link to its definition, which is what GitHub does. A definition pointing elsewhere, or
-sitting inside a fence, still differs, so the comparison hides no real change. Control L pins all
-three cases.
+comparison already absorbed for padding came back through link style.
 
-Codex found the hole in that claim on PR #6. A definition inside raw HTML, such as a comment,
-defines nothing on GitHub, but the parser read it. The first definition wins, so a commented-out old
-target shadowed the live one and `--check` passed a link GitHub renders somewhere else. HTML blocks
-are now excluded like fences, and control L pins a comment and a `<details>` block.
+### Six review rounds, and a resolver that did not converge
 
-⚠️ **The next three rounds found three more corners:** a fence inside an HTML comment, escaped
-brackets, then angle-bracket destinations and nested backtick runs. Each made two different renders
-compare equal. Four rounds is evidence that a hand-rolled CommonMark resolver doesn't converge, so
-resolution was **narrowed to the subset `format` emits**: a bare destination, no title, no code in
-the cell. Everything else is compared as written, which can only fail loudly. A definition outside
-the subset still claims its label, so a later simple definition can't take it over.
+The first answer resolved reference links back to the inline links they render as. Codex reviewed PR #6
+six times, and **every round found another CommonMark corner where two different renders compared
+equal**, so a real edit passed:
 
-The fifth round found footnotes and HTML attributes, and exposed the real mistake: **the subset was
-defined by exclusion**, so every form nobody thought of was allowed through. It is now defined by
-inclusion. Only the one form `format` writes resolves: a full `[text][label]` touching no other
-bracket, `!` or `(`, with no leading `^`, in a cell with no backtick, `<` or backslash. A form
-nobody thought of is now compared as written, the loud direction, instead of passing.
+| round | what the resolver got wrong |
+| --- | --- |
+| 1 | a definition inside an HTML comment, which defines nothing on GitHub |
+| 2 | a fence-looking pair inside that comment, which ended the comment early |
+| 3 | an escaped bracket, `\[foo][x]` |
+| 4 | an angle-bracket destination holding a space, and nested backtick runs in a code span |
+| 5 | a GitHub footnote, and reference-shaped text inside an HTML attribute |
+| 6 | a title on the line after the definition, and `</style>` closing a `<script>` block |
+
+Rounds 4 and 5 narrowed the resolver, first by exclusion and then by inclusion, and round 6 still
+found the definition side. **The resolver was deleted** (Wilson, 2026-09-17). A row is now
+consistent when its cells exactly equal the render or exactly equal `format(render)`, two literal
+comparisons. The probe that justified this: `format(render(roadmap))` was byte-identical to the
+committed roadmap here, with 43 of 43 rows equal.
+
+⚠️ **What this trades.** A reference `format` would not write reads as diverged, loudly, even when
+GitHub renders the same link. And the gate is now exactly as correct about links as `format` is: a
+definition `format` mishandles is mishandled in both. That concentrates the risk in one tool that is
+already under test, where before it was split across two parsers that could disagree.
 
 ### Not built
 
 - **The generated-file banner** is still worth its one line and is still missing.
 - **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
   the churn in `git diff` remains.
-- **Not yet run on an estate register.** 29 controls, one repository, green locally. The next
+- **Not yet run on an estate register.** 27 controls, one repository, green locally. The next
   evidence is `index --check` on an adopted MedAR register.
