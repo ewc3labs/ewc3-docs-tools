@@ -25,6 +25,7 @@ const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
 const gitbase = require('../lib/gitbase');
 const { planMint } = require('../lib/mint');
+const { planFold, applyFold } = require('../lib/fold');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -998,8 +999,15 @@ function cmdIndex(root, config, argv) {
 		const last = gitbase.loadLastWritten(repo, repoState.head);
 		for (const { file, rel, res, changed, everyForm } of plans) {
 			if (changed) {
+				// A REGISTER KEPT FORMAT-CLEAN STAYS FORMAT-CLEAN. Rows render with inline links; in a register
+				// `format` moved to reference style, one state change re-rendered EVERY row - a whole-table diff,
+				// and `check` red until `fix` (found folding on this repository). `format` never changes a word.
+				const before = fs.readFileSync(file, 'utf8');
+				const lf = before.split('\r\n').join('\n');
+				const formatOptions = { ...(config.format || {}) };
 				fs.writeFileSync(file, res.text);
-				console.log(`${rel}: written`);
+				if (format(lf, formatOptions) === lf) { formatFiles([file], formatOptions); }
+				console.log(fs.readFileSync(file, 'utf8') === before ? `${rel}: already current` : `${rel}: written`);
 			}
 			// Both forms, so render -> `fix` -> render is not read as a hand edit of the formatted row. The
 			// formatted form is recorded even when it was not accepted for comparison: it is what `fix` makes
@@ -1037,6 +1045,117 @@ function cmdIndex(root, config, argv) {
  * document and Last Used), the slice document, and its row in the table that already holds the prefix.
  * Dry by default. `index --write` still never mints - this is the deliberate act that does.
  */
+/**
+ * Fold git trailers into slice-document state. DOCS-036, DOCS-038.
+ *
+ *   ewc3-docs fold [--write | --check] [--since <rev>]
+ *
+ * Reads `Slice:`/`State:` trailers on the checked-out branch, newest first, and writes the newest state for
+ * each slice into its frontmatter (`state`, `state_sha`, `state_source: trailer`), then renders the rows.
+ * Dry by default. `--check` fails when a slice's frontmatter state is behind its newest trailer. A malformed
+ * trailer is an ERROR for commits after `--since` (for pull-request CI) and a WARNING in full history, which
+ * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
+ */
+function cmdFold(root, config, argv) {
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config']);
+	const VALUED = new Set(['--since', '--repo', '--config']);
+	for (const [i, a] of argv.entries()) {
+		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
+		if (VALUED.has(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) { console.error(`fold: ${a} needs a value`); return 2; }
+		if (!a.startsWith('--') && !VALUED.has(argv[i - 1])) { console.error(`fold: unexpected argument ${a}`); return 2; }
+	}
+	const write = argv.includes('--write');
+	const check = argv.includes('--check');
+	if (write && check) { console.error('fold: --write and --check are exclusive.'); return 2; }
+	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
+	const repo = path.resolve(flag('--repo') || root);
+
+	// History is the input, so git is required; a tree with unresolved conflicts is not read, and --write also
+	// refuses mid-operation because it renders rows through the index gate.
+	const repoState = gitbase.state(repo);
+	if (!repoState.git) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
+	if (write ? !repoState.ok : repoState.conflicts) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
+
+	const project = path.join(repo, 'docs', 'project');
+	const sliceDir = path.join(project, 'slices');
+	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps).filter((file) => {
+		const rel = path.relative(project, file);
+		return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+	});
+
+	// WHICH KIND OF REGISTER THIS IS. A repository may keep a hand-edited Delivery Index (roadmap-rows) - most of
+	// an estate legitimately does - or slice documents, or no register at all, while still carrying `Slice:`
+	// trailers as evidence for another repository's slices. Only slice documents fold. The mode is DECLARED by the
+	// optional `planning` config key, else read off the layout; a declaration the documents contradict did not run,
+	// either way round, so deleting a declaration can never turn a check green.
+	const hasIndex = roadmaps.some((f) => /^##\s+Delivery Index/im.test(fs.readFileSync(f, 'utf8')));
+	const idDocs = fs.existsSync(sliceDir) && inventorySlices(fs.readdirSync(sliceDir).filter((n) => /\.md$/i.test(n))
+		.map((name) => ({ name, text: fs.readFileSync(path.join(sliceDir, name), 'utf8') }))).some((e) => e.frontmatter === 'ok');
+	const declared = config.planning;
+	if (declared !== undefined && declared !== 'slice-documents' && declared !== 'roadmap-rows') {
+		console.error(`fold: did not run: planning is ${JSON.stringify(declared)}; it must be "slice-documents" or "roadmap-rows"`);
+		return 2;
+	}
+	if (declared === 'slice-documents' && !fs.existsSync(sliceDir)) {
+		console.error('fold: did not run: planning is declared "slice-documents" but there is no docs/project/slices');
+		return 2;
+	}
+	if (declared === 'roadmap-rows' && idDocs) {
+		console.error('fold: did not run: planning is declared "roadmap-rows" but slice documents in docs/project/slices declare ids');
+		return 2;
+	}
+	const mode = declared || (fs.existsSync(sliceDir) ? 'slice-documents' : hasIndex ? 'roadmap-rows' : null);
+	if (mode === 'roadmap-rows') { console.log('fold: rows register: nothing to fold - the Delivery Index is kept as rows, not slice documents'); return 0; }
+	if (!mode) { console.log('fold: no register: nothing to fold - no Delivery Index and no slice documents; Slice: trailers here are evidence only'); return 0; }
+
+	let sinceShas = null;
+	const since = flag('--since');
+	if (since) {
+		sinceShas = gitbase.commitsSince(repo, since);
+		if (!sinceShas) { console.error(`fold: did not run: --since ${since} is not a commit`); return 2; }
+	}
+
+	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas });
+	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
+	const errors = plan.issues.filter((i) => i.inScope);
+	const warnings = plan.issues.filter((i) => !i.inScope);
+
+	console.log(`fold: states spelled from the ${plan.legendSource}`);
+	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
+	for (const c of plan.conflicts) {
+		console.log(`  ${c.written}: KEPT ${c.human} - state_source: human; the newest trailer says ${c.to || c.trailer} (${c.sha})`);
+	}
+	for (const i of errors) { console.error(`  error:   ${i.sha}  ${i.message}`); }
+	for (const i of warnings) { console.log(`  warning: ${i.sha}  ${i.message}`); }
+
+	if (check) {
+		if (plan.changes.length) { console.error(`fold --check: ${plan.changes.length} slice(s) behind their newest trailer - run \`ewc3-docs fold --write\``); }
+		const code = plan.changes.length || errors.length ? 1 : 0;
+		if (!code) { console.log('fold --check: every slice with a trailer matches its newest state'); }
+		return code;
+	}
+	if (!write) {
+		if (plan.changes.length || plan.provenance.length) { console.log('  (dry run - pass --write to fold)'); }
+		return errors.length ? 1 : 0;
+	}
+
+	// ALL OR NOTHING. The row follows the document through the index gate, which refuses a hand-edited row -
+	// and when it refuses it writes no roadmap. Frontmatter written before that refusal left a document and its
+	// row disagreeing while the output said nothing was written (Codex P1, PR #15), so it is restored.
+	const entries = [...plan.changes, ...plan.provenance];
+	const roadmapsBefore = roadmaps.map((f) => fs.readFileSync(f, 'utf8'));
+	entries.forEach(applyFold);
+	const indexCode = plan.changes.length ? cmdIndex(repo, config, ['--write']) : 0;
+	const roadmapUntouched = roadmaps.every((f, i) => fs.readFileSync(f, 'utf8') === roadmapsBefore[i]);
+	if (indexCode !== 0 && plan.changes.length && roadmapUntouched) {
+		entries.forEach((e) => fs.writeFileSync(e.file, e.text));
+		console.error('fold: rolled back - the index refused to render the rows, so no slice document was changed either');
+		return indexCode;
+	}
+	console.log(`fold: wrote ${plan.changes.length} state change(s) and ${plan.provenance.length} provenance update(s)`);
+	return Math.max(indexCode, errors.length ? 1 : 0);
+}
+
 function cmdSlice(root, config, argv) {
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
 	// `--state --write` must not store the state "--write" and then mint (Codex, PR #12).
@@ -1157,6 +1276,7 @@ switch (command) {
 	case 'tables': code = cmdTables(root, config, argv); break;
 	case 'index': code = cmdIndex(root, config, argv); break;
 	case 'slice': code = cmdSlice(root, config, argv); break;
+	case 'fold': code = cmdFold(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':

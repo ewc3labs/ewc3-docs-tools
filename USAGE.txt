@@ -46,6 +46,14 @@ EWC3 Labs documentation tools
                                           since it was last committed or written - edit the
                                           slice document instead.
 
+  ewc3-docs fold                          Fold git trailers into slice state. A commit carries
+    [--write | --check]                   Slice: <ID> and State: <word> in its last paragraph;
+    [--since <rev>]                       the newest per slice becomes its frontmatter state, in
+                                          the register's legend spelling, and the rows follow.
+                                          state_source: human is never overwritten. --check fails
+                                          when a state is behind its trailer; malformed trailers
+                                          after --since are errors. Dry run without --write.
+
   ewc3-docs slice new <PREFIX> "<title>"   Mint a slice in an adopted repository: the next id (past
     [--state <state>]                     every row, slice document, archived document and Last
     [--set <column>=<value>]...           Used), its slice document, and its row in the table that
