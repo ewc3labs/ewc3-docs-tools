@@ -91,7 +91,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-067 | ⬜ planned | slice new: match a bare --state word to the register's own spelling | S | [DOCS-067][docs-067] |  |
 | DOCS-068 | 🟦 tested | migrate-project: an off-canon register's links and an existing Prefix register | M | [DOCS-068][docs-068] |  |
 | DOCS-069 | ⬜ planned | Anchors: migrate retargets moved headings, links checks fragments | M | [DOCS-069][docs-069] |  |
-| DOCS-070 | ⬜ planned | fold: a dry run reports provenance updates, and --help prints usage | S | [DOCS-070][docs-070] |  |
+| DOCS-070 | 🟦 tested | fold: a dry run reports provenance updates, and --help prints usage | S | [DOCS-070][docs-070] |  |
 | DOCS-071 | ⬜ planned | fold --check --since: say out-of-range trailers were not checked | S | [DOCS-071][docs-071] |  |
 | DOCS-072 | ⬜ planned | One frontmatter shape: migrate writes doc only for a Doc column, and no source | S | [DOCS-072][docs-072] |  |
 | DOCS-073 | ⬜ planned | fold --check-message: validate a commit message's trailers before it is committed | M | [DOCS-073][docs-073] |  |
