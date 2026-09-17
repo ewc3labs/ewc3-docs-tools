@@ -1127,6 +1127,14 @@ function cmdFold(root, config, argv) {
 
 	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas });
 	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
+	// A legend fold cannot fully read is a register defect, not a stale document: did not run, never exit 1 (DOCS-074).
+	if (plan.unreadable) {
+		const u = plan.unreadable;
+		console.error(`fold: did not run: the State Legend at ${rel(u.file)}:${u.line} could not be read:`);
+		console.error(`    ${u.text.trim()}`);
+		console.error('  expected one state per bullet: - <glyph> `word` — meaning');
+		return 2;
+	}
 	const errors = plan.issues.filter((i) => i.inScope);
 	const warnings = plan.issues.filter((i) => !i.inScope);
 

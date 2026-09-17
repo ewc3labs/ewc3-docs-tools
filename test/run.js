@@ -3132,6 +3132,59 @@ test('[fold] with no State Legend, a word takes the spelling the register alread
 	assert.strictEqual(foldData(dir, 'VS-1').state, 'coded');
 });
 
+/** foldRepo with its State Legend section replaced by `legendLines` (heading included), committed. */
+function legendRepo(legendLines) {
+	const dir = foldRepo();
+	const file = gateRoadmap(dir);
+	const text = fs.readFileSync(file, 'utf8').split(FOLD_LEGEND.join('\n')).join([...legendLines, ''].join('\n'));
+	fs.writeFileSync(file, text);
+	git(dir, 'commit', '-qam', 'legend');
+	return dir;
+}
+
+test('[fold] DOCS-074: a legend listing several states on ONE bullet does not run - never folds against a partial legend', () => {
+	// Measured downstream: `- ⬜ \`planned\` · 🟦 \`coded\`` read as `planned` alone, and every other trailer word was
+	// then refused as "not in the legend" - exit 1, reading as the trailer's fault.
+	const dir = legendRepo(['## State Legend', '', '- ⬜ `planned` · 🟦 `coded` · 💨 `smoked` · 🟩 `go`']);
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	const before = fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8');
+	for (const mode of [[], ['--write'], ['--check']]) {
+		const r = cli(['fold', ...mode], dir);
+		assert.strictEqual(r.code, 2, `fold ${mode.join(' ')}:\n${r.out}`);
+		assert.ok(/State Legend at docs\/project\/R_Roadmap\.md:\d+ could not be read/.test(r.out), r.out);
+		assert.ok(r.out.includes('`planned` · 🟦 `coded`'), `the offending line is shown:\n${r.out}`);
+	}
+	assert.strictEqual(fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8'), before, 'nothing written');
+});
+
+test('[fold] DOCS-074: a State Legend under ANY heading level is read', () => {
+	// `### State Legend` was not found at all, and every word was refused with "the register has no State Legend".
+	const dir = legendRepo(['### State Legend (current)', '', ...FOLD_LEGEND.slice(2)]);
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	const r = cli(['fold', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded');
+});
+
+test('[fold] DOCS-074: an unbackticked one-line legend, and an empty one, do not run; notes and meanings are not states', () => {
+	const oneLine = legendRepo(['### State Legend', '', '⬜ planned · 🟦 coded · 💨 smoked']);
+	trailerCommit(oneLine, 'work', ['Slice: VS-1', 'State: coded']);
+	const r = cli(['fold', '--check'], oneLine);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(r.out.includes('⬜ planned · 🟦 coded · 💨 smoked'), r.out);
+
+	const empty = legendRepo(['## State Legend', '', 'States are listed elsewhere.']);
+	assert.strictEqual(cli(['fold', '--check'], empty).code, 2, 'a legend heading with no states did not run');
+
+	// A meaning may mention another state in backticks, and a nested bullet may explain one: neither is a state.
+	const rich = legendRepo(['## State Legend', '', '- ⬜ `planned` — not started', '- 🟦 `coded` — source landed; next is `smoked`',
+		'  - covers refactors too', '- _`tested` is **reserved** and is not a state_']);
+	trailerCommit(rich, 'work', ['Slice: VS-1', 'State: coded']);
+	const w = cli(['fold', '--write'], rich);
+	assert.strictEqual(w.code, 0, w.out);
+	assert.strictEqual(foldData(rich, 'VS-1').state, '🟦 coded');
+});
+
 test('[fold] a trailer merged in from a branch counts', () => {
 	const dir = foldRepo();
 	git(dir, 'checkout', '-qb', 'feature/VS-1');
