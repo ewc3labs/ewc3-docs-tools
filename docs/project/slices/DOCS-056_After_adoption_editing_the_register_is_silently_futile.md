@@ -186,7 +186,7 @@ what was built differs in three places, each for a stated reason:
 | drafted | built | why |
 | --- | --- | --- |
 | `--force` to overwrite | **no `--force`** | a document edit alone never refuses, because the baseline is git and not the render. The only thing `--force` could overwrite is a hand edit, and `git checkout` already does that visibly |
-| `check` reports the divergence | **`index --check`** | `check` is red wholesale on SX_Coder (788 format, 272 links), so a gate inside it would be ignored with the rest |
+| `check` reports the divergence | **`index --check`** | `check` is red wholesale on a large downstream register (hundreds of format and link findings), so a gate inside it would be ignored with the rest |
 | compare the row with its render | **compare cells, against git** | a row cannot say whether it was typed or rendered, but its history can |
 
 - **L1, `index --write`**, refuses a row whose cells match neither the committed version at HEAD nor
@@ -247,4 +247,4 @@ already under test, where before it was split across two parsers that could disa
 - **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
   the churn in `git diff` remains.
 - **Not yet run on an estate register.** 27 controls, one repository, green locally. The next
-  evidence is `index --check` on an adopted MedAR register.
+  evidence is `index --check` on an adopted downstream register.
