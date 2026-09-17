@@ -2150,6 +2150,26 @@ test('[index-gate] an ESCAPED bracket is literal text, not a reference to resolv
 	assert.deepStrictEqual(cells('| a | \\\\[foo][x] |', 2, defs), ['a', '\\\\[foo](slices/u.md)']);
 });
 
+test('[index-gate] references resolve only in the SIMPLE subset; anything else is compared as written', () => {
+	// Codex, PR #6 fourth pass - the third round of CommonMark corners in a hand-rolled resolver. Rather
+	// than chase the grammar, resolve only what `format` emits (a bare destination, no title, no code in
+	// the cell) and compare everything else literally, which can only fail loudly.
+	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
+
+	// An angle-bracketed destination may hold a space; `[t](docs/my file.md)` is not a link on GitHub.
+	const angle = defsOf('[x]: <docs/my file.md>\n[x]: docs/simple.md\n');
+	assert.deepStrictEqual(cells('| [t][x] |', 1, angle), ['[t][x]'], 'unresolved');
+	// ...and it still CLAIMS its label, so the later simple definition does not win.
+	assert.deepStrictEqual(cells('| [x] |', 1, angle), ['[x]']);
+
+	assert.deepStrictEqual(cells('| [t][x] |', 1, defsOf('[x]: docs/u.md "a title"\n')), ['[t][x]'], 'a title');
+
+	// Code spans need matching backtick runs; a cell with any backtick is not resolved at all.
+	const simple = defsOf('[x]: docs/u.md\n');
+	assert.deepStrictEqual(cells('| `` `[foo][x]` `` |', 1, simple), ['`` `[foo][x]` ``']);
+	assert.deepStrictEqual(cells('| [foo][x] |', 1, simple), ['[foo](docs/u.md)'], 'the simple case still resolves');
+});
+
 test('[index-gate] --write and --check together is a usage error', () => {
 	assert.strictEqual(cli(['index', '--write', '--check'], gateRepo()).code, 2);
 });

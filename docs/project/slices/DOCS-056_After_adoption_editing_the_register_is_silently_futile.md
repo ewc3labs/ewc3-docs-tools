@@ -4,7 +4,7 @@ state: 🟦 tested
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
 doc: '[DOCS-056](slices/DOCS-056_After_adoption_editing_the_register_is_silently_futile.md)'
-status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 27 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
+status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 28 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
 priority: high
 lane: index
 ---
@@ -223,10 +223,17 @@ defines nothing on GitHub, but the parser read it. The first definition wins, so
 target shadowed the live one and `--check` passed a link GitHub renders somewhere else. HTML blocks
 are now excluded like fences, and control L pins a comment and a `<details>` block.
 
+⚠️ **The next three rounds found three more corners:** a fence inside an HTML comment, escaped
+brackets, then angle-bracket destinations and nested backtick runs. Each made two different renders
+compare equal. Four rounds is evidence that a hand-rolled CommonMark resolver doesn't converge, so
+resolution was **narrowed to the subset `format` emits**: a bare destination, no title, no code in
+the cell. Everything else is compared as written, which can only fail loudly. A definition outside
+the subset still claims its label, so a later simple definition can't take it over.
+
 ### Not built
 
 - **The generated-file banner** is still worth its one line and is still missing.
 - **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
   the churn in `git diff` remains.
-- **Not yet run on an estate register.** 27 controls, one repository, green locally. The next
+- **Not yet run on an estate register.** 28 controls, one repository, green locally. The next
   evidence is `index --check` on an adopted MedAR register.
