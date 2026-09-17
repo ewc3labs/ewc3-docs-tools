@@ -1,10 +1,12 @@
 ---
 id: DOCS-068
-state: ⬜ planned
+state: 🟦 tested
 title: "migrate-project: an off-canon register's links and an existing Prefix register"
 est: M
 doc: "[DOCS-068](slices/DOCS-068_migrate_project_an_off_canon_register_s_links_and_an_exist.md)"
 status: ""
+state_sha: 2bd598375de6
+state_source: trailer
 ---
 
 # DOCS-068 — migrate-project: an off-canon register's links and an existing Prefix register

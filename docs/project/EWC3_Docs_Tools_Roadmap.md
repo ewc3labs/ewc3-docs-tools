@@ -89,7 +89,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-065 | 🟦 tested | `migrate-project` and `index` disagree about every row of the register migrate writes, and the moved prose breaks links | M | [DOCS-065][docs-065] | migrate renders its register with index's own renderer; every row's Status moves to its body; moved links are repointed and evidence is quoted; unit-tested end to end on both register shapes, awaiting a downstream re-run |
 | DOCS-066 | 🟦 tested | Frontmatter is written in a form strict YAML rejects, so GitHub shows an error on every migrated document | S | [DOCS-066][docs-066] | plain only when strict YAML agrees; format re-quotes existing unsafe values without churning quoted ones; verified out-of-band with js-yaml, awaiting a downstream PyYAML gate |
 | DOCS-067 | ⬜ planned | slice new: match a bare --state word to the register's own spelling | S | [DOCS-067][docs-067] |  |
-| DOCS-068 | ⬜ planned | migrate-project: an off-canon register's links and an existing Prefix register | M | [DOCS-068][docs-068] |  |
+| DOCS-068 | 🟦 tested | migrate-project: an off-canon register's links and an existing Prefix register | M | [DOCS-068][docs-068] |  |
 | DOCS-069 | ⬜ planned | Anchors: migrate retargets moved headings, links checks fragments | M | [DOCS-069][docs-069] |  |
 | DOCS-070 | ⬜ planned | fold: a dry run reports provenance updates, and --help prints usage | S | [DOCS-070][docs-070] |  |
 
