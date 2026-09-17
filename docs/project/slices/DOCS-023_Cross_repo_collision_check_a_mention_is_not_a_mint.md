@@ -1,7 +1,7 @@
 ---
 id: DOCS-023
 state: ⬜ planned
-title: Cross-repo collision check: a mention is not a mint
+title: "Cross-repo collision check: a mention is not a mint"
 est: M
 doc: '[DOCS-023](slices/DOCS-023_Cross_repo_collision_check_a_mention_is_not_a_mint.md)'
 status: ""

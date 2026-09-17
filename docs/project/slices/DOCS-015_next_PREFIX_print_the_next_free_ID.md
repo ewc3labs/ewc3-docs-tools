@@ -1,7 +1,7 @@
 ---
 id: DOCS-015
 state: ⬜ planned
-title: `next <PREFIX>`: print the next free ID
+title: "`next <PREFIX>`: print the next free ID"
 est: S
 doc: '[DOCS-015](slices/DOCS-015_next_PREFIX_print_the_next_free_ID.md)'
 status: ""

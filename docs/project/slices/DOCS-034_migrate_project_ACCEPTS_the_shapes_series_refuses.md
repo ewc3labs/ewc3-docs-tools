@@ -1,7 +1,7 @@
 ---
 id: DOCS-034
 state: ⬜ planned
-title: `migrate-project` ACCEPTS the shapes `series` refuses
+title: "`migrate-project` ACCEPTS the shapes `series` refuses"
 est: M
 doc: '[DOCS-034](slices/DOCS-034_migrate_project_ACCEPTS_the_shapes_series_refuses.md) · [One template beats three parsers][one-template-beats]'
 status: ""

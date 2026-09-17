@@ -1,7 +1,7 @@
 ---
 id: DOCS-047
 state: 🟨 coded
-title: `check` must refuse to report a PASS over zero files
+title: "`check` must refuse to report a PASS over zero files"
 est: S
 doc: '[DOCS-047](slices/DOCS-047_check_must_refuse_to_report_a_PASS_over_zero_files.md)'
 status: 'doubt: the guard is built and seen firing for index only; format, values, links and tables still report a pass over zero files'
