@@ -1,10 +1,10 @@
 ---
 id: DOCS-041
-state: ⬜ planned
+state: 🟦 tested
 title: "`slice new <PREFIX> \"<title>\"` — mint by creating the document"
 est: M
 doc: '[DOCS-041](slices/DOCS-041_slice_new_PREFIX_title_mint_by_creating_the_document.md) · [Frontmatter is the declaration][frontmatter-is-the]'
-status: ""
+status: "built: slice new mints past rows, documents, archived documents and Last Used, into the table holding the prefix; unit-tested end to end, awaiting a downstream mint"
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 
@@ -18,5 +18,62 @@ source: EWC3_Docs_Tools_Roadmap.md
 every ID gets a document and most are five-line stubs, because rows-for-small-work reintroduces the
 second declaring surface; the next number derives from `max(existing filenames)`, the same move
 `Last Used` made
+
+## Built, 2026-09-17
+
+A downstream repository adopted the slice model and could not mint its first new slice.
+`index --write` refuses a document whose id the register never minted, and that refusal is
+deliberate: a generator that can mint can mint by accident. So the only working path was typing the
+generated row by hand, exactly as `index` would render it.
+
+`ewc3-docs slice new <PREFIX> "<title>" [--state <s>] [--set <column>=<value>]... [--table "<heading>"] [--write]`
+is the deliberate act instead. The contract was agreed with the consumer:
+
+- **The id** is one past the highest number for that prefix in the rows and other declaring
+  positions, the register's **Last Used**, the live slice documents, and **archived** documents
+  under `docs/_ARCHIVE/`. A retired number is spent. It is padded to the declared width.
+- **Ownership is checked the way `series` reads it.** A frozen prefix, a prefix the register only
+  cites (`reference-only`), and an undeclared prefix are all refused.
+- **The table** is the one already holding the prefix's highest row. A prefix with no row anywhere
+  needs `--table "<heading>"`, which must name an existing sub-table. `--table` that disagrees with
+  where the prefix already lives is refused, not silently ignored.
+- **The document** gets frontmatter for every column of that table: `--state` (default: the
+  register's own spelling of "planned"), the title, a `doc:` link when the table has a Doc column,
+  and `--set` values for other columns. The id, doc, state and title cannot be `--set`. The
+  frontmatter is quoted for strict YAML (`DOCS-066`).
+- **The row** is a placeholder at the end of the table, rendered by `index`'s own renderer, so the
+  row and the document agree by construction. `values` is refreshed so Last Used moves with the
+  mint.
+- **Dry run by default**, printing the id, the file and the table.
+
+The name was settled as `slice new`, not `mint`, and `--set` has one spelling; the consumer declined
+named aliases.
+
+### Tests
+
+End to end on an adopted fixture with two sub-tables, a frozen series, a cited-only prefix, a
+declared prefix with no rows, and an archived id above every live one. A mint writes the document
+and the row in the right table, skips past the archived id, keeps `index --check`, `series` and
+`values --check` at exit 0, and a second mint gets the next number. Refusals write nothing.
+
+### Review, PR #12
+
+Codex and Copilot found six ways a mint could go quietly wrong. Each is fixed and tested:
+
+- **A freeze recorded by any register refuses.** Only the first scope record found used to be
+  checked.
+- **`--state --write` is a usage error.** It used to store the state `--write` and mint.
+- **An unheaded table is named `(no heading)`**, the label the refusal prints.
+- **A target table with other columns than the first is refused.** `index` renders every table with
+  the first table's header.
+- **No row says "planned": `--state` is required**, rather than guessing a spelling.
+- **With no Doc column, the pointer cell cannot be `--set`.** Filling it would hide the new
+  document.
+
+### Not built
+
+- **A mint interrupted between writing the document and the row** leaves a document `index` reports
+  as never minted. It is loud, and re-running `slice new` refuses the existing file, so recovery is
+  to delete that file and mint again. Writing both atomically is not built.
 
 [frontmatter-is-the]: ../../design/frontmatter-is-the-declaration.md

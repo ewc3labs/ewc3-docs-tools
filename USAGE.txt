@@ -46,6 +46,13 @@ EWC3 Labs documentation tools
                                           since it was last committed or written - edit the
                                           slice document instead.
 
+  ewc3-docs slice new <PREFIX> "<title>"   Mint a slice in an adopted repository: the next id (past
+    [--state <state>]                     every row, slice document, archived document and Last
+    [--set <column>=<value>]...           Used), its slice document, and its row in the table that
+    [--table "<heading>"]                 already holds the prefix (--table for a first row).
+    [--write]                             Refreshes values. Refuses a frozen, cited-only or
+                                          undeclared prefix. Dry run without --write.
+
   ewc3-docs tables                        Table rows whose cell count does not match their header -
                                           almost always a pipe inside a cell that needs escaping
                                           as |. Reports; never rewrites, because a bare pipe is
