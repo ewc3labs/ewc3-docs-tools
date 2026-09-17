@@ -1957,6 +1957,41 @@ test('[index-gate] L: a row as `format` rewrote it is consistent - with no link 
 	assert.strictEqual(cli(['index', '--check'], dir).code, 1, 'a re-pointed definition');
 });
 
+test('[index-gate] a formatted row whose DEFINITION is gone is not consistent', () => {
+	// Codex, PR #6. Only the formatted ROW was compared, so `[VS-1][label]` with its definition deleted
+	// still matched - and GitHub renders literal brackets. The formatted form now counts only when the
+	// roadmap outside its rows is exactly what `format` writes, which is where the definitions live.
+	const dir = gateRepo();
+	const target = 'slices/VS-1_a_path_long_enough_that_format_moves_it.md';
+	swap(gateDoc(dir, 'VS-1'), 'status: x', `status: see [VS-1](${target})`);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'fixture: consistent while the definition exists');
+	const text = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const def = text.split('\n').find((l) => l.endsWith(`: ${target}`));
+	assert.ok(def, 'fixture: format wrote a definition');
+	fs.writeFileSync(gateRoadmap(dir), text.replace(`${def}\n`, ''));
+	const r = cli(['index', '--check'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('VS-1'), r.out);
+});
+
+test('[index-gate] J: one id in TWO roadmaps is a duplicate too', () => {
+	// Codex, PR #6: rows were grouped per file, so VS-1 once in each of two registers passed --check and
+	// --write rendered the one document into both.
+	const dir = gateRepo();
+	fs.copyFileSync(gateRoadmap(dir), path.join(dir, 'docs', 'project', 'S_Roadmap.md'));
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'second register');
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 1, check.out);
+	assert.ok(check.out.includes('R_Roadmap.md:7') && check.out.includes('S_Roadmap.md:7'), check.out);
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	swap(gateDoc(dir, 'VS-1'), 'title: first', 'title: renamed');
+	assert.strictEqual(cli(['index', '--write'], dir).code, 1);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before, 'nothing written');
+});
+
 test('[index-gate] a reference link `format` would NOT write is compared literally - loud, never silent', () => {
 	// The cost of parsing no link syntax, pinned so it is a decision and not a surprise: a short target
 	// `format` leaves inline, hand-written as a reference, reads as diverged even though GitHub renders

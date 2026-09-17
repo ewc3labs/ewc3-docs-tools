@@ -741,6 +741,10 @@ function cmdIndex(root, config, argv) {
 	let code = 0;
 	let anyIndex = false;
 	let duplicateRows = false;
+	let notFormatted = false;
+	// Across EVERY roadmap: one id once in each of two registers is still one document rendered twice
+	// (Codex, PR #6).
+	const rowsById = new Map();
 	const plans = [];
 	for (const file of roadmaps) {
 		const rel = path.relative(repo, file).split(path.sep).join('/');
@@ -758,28 +762,34 @@ function cmdIndex(root, config, argv) {
 		// is parsed. A resolver did that for six review rounds on PR #6, and each round found another
 		// CommonMark corner where it let a real change compare equal. Rows are paired by position, and
 		// only while `format` kept the row count, which it does not touch.
-		const formatted = indexRows(format(res.text, { ...(config.format || {}) }));
-		const forms = res.rows.map((row, k) => (row.rendered === null ? null : [
+		//
+		// A formatted ROW is only half of what `format` writes: its `[text][label]` resolves through a
+		// definition elsewhere in the file. Comparing the row alone accepted one whose definition had been
+		// deleted, which GitHub renders as literal brackets (Codex, PR #6). So the formatted form counts
+		// only when everything OUTSIDE the rows is exactly what `format` writes too - compared as lines,
+		// still without parsing a link.
+		const formattedText = format(res.text, { ...(config.format || {}) });
+		const formatted = indexRows(formattedText);
+		const outsideRows = (s) => {
+			const all = s.split('\r\n').join('\n').split('\n');
+			const rowAt = new Set(indexRows(s).map((r) => r.line));
+			return all.filter((_, i) => !rowAt.has(i)).join('\n');
+		};
+		const pairable = formatted.length === res.rows.length;
+		const asFormatted = pairable && outsideRows(formattedText) === outsideRows(text);
+		const everyForm = res.rows.map((row, k) => (row.rendered === null ? null : [
 			gfmCells(row.rendered, res.columns),
-			...(formatted.length === res.rows.length ? [gfmCells(formatted[k].raw, res.columns)] : []),
+			...(pairable ? [gfmCells(formatted[k].raw, res.columns)] : []),
 		]));
-		plans.push({ file, rel, res, changed, forms });
+		const forms = everyForm.map((f) => (f && !asFormatted ? f.slice(0, 1) : f));
+		plans.push({ file, rel, res, changed, forms, everyForm });
 		console.log(`${rel}`);
 		console.log(`  ${res.rendered} row(s) rendered from ${records.length} slice document(s)`
 			+ `${res.rendered && !changed ? ' - already current' : ''}`);
 
-		// One id on two rows renders the same document twice and hides that the register disagrees
-		// with itself. Which row is the real one is a human call.
-		const lines = new Map();
 		for (const row of res.rows) {
-			if (!lines.has(row.id)) { lines.set(row.id, []); }
-			lines.get(row.id).push(row.line + 1);
-		}
-		for (const [id, at] of lines) {
-			if (at.length < 2) { continue; }
-			code = 1;
-			duplicateRows = true;
-			console.log(`  DUPLICATE ${id} on ${at.length} rows: ${at.map((n) => `${rel}:${n}`).join('  ')}`);
+			if (!rowsById.has(row.id)) { rowsById.set(row.id, []); }
+			rowsById.get(row.id).push(`${rel}:${row.line + 1}`);
 		}
 
 		if (check) {
@@ -788,6 +798,7 @@ function cmdIndex(root, config, argv) {
 				const now = gfmCells(row.raw, res.columns);
 				if (forms[k].some((w) => sameCells(now, w))) { return; }
 				code = 1;
+				if (!asFormatted && everyForm[k][1] && sameCells(now, everyForm[k][1])) { notFormatted = true; }
 				console.log(`  DIVERGED ${row.id} at ${rel}:${row.line + 1}`);
 				console.log(`    row:        ${showCells(now)}`);
 				console.log(`    renders:    ${showCells(forms[k][0])}`);
@@ -827,6 +838,20 @@ function cmdIndex(root, config, argv) {
 	// returning 0 for it is a pass about the wrong question - a misspelled heading, an overly
 	// broad glob or a backlog-only repo all produce a confident success. Same shape as the
 	// zero-declaring-documents case already guarded above.
+	// One id on two rows renders the same document twice and hides that the register disagrees with
+	// itself. Which row is the real one is a human call.
+	for (const [id, at] of rowsById) {
+		if (at.length < 2) { continue; }
+		code = 1;
+		duplicateRows = true;
+		console.log(`  DUPLICATE ${id} on ${at.length} rows: ${at.join('  ')}`);
+	}
+	if (notFormatted) {
+		console.log('  NOTE: some rows are in the form `format` writes, but the rest of the roadmap is not - a');
+		console.log('        definition those rows depend on may be missing. They were compared with the plain');
+		console.log('        render only. Run `ewc3-docs fix` if the roadmap should be formatted.');
+	}
+
 	if (!anyIndex) {
 		console.error('index: no roadmap in that tree carries a recognised Delivery Index.');
 		roadmaps.forEach((r) => console.error(`  looked at: ${path.relative(repo, r).split(path.sep).join('/')}`));
@@ -844,16 +869,18 @@ function cmdIndex(root, config, argv) {
 		const gate = gateWrite(repo, repoState.head, plans, sameCells, showCells);
 		if (gate) { return gate; }
 		const last = gitbase.loadLastWritten(repo, repoState.head);
-		for (const { file, rel, res, changed, forms } of plans) {
+		for (const { file, rel, res, changed, everyForm } of plans) {
 			if (changed) {
 				fs.writeFileSync(file, res.text);
 				console.log(`${rel}: written`);
 			}
-			// Both forms, so render -> `fix` -> render is not read as a hand edit of the formatted row.
+			// Both forms, so render -> `fix` -> render is not read as a hand edit of the formatted row. The
+			// formatted form is recorded even when it was not accepted for comparison: it is what `fix` makes
+			// of this write, and nobody typed it.
 			last[rel] = {};
 			res.rows.forEach((row, k) => {
 				if (row.rendered === null) { return; }
-				(last[rel][row.id] = last[rel][row.id] || []).push(...forms[k]);
+				(last[rel][row.id] = last[rel][row.id] || []).push(...everyForm[k]);
 			});
 		}
 		gitbase.saveLastWritten(repo, repoState.head, last);
