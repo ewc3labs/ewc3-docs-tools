@@ -98,7 +98,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-074 | 🟦 tested | fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend | S | [DOCS-074][docs-074] |  |
 | DOCS-075 | 🟦 tested | migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice | M | [DOCS-075][docs-075] |  |
 | DOCS-076 | ⬜ planned | slice new: a first mint into an empty register declared slice-documents creates slices/ | S | [DOCS-076][docs-076] |  |
-| DOCS-077 | ⬜ planned | migrate-project: a tree whose history begins at its import cannot date evidence, and says so | S | [DOCS-077][docs-077] |  |
+| DOCS-077 | 🟦 tested | migrate-project: a tree whose history begins at its import cannot date evidence, and says so | S | [DOCS-077][docs-077] |  |
 
 ## Done
 

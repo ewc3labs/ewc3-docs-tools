@@ -1,10 +1,12 @@
 ---
 id: DOCS-077
-state: ⬜ planned
+state: 🟦 tested
 title: "migrate-project: a tree whose history begins at its import cannot date evidence, and says so"
 est: S
 doc: "[DOCS-077](slices/DOCS-077_migrate_project_a_tree_whose_history_begins_at_its_import.md)"
 status: ""
+state_sha: 42564f5cf115
+state_source: trailer
 ---
 
 # DOCS-077 — migrate-project: a tree whose history begins at its import cannot date evidence, and says so
