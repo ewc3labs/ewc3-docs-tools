@@ -54,7 +54,10 @@ the live one.
   Found by Codex on PR #7: a doc named `VS-2_...md` declaring `VS-5` replaced VS-2's generated
   document, and both rows pointed at one file.
 - **The staged tree is complete.** Adopting `docs/project_v2/` in one move now loses nothing a human
-  wrote. A test pins this: every live document must appear byte-for-byte somewhere in staging.
+  wrote. That includes `.MD` in any case, and every other file under `slices/` (an image, anything
+  in a subfolder), copied verbatim at the same path. Codex found both gaps on PR #7. The staged
+  slices folder is rebuilt from nothing on every run. A test walks every live file, binary included,
+  and requires each to appear byte-for-byte somewhere in staging.
 
 ## Estate census (PMO, 2026-09-17, read-only)
 

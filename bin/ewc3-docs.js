@@ -419,7 +419,9 @@ function cmdMigrateProject(root, config, argv) {
 	// let a first run's generated documents look authored to the second.
 	const liveSlices = path.join(repo, 'docs/project/slices');
 	const inventory = fs.existsSync(liveSlices)
-		? inventorySlices(fs.readdirSync(liveSlices).filter((n) => n.endsWith('.md')).sort()
+		// `.md` in any case: `VS-4_notes.MD` was skipped entirely, and adoption deleted it (Codex, PR #7).
+		? inventorySlices(fs.readdirSync(liveSlices, { withFileTypes: true })
+			.filter((e) => e.isFile() && /\.md$/i.test(e.name)).map((e) => e.name).sort()
 			.map((name) => ({ name, text: fs.readFileSync(path.join(liveSlices, name), 'utf8') })))
 		: [];
 	const rowIds = new Set(indexRows(result.text).map((r) => r.id));
@@ -516,17 +518,24 @@ function cmdMigrateProject(root, config, argv) {
 		if (heads.length) { console.log(`          this roadmap has: ${heads.slice(0, 6).join(' · ')}`); }
 	}
 
-	if (extracted.docs.length || inventory.length) {
-		const sliceDir = path.join(outDir, 'slices');
-		// Regenerating must not leave last run's files behind: a slice document whose group was
-		// renamed would otherwise persist forever, and a stale orphan reads exactly like a current one.
-		// The same for a backup whose original was since deleted or given frontmatter.
-		if (fs.existsSync(sliceDir)) {
-			for (const f of fs.readdirSync(sliceDir)) {
-				if (f.endsWith('.md')) { fs.unlinkSync(path.join(sliceDir, f)); }
-			}
-			fs.rmSync(path.join(sliceDir, '_legacy'), { recursive: true, force: true });
+	// Everything else under the live slices folder: files that are not markdown (an image a document
+	// embeds) and anything in a subfolder. None of it is a slice document to inventory, and all of it is
+	// deleted by "replace docs/project/" unless it is staged. Codex, PR #7.
+	const otherFiles = [];
+	const walk = (rel) => {
+		for (const e of fs.readdirSync(path.join(liveSlices, rel), { withFileTypes: true })) {
+			const p = rel ? `${rel}/${e.name}` : e.name;
+			if (e.isDirectory()) { walk(p); } else if (rel || !/\.md$/i.test(e.name)) { otherFiles.push(p); }
 		}
+	};
+	if (fs.existsSync(liveSlices)) { walk(''); }
+
+	if (extracted.docs.length || inventory.length || otherFiles.length) {
+		const sliceDir = path.join(outDir, 'slices');
+		// The staged slices folder is GENERATED, all of it, so it is rebuilt from nothing on every run.
+		// Removing only last run's markdown left anything else behind: a stale backup, a copied file whose
+		// original was since deleted - and a stale orphan reads exactly like a current one.
+		fs.rmSync(sliceDir, { recursive: true, force: true });
 		fs.mkdirSync(sliceDir, { recursive: true });
 		for (const d of extracted.docs) { fs.writeFileSync(path.join(sliceDir, d.file), d.content); }
 		if (extracted.docs.length) {
@@ -546,6 +555,14 @@ function cmdMigrateProject(root, config, argv) {
 			for (const e of backups) { fs.copyFileSync(path.join(liveSlices, e.name), path.join(sliceDir, '_legacy', e.name)); }
 			console.log(`  backed up: ${backups.length} document(s) without usable frontmatter, verbatim, to `
 				+ 'docs/project_v2/slices/_legacy/');
+		}
+		for (const rel of otherFiles) {
+			fs.mkdirSync(path.dirname(path.join(sliceDir, rel)), { recursive: true });
+			fs.copyFileSync(path.join(liveSlices, rel), path.join(sliceDir, rel));
+		}
+		if (otherFiles.length) {
+			console.log(`  copied: ${otherFiles.length} other file(s) under slices/ verbatim, at the same path `
+				+ '(not markdown, or in a subfolder)');
 		}
 	}
 

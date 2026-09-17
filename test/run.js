@@ -2269,12 +2269,21 @@ function filesUnder(root) {
 test('[migrate-legacy] every existing slice document reaches the staged tree BYTE-FOR-BYTE', () => {
 	// The property that matters: adopting docs/project_v2 in one move loses nothing a human wrote. Kept
 	// documents used to stay only in the live tree, so the documented "replace docs/project/" deleted them.
-	const { dir, docs } = legacyRepo();
+	//
+	// Walks EVERY live file, not a list of expected ones. Codex (PR #7): `VS-6_notes.MD` was skipped by a
+	// case-sensitive `.md` filter, and anything that is not markdown - an image a document embeds - was
+	// never staged at all. A list of expected names cannot catch the file nobody expected.
+	const { dir } = legacyRepo({ 'VS-6_notes.MD': '# VS-6\n\nPROSE SEVEN, UPPERCASE EXTENSION.\n' });
+	const live = path.join(dir, 'docs', 'project', 'slices');
+	fs.mkdirSync(path.join(live, 'assets'), { recursive: true });
+	fs.writeFileSync(path.join(live, 'assets', 'diagram.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 255]));
 	cli(['migrate-project', '--write'], dir);
-	const staged = filesUnder(stagedSlices(dir)).map((f) => fs.readFileSync(f, 'utf8'));
-	for (const [name, body] of Object.entries(docs)) {
-		assert.ok(staged.includes(body), `${name} is not in the staged tree verbatim`);
+	const staged = filesUnder(stagedSlices(dir)).map((f) => fs.readFileSync(f));
+	for (const file of filesUnder(live)) {
+		const bytes = fs.readFileSync(file);
+		assert.ok(staged.some((s) => s.equals(bytes)), `${path.relative(live, file)} is not in the staged tree verbatim`);
 	}
+	assert.ok(fs.existsSync(path.join(stagedSlices(dir), 'assets', 'diagram.png')), 'a non-markdown file keeps its path');
 });
 
 test('[migrate-legacy] a padded id is the SAME slice - VS-004 is kept for row VS-4, not regenerated', () => {
