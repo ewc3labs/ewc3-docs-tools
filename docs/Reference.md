@@ -15,7 +15,7 @@ that is a bug — there is a test asserting this page covers the code's surface.
 | `tables` | never | Table rows whose cell count disagrees with their header - an unescaped pipe. |
 | `check` | never | All of the above in check mode. **The CI command.** |
 | `index [--repo <dir>] [--slices <dir>] [--write \| --check]` | the Delivery Index table only | Regenerates a Delivery Index from the slice documents that declare its rows. Renders rows and refuses everything else: an unminted ID is reported not added, an unclaimed row is left alone, and a row with more cells than its header has columns is refused. Column schema and ID padding are read off the register itself. `--write` refuses a row edited by hand; `--check` fails on any row that differs from its document. See [the index gate](#the-index-gate). |
-| `migrate-project [--write]` | into `docs/project_v2/` only | Emits a migrated planning surface beside the live one. Never touches `docs/project/`. |
+| `migrate-project [--write]` | into `docs/project_v2/` only | Emits a migrated planning surface beside the live one. Never touches `docs/project/`. Inventories every existing slice document first. A document with usable frontmatter is kept, one without is backed up verbatim to `slices/_legacy/` and linked from the document generated for its slice, and two documents for one slice refuse the run. The staged tree is complete, so adopting it loses nothing. Ids match padding-insensitively: `VS-4` is `VS-004`. |
 
 `fix` and `check` are mirrors of each other: one makes it right, one asks whether it is.
 

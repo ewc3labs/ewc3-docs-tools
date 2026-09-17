@@ -2197,6 +2197,151 @@ test('[index-gate] --write and --check together is a usage error', () => {
 	assert.strictEqual(cli(['index', '--write', '--check'], gateRepo()).code, 2);
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-062. A repository that already has slice documents from before the frontmatter shape. Migration
+// recognised an existing document only by an exact frontmatter `id:`, so an older document - no
+// frontmatter, no `id:`, unreadable frontmatter, or an id padded differently - was regenerated without
+// a word, and adopting the staged tree overwrote or orphaned the prose. Nothing a human wrote may be lost:
+// every existing document is inventoried, and every one reaches the staged tree byte-for-byte.
+
+test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
+	const { normalizeId } = require('../lib/slices');
+	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
+	assert.strictEqual(normalizeId('VS-00004'), 'VS-4');
+	assert.strictEqual(normalizeId(' vs-004 '), null, 'a lowercase prefix is not an id');
+	assert.strictEqual(normalizeId('VS-004a'), 'VS-4a');
+	assert.strictEqual(normalizeId('VS-0'), 'VS-0');
+	assert.strictEqual(normalizeId('not an id'), null);
+});
+
+/** A roadmap with five rows and a live slices folder holding the ways an older document falls short. */
+function legacyRepo(extra = {}) {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-'));
+	const project = path.join(dir, 'docs', 'project');
+	fs.mkdirSync(path.join(project, 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(project, 'R_Roadmap.md'), [
+		'# R', '',
+		'## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| VS-1 | planned | no frontmatter at all | a |',
+		'| VS-2 | planned | frontmatter without id | b |',
+		'| VS-3 | planned | malformed frontmatter | c |',
+		'| VS-4 | planned | id padded differently | d |',
+		'| VS-5 | planned | proper frontmatter | e |', '',
+		'## Slice Notes', '',
+		'### VS-1 — no frontmatter at all', '', 'Roadmap narrative one.', '',
+	].join('\n'));
+	const docs = {
+		'VS-1_no_frontmatter_at_all.md': '# VS-1 — no frontmatter at all\n\nPROSE ONE.\n',
+		'VS-2-old-name.md': '---\ntitle: frontmatter without id\n---\n\n# VS-2\n\nPROSE TWO.\n',
+		'VS-3_malformed.md': '---\nid: VS-3\n  nested: x\n---\n\n# VS-3\n\nPROSE THREE.\n',
+		'VS-004_padded.md': '---\nid: VS-004\nstate: planned\ntitle: id padded differently\n---\n\nPROSE FOUR.\n',
+		'VS-5_proper.md': '---\nid: VS-5\nstate: planned\ntitle: proper frontmatter\n---\n\nPROSE FIVE.\n',
+		'design-notes.md': 'No id anywhere.\n\nPROSE SIX.\n',
+		...extra,
+	};
+	for (const [name, body] of Object.entries(docs)) {
+		if (body !== null) { fs.writeFileSync(path.join(project, 'slices', name), body); }
+	}
+	return { dir, docs };
+}
+const stagedSlices = (dir) => path.join(dir, 'docs', 'project_v2', 'slices');
+function filesUnder(root) {
+	const out = [];
+	for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+		const p = path.join(root, e.name);
+		if (e.isDirectory()) { out.push(...filesUnder(p)); } else { out.push(p); }
+	}
+	return out;
+}
+
+test('[migrate-legacy] every existing slice document reaches the staged tree BYTE-FOR-BYTE', () => {
+	// The property that matters: adopting docs/project_v2 in one move loses nothing a human wrote. Kept
+	// documents used to stay only in the live tree, so the documented "replace docs/project/" deleted them.
+	const { dir, docs } = legacyRepo();
+	cli(['migrate-project', '--write'], dir);
+	const staged = filesUnder(stagedSlices(dir)).map((f) => fs.readFileSync(f, 'utf8'));
+	for (const [name, body] of Object.entries(docs)) {
+		assert.ok(staged.includes(body), `${name} is not in the staged tree verbatim`);
+	}
+});
+
+test('[migrate-legacy] a padded id is the SAME slice - VS-004 is kept for row VS-4, not regenerated', () => {
+	const { dir } = legacyRepo();
+	const r = cli(['migrate-project', '--write'], dir);
+	const names = fs.readdirSync(stagedSlices(dir));
+	assert.ok(names.includes('VS-004_padded.md'), names.join(' '));
+	assert.ok(!names.some((n) => /^VS-0*4_id_padded/.test(n)), `a second VS-4 document was generated: ${names.join(' ')}`);
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8');
+	assert.ok(roadmap.includes('slices/VS-004_padded.md'), 'the row points at the existing document');
+	assert.ok(/kept/.test(r.out), r.out);
+});
+
+test('[migrate-legacy] a document WITHOUT usable frontmatter is backed up verbatim and linked, never overwritten', () => {
+	const { dir, docs } = legacyRepo();
+	cli(['migrate-project', '--write'], dir);
+	const legacy = path.join(stagedSlices(dir), '_legacy');
+	for (const name of ['VS-1_no_frontmatter_at_all.md', 'VS-2-old-name.md', 'VS-3_malformed.md']) {
+		assert.strictEqual(fs.readFileSync(path.join(legacy, name), 'utf8'), docs[name], `${name} backup`);
+	}
+	// The generated VS-1 document takes the legacy file's own name - so the backup is what keeps the prose,
+	// and the generated document must say where it went.
+	const generated = fs.readFileSync(path.join(stagedSlices(dir), 'VS-1_no_frontmatter_at_all.md'), 'utf8');
+	assert.ok(generated.includes('_legacy/VS-1_no_frontmatter_at_all.md'), generated);
+	const two = fs.readdirSync(stagedSlices(dir)).find((n) => /^VS-0*2_/.test(n));
+	assert.ok(fs.readFileSync(path.join(stagedSlices(dir), two), 'utf8').includes('_legacy/VS-2-old-name.md'));
+});
+
+test('[migrate-legacy] the inventory names EVERY existing document and what was done with it', () => {
+	const { dir } = legacyRepo();
+	const r = cli(['migrate-project'], dir);
+	const inv = r.out.slice(r.out.indexOf('inventory'));
+	for (const [name, what] of [
+		['VS-1_no_frontmatter_at_all.md', /no frontmatter/],
+		['VS-2-old-name.md', /no id: in frontmatter/],
+		['VS-3_malformed.md', /unreadable frontmatter/],
+		['VS-004_padded.md', /kept/],
+		['VS-5_proper.md', /kept/],
+		['design-notes.md', /no id/],
+	]) {
+		const line = inv.split('\n').find((l) => l.includes(name));
+		assert.ok(line, `${name} missing from the inventory:\n${r.out}`);
+		assert.ok(what.test(line), `${name}: ${line}`);
+	}
+	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), 'a dry run writes nothing');
+});
+
+test('[migrate-legacy] two documents for ONE slice refuse the migration, naming both - padding included', () => {
+	for (const extra of [
+		{ 'VS-5_second.md': '---\nid: VS-005\ntitle: other\n---\n' },
+		{ 'VS-0001_older.md': 'Also VS-1, no frontmatter.\n' },
+	]) {
+		const { dir } = legacyRepo(extra);
+		const r = cli(['migrate-project', '--write'], dir);
+		const second = Object.keys(extra)[0];
+		assert.strictEqual(r.code, 1, r.out);
+		assert.ok(/more than one document/.test(r.out) && r.out.includes(second), r.out);
+		assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), `nothing written:\n${r.out}`);
+	}
+});
+
+test('[migrate-legacy] a second run leaves no stale backup behind', () => {
+	const { dir } = legacyRepo();
+	cli(['migrate-project', '--write'], dir);
+	fs.unlinkSync(path.join(dir, 'docs', 'project', 'slices', 'design-notes.md'));
+	cli(['migrate-project', '--write'], dir);
+	assert.ok(!fs.existsSync(path.join(stagedSlices(dir), '_legacy', 'design-notes.md')));
+});
+
+test('[index] VS-4 and VS-004 declared by two documents are ONE id, and refused', () => {
+	const dir = stagedRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-001_again.md'),
+		'---\nid: VS-001\nstate: planned\ntitle: OTHER\n---\n\n# VS-001\n');
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(r.out.includes('VS-1_first.md') && r.out.includes('VS-001_again.md'), r.out);
+});
+
 test('[slices] a row links to its OWN document, not the anchor\'s', () => {
 	// P2. Every member of a group gets its own document, but the row rewrite used the anchor-only
 	// `g.file` for all of them - so a follower row pointed at the anchor and that follower own
