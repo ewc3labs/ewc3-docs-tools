@@ -1,11 +1,13 @@
 ---
 id: DOCS-036
-state: ⬜ planned
+state: 🟦 tested
 title: "`fold`: git trailers become frontmatter state, idempotently"
 est: L
 doc: '[DOCS-036](slices/DOCS-036_fold_git_trailers_become_frontmatter_state_idempotently.md) · [One thing to edit][one-thing-to-edit]'
 status: "built: fold reads Slice:/State: trailers on the branch, newest first, and writes frontmatter state in the legend spelling; unit-tested, awaiting a downstream pilot"
 source: EWC3_Docs_Tools_Roadmap.md
+state_sha: e2f5b9e2b5fa
+state_source: trailer
 ---
 
 # DOCS-036 — `fold`: git trailers become frontmatter state, idempotently

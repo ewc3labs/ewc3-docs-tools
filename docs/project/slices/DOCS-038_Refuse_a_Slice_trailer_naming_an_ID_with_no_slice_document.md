@@ -1,11 +1,13 @@
 ---
 id: DOCS-038
-state: ⬜ planned
+state: 🟦 tested
 title: "Refuse a Slice: trailer naming an ID with no slice document"
 est: S
 doc: '[DOCS-038](slices/DOCS-038_Refuse_a_Slice_trailer_naming_an_ID_with_no_slice_document.md) · [One thing to edit][one-thing-to-edit]'
 status: "built into fold: a Slice: naming no slice document is an error for commits after --since and a warning in full history; unit-tested"
 source: EWC3_Docs_Tools_Roadmap.md
+state_sha: e2f5b9e2b5fa
+state_source: trailer
 ---
 
 # DOCS-038 — Refuse a Slice: trailer naming an ID with no slice document
