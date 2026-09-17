@@ -1760,6 +1760,17 @@ test('[index] STAGED slices never write the LIVE roadmap', () => {
 		.includes('CHANGED'), 'which it did write');
 });
 
+test('[index] VS-4 and VS-004 declared by two documents are ONE id, and refused', () => {
+	// Codex P1, PR #6. The duplicate check compared ids as written, so VS-001 and VS-1 passed it - and
+	// renderIndex, which normalises, kept only one of the two documents and exited 0.
+	const dir = stagedRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-001_again.md'),
+		'---\nid: VS-001\nstate: planned\ntitle: OTHER\n---\n\n# VS-001\n');
+	const r = cli(['index'], dir);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(r.out.includes('VS-1_first.md') && r.out.includes('VS-001_again.md'), r.out);
+});
+
 test('[index] two documents declaring one id is REFUSED', () => {
 	// P1. `byId` as a Map silently keeps whichever document was read last, and VS-1_First.md and
 	// VS-1_Second.md coexist because the filename carries a title slug too. One commitment renders,
@@ -2331,15 +2342,6 @@ test('[migrate-legacy] a second run leaves no stale backup behind', () => {
 	fs.unlinkSync(path.join(dir, 'docs', 'project', 'slices', 'design-notes.md'));
 	cli(['migrate-project', '--write'], dir);
 	assert.ok(!fs.existsSync(path.join(stagedSlices(dir), '_legacy', 'design-notes.md')));
-});
-
-test('[index] VS-4 and VS-004 declared by two documents are ONE id, and refused', () => {
-	const dir = stagedRepo();
-	fs.writeFileSync(path.join(dir, 'docs', 'project_v2', 'slices', 'VS-001_again.md'),
-		'---\nid: VS-001\nstate: planned\ntitle: OTHER\n---\n\n# VS-001\n');
-	const r = cli(['index'], dir);
-	assert.strictEqual(r.code, 2, r.out);
-	assert.ok(r.out.includes('VS-1_first.md') && r.out.includes('VS-001_again.md'), r.out);
 });
 
 test('[slices] a row links to its OWN document, not the anchor\'s', () => {
