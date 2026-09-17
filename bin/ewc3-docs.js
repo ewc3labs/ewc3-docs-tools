@@ -561,7 +561,13 @@ function gateWrite(repo, head, plans, sameCells, showCells) {
 			const now = gfmCells(row.raw, res.columns, defs);
 			const want = gfmCells(row.rendered, res.columns, defs);
 			const known = baselines.get(row.id) || [];
-			if (sameCells(now, want) || !known.length || known.some((b) => sameCells(b.cells, now))) { continue; }
+			if (sameCells(now, want) || known.some((b) => sameCells(b.cells, now))) { continue; }
+			// No history is how a minted placeholder row looks - and also how a row looks after its id was
+			// renamed, with whatever was typed into it (Codex P1, PR #6). So the exemption is not "no
+			// history" but "writing loses nothing typed": every non-empty cell besides the id already
+			// renders. A renamed row that also changed is refused, which is loud rather than lossy.
+			const loses = now.some((c, i) => i !== res.idColumn && c !== '' && c !== want[i]);
+			if (!known.length && !loses) { continue; }
 			edited.push({ rel, row, now, want, known });
 		}
 	}
@@ -573,6 +579,7 @@ function gateWrite(repo, head, plans, sameCells, showCells) {
 		console.error(`  ${rel}:${row.line + 1}  ${row.id}`);
 		console.error(`    row now:       ${showCells(now)}`);
 		for (const b of known) { console.error(`    ${`${b.label}:`.padEnd(14)} ${showCells(b.cells)}`); }
+		if (!known.length) { console.error('    no history:    a new or renamed row, with cells its document would overwrite'); }
 		console.error(`    renders:       ${showCells(want)}`);
 	}
 	console.error('  Move each edit into its slice document, or restore the row, then run again. Nothing was written.');

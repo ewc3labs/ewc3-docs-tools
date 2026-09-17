@@ -2117,6 +2117,39 @@ test('[index-gate] a NEW row has no baseline, so it is minted, not refused', () 
 	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-3 | planned | third | z |'));
 });
 
+test('[index-gate] renaming a row\'s id does not launder a hand edit through the new-row exemption', () => {
+	// Codex P1, PR #6. A row with no history is exempt so a placeholder can be minted - but VS-1 renamed to
+	// VS-9 has no history either, and whatever was typed into it was overwritten with exit 0. The
+	// exemption is for a row whose writing loses nothing typed: every non-empty cell already renders.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-1 | planned | first | x |', '| VS-9 | planned | typed by hand | x |');
+	swap(gateDoc(dir, 'VS-1'), 'id: VS-1', 'id: VS-9');
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('VS-9') && r.out.includes('typed by hand'), r.out);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before);
+
+	// A minted row that already says what its document says loses nothing, so it is still allowed.
+	const mint = gateRepo();
+	swap(gateRoadmap(mint), '| VS-2 | coded | second | y |\n', '| VS-2 | coded | second | y |\n| VS-3 | planned | third | |\n');
+	fs.writeFileSync(path.join(mint, 'docs', 'project', 'slices', 'VS-3_third.md'), GATE_DOC('VS-3', 'planned', 'third', 'z'));
+	const m = cli(['index', '--write'], mint);
+	assert.strictEqual(m.code, 0, m.out);
+});
+
+test('[index-gate] an ESCAPED bracket is literal text, not a reference to resolve', () => {
+	// Codex P2, PR #6. `\[foo][x]` renders as the characters, so it must not compare equal to a link.
+	const { gfmCells: cells, referenceDefs: defsOf } = require('../lib/deliveryindex');
+	const defs = defsOf('[x]: slices/u.md\n');
+	// `\[foo` is literal; the `[x]` after it is still a shortcut reference, exactly as GitHub reads it.
+	assert.deepStrictEqual(cells('| a | \\[foo][x] |', 2, defs), ['a', '\\[foo][x](slices/u.md)']);
+	assert.deepStrictEqual(cells('| a | \\[foo] |', 2, defs), ['a', '\\[foo]']);
+	assert.deepStrictEqual(cells('| a | [foo][x] |', 2, defs), ['a', '[foo](slices/u.md)']);
+	// An escaped BACKSLASH leaves the bracket live.
+	assert.deepStrictEqual(cells('| a | \\\\[foo][x] |', 2, defs), ['a', '\\\\[foo](slices/u.md)']);
+});
+
 test('[index-gate] --write and --check together is a usage error', () => {
 	assert.strictEqual(cli(['index', '--write', '--check'], gateRepo()).code, 2);
 });

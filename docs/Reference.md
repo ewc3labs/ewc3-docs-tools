@@ -65,9 +65,11 @@ else is a real difference.
 `--write` exits `2` without a git work tree, mid-merge, mid-rebase, mid-cherry-pick or mid-revert,
 and when the roadmap has never been committed. Without a commit there is nothing to tell a hand edit
 from a render. `--check` needs no history and runs mid-operation, but both exit `2` while any
-conflict is unresolved, because the tree may hold conflict markers. A new row with no committed or
-written history is allowed, because minting a placeholder row is how a person adds one. A slice
-document whose frontmatter cannot be read exits `1` and names the file.
+conflict is unresolved, because the tree may hold conflict markers. A row with no committed or
+written history is written only if that loses nothing: every non-empty cell other than the ID must
+already match its render. A blank placeholder row, which is how a person mints one, passes. A row
+whose ID was renamed while its cells were edited is refused. A slice document whose frontmatter
+cannot be read exits `1` and names the file.
 
 ## Configuration
 

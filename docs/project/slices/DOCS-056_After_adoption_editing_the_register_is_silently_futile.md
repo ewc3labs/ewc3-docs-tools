@@ -4,7 +4,7 @@ state: 🟦 tested
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
 doc: '[DOCS-056](slices/DOCS-056_After_adoption_editing_the_register_is_silently_futile.md)'
-status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 25 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
+status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 27 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
 priority: high
 lane: index
 ---
@@ -193,8 +193,9 @@ what was built differs in three places, each for a stated reason:
   the version `index` last wrote since HEAD, stored per worktree under
   `git rev-parse --git-path ewc3-docs/index-last.json`. That second baseline is LabsHQ finding 3.
   Without it, render, edit the document, render again refuses its own output. A row with no history
-  is allowed, because minting a placeholder row is how a person adds one. The decision covers every
-  roadmap before any is written.
+  is written only if nothing typed is lost, meaning every non-empty cell other than the ID already
+  renders. "No history" alone was the first rule, and Codex (PR #6, P1) showed a renamed ID getting
+  a hand edit past it with exit 0. The decision covers every roadmap before any is written.
 - **L2, `index --check`**, fails on a diverged row, a row with no document, a document with no row,
   and one ID on two rows. It needs no git history. **Only L2 catches a hand edit that was
   committed.**
@@ -227,5 +228,5 @@ are now excluded like fences, and control L pins a comment and a `<details>` blo
 - **The generated-file banner** is still worth its one line and is still missing.
 - **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
   the churn in `git diff` remains.
-- **Not yet run on an estate register.** 25 controls, one repository, green locally. The next
+- **Not yet run on an estate register.** 27 controls, one repository, green locally. The next
   evidence is `index --check` on an adopted MedAR register.
