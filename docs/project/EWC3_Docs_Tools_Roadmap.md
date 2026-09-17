@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-077<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-079<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -99,6 +99,8 @@ is never referenced from outside the repository it fixes.
 | DOCS-075 | 🟦 tested | migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice | M | [DOCS-075][docs-075] |  |
 | DOCS-076 | ⬜ planned | slice new: a first mint into an empty register declared slice-documents creates slices/ | S | [DOCS-076][docs-076] |  |
 | DOCS-077 | 🟦 tested | migrate-project: a tree whose history begins at its import cannot date evidence, and says so | S | [DOCS-077][docs-077] |  |
+| DOCS-078 | 🟦 tested | a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named | S | [DOCS-078][docs-078] |  |
+| DOCS-079 | ⬜ planned | migrate-project: evidence under an id's former name, bounded, and dated against the id it was written under | M | [DOCS-079][docs-079] |  |
 
 ## Done
 
@@ -197,6 +199,8 @@ caught.
 [docs-075]: slices/DOCS-075_migrate_project_evidence_recorded_before_an_ID_was_minted.md
 [docs-076]: slices/DOCS-076_slice_new_a_first_mint_into_an_empty_register_declared_sli.md
 [docs-077]: slices/DOCS-077_migrate_project_a_tree_whose_history_begins_at_its_import.md
+[docs-078]: slices/DOCS-078_a_set_aside_is_a_prompt_for_the_owner_not_a_verdict_neutra.md
+[docs-079]: slices/DOCS-079_migrate_project_evidence_under_an_id_s_former_name_bounded.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md

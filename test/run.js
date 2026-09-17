@@ -2466,7 +2466,7 @@ const stagedDoc = (dir, id) => {
 /** [evidence section before the set-apart group, the set-apart group] */
 const evidenceParts = (doc) => {
 	const ev = doc.slice(doc.indexOf('## Recorded evidence'));
-	const at = ev.indexOf('Mentioned before');
+	const at = ev.indexOf('### Recorded before');
 	return at === -1 ? [ev, ''] : [ev.slice(0, at), ev.slice(at)];
 };
 
@@ -2477,7 +2477,7 @@ test('[migrate-evidence] DOCS-075: a line recorded before its id was minted is S
 	const [seventh, seventhApart] = evidenceParts(stagedDoc(dir, 'XY-007'));
 	assert.ok(seventh.includes('the real seventh work'), `on the mint day it is evidence:\n${seventh}`);
 	assert.ok(!seventh.includes('gateway work'), `the earlier use is not evidence:\n${seventh}`);
-	assert.ok(seventhApart.includes('Mentioned before XY-007 was minted (2026-08-12)') && seventhApart.includes('gateway work'),
+	assert.ok(seventhApart.includes('Recorded before this row existed (2026-08-12)') && seventhApart.includes('gateway work'),
 		`kept, set apart, labelled:\n${seventhApart}`);
 	const [sixth, sixthApart] = evidenceParts(stagedDoc(dir, 'XY-006'));
 	assert.ok(sixth.includes('XY-006 real sixth work') && !sixth.includes('early gateway mention'), `an undated line is dated by blame:\n${sixth}`);
@@ -2500,6 +2500,66 @@ test('[migrate-evidence] DOCS-075: with no history to date against, nothing is s
 	assert.strictEqual(apart, '');
 	assert.ok(seventh.includes('gateway work') && seventh.includes('the real seventh work'), seventh);
 	assert.ok(/not checked against when/.test(seventh), seventh);
+});
+
+test('[migrate-evidence] DOCS-078: a set-aside is a PROMPT - neutral wording, and the backfill shape named from the data', () => {
+	// Measured downstream: a row backfilled for work already delivered had every one of its evidence lines set apart
+	// under "most likely an earlier, unminted use of the number" - mechanically right, and exactly backwards.
+	const dir = mintedLateRepo();
+	assert.strictEqual(cli(['migrate-project', '--write'], dir).code, 0);
+	const [, apart] = evidenceParts(stagedDoc(dir, 'XY-007'));
+	assert.ok(/### Recorded before this row existed \(2026-08-12\)/.test(apart), apart);
+	assert.ok(/XY-007/.test(apart) && !/unminted use/.test(apart), `no story is asserted:\n${apart}`);
+	assert.ok(/some earlier|recorded before the row and some after|decide/i.test(apart), apart);
+	assert.ok(!/every line for/.test(apart), 'XY-007 has a later line too, so it is not the backfill shape');
+
+	// A row whose evidence is ALL earlier than itself: the shape of a row written down after the work.
+	const back = mintedLateRepo();
+	fs.appendFileSync(path.join(back, 'config/STATUS.yaml'), "  - '2026-08-02 [XY-009] backfilled work, delivered before its row'\n");
+	const roadmap = path.join(back, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(roadmap, fs.readFileSync(roadmap, 'utf8').replace('| XY-007 | planned | seventh | z |', '| XY-007 | planned | seventh | z |\n| XY-009 | planned | ninth | v |'));
+	git(back, 'add', '-A'); git(back, 'commit', '-qm', 'backfill', '--date=2026-08-25T12:00:00+0000');
+	cli(['migrate-project', '--write'], back);
+	const [, ninth] = evidenceParts(stagedDoc(back, 'XY-009'));
+	assert.ok(/### Recorded before this row existed \(2026-08-25\)/.test(ninth), ninth);
+	assert.ok(/Every line for XY-009 \(2026-08-25\) predates its row/.test(ninth), `the backfill shape is named:\n${ninth}`);
+});
+
+test('[migrate-evidence] DOCS-078: the backfill shape is decided PER ID, and a repeated line does not hide a later mention', () => {
+	// Copilot, PR #24: one id's all-earlier shape was suppressed because another id in the same group had a later
+	// line. Codex, PR #24: identical text before and after the row is deduplicated, so the later occurrence never
+	// reached the kept list and every line looked earlier.
+	const dir = mintedLateRepo();
+	const roadmap = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(roadmap, `${fs.readFileSync(roadmap, 'utf8').replace('| XY-007 | planned | seventh | z |', '| XY-007 | planned | seventh | z |\n| XY-009 | planned | ninth | v |')}\n## Slice Notes\n\n### XY-007 through XY-009 — seventh and ninth\n\nOne document for both.\n`);
+	fs.appendFileSync(path.join(dir, 'config/STATUS.yaml'), "  - '2026-08-02 [XY-009] all of this is earlier than its row'\n");
+	git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'group', '--date=2026-08-25T12:00:00+0000');
+	cli(['migrate-project', '--write'], dir);
+	const [, apart] = evidenceParts(stagedDoc(dir, 'XY-007'));
+	assert.ok(/Every line for XY-009 \(2026-08-25\) predates its row/.test(apart), `XY-009 is all-earlier even beside XY-007:\n${apart}`);
+	assert.ok(!/Every line for XY-007/.test(apart), `XY-007 has a later line, so it is not named:\n${apart}`);
+
+	// The same line text recorded twice with no date of its own: once before the row (blamed early) and once after
+	// (blamed late). Deduplication keeps the first, so the later occurrence is invisible in the rendered evidence.
+	const dup = fs.mkdtempSync(path.join(os.tmpdir(), 'dup-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dup, rel)), { recursive: true }); fs.writeFileSync(path.join(dup, rel), text); };
+	const roadmapOf = (last, rows) => ['# R', '', '## Number Series', '', '| Prefix | Scope | Owner | Last Used | Series |',
+		'| --- | --- | --- | --- | --- |', `| XY | global | r | XY-${last} | slices |`, '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |', ...rows, ''].join('\n');
+	const commit = (date, msg) => { git(dup, 'add', '-A'); git(dup, 'commit', '-qm', msg, `--date=${date}T12:00:00+0000`); };
+	git(dup, 'init', '-q');
+	w('docs/project/R_Roadmap.md', roadmapOf('005', ['| XY-005 | planned | fifth | x |']));
+	commit('2026-08-01', 'register');
+	w('config/STATUS.yaml', "done:\n  - 'XY-006 repeated line'\n");
+	commit('2026-08-05', 'before the row');
+	w('docs/project/R_Roadmap.md', roadmapOf('006', ['| XY-005 | planned | fifth | x |', '| XY-006 | planned | sixth | y |']));
+	commit('2026-08-12', 'mint 006');
+	fs.appendFileSync(path.join(dup, 'config/STATUS.yaml'), "  - 'XY-006 repeated line'\n");
+	commit('2026-08-20', 'again, after the row');
+	cli(['migrate-project', '--write'], dup);
+	const [, sixthApart] = evidenceParts(stagedDoc(dup, 'XY-006'));
+	assert.ok(sixthApart.includes('repeated line'), sixthApart);
+	assert.ok(!/Every line for XY-006/.test(sixthApart), `the second occurrence is blamed after the row, so this is not the backfill shape:\n${sixthApart}`);
 });
 
 test('[migrate-evidence] DOCS-077: a tree whose register all arrives in its first commit cannot date evidence', () => {
