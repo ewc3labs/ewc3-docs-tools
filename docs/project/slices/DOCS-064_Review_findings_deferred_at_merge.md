@@ -36,6 +36,7 @@ Every blocking finding was fixed before merge. These were not:
 | 9 | #8 | P2 | `rebaseRelative` repoints link-shaped text that is escaped (`\[x](a.md)`), which was never a link | literal example text shifts by `../`; nothing is lost, and the example is still readable |
 | 10 | #16 | P2 | A synthesised register pads a prefix with no Delivery Index row at width zero, so `TS-02` is written `TS-2` | cosmetic: the original register is kept verbatim beneath the new one, and ids elsewhere are untouched |
 | 11 | #16 | P2 | With an unrelated `\| Prefix \|` table above the real register, `readSeriesText` seeds heading declarations from the wrong table, so a heading-only id past Last Used is missed | needs an unrelated Prefix table ahead of the register **and** an id declared only by a heading |
+| 12 | #21 | P2 | `mintDates` scans added patch lines, so a table row inside a code fence or HTML comment, committed before the real row, dates the mint too early and evidence between the two is not set apart | the failure is the behaviour before DOCS-075, never worse; it needs a fenced example of that exact id committed ahead of the row |
 
 Row 8 is a design decision, not a defect, and belongs to `DOCS-062`. It is listed here only so this
 table is the one place to look.
@@ -56,6 +57,9 @@ table is the one place to look.
   position, before zero.
 - **11:** give `readSeriesText` the same full-schema header test `canonicalRegister` uses, so both
   read one table.
+- **12:** list commits and paths with `git log --name-only`, read each version through one
+  `git cat-file --batch`, and take rows from `withoutFences` of the whole file, not from patch
+  lines.
 
 ## The lesson worth keeping
 

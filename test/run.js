@@ -2502,6 +2502,17 @@ test('[migrate-evidence] DOCS-075: with no history to date against, nothing is s
 	assert.ok(/not checked against when/.test(seventh), seventh);
 });
 
+test('[migrate-evidence] DOCS-075: blame dates lines in a SHA-256 repository too', () => {
+	// Codex, PR #21: the porcelain header matched 40 hex characters only, so a SHA-256 repository dated no line.
+	const { lineDates } = require('../lib/evidence');
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sha256-'));
+	try { git(dir, 'init', '-q', '--object-format=sha256'); } catch { return; }
+	fs.mkdirSync(path.join(dir, 'config'));
+	fs.writeFileSync(path.join(dir, 'config/STATUS.yaml'), "done:\n  - 'XY-1 undated'\n");
+	git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'a', '--date=2026-08-03T12:00:00+0000');
+	assert.deepStrictEqual(lineDates(dir, 'config/STATUS.yaml', "done:\n  - 'XY-1 undated'\n").slice(0, 2), ['2026-08-03', '2026-08-03']);
+});
+
 test('[migrate-evidence] DOCS-075: mint dates match ids padding-insensitively, and only a committed ROW mints', () => {
 	const { mintDates } = require('../lib/evidence');
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mintpad-'));
