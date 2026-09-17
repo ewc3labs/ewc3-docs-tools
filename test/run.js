@@ -1950,7 +1950,10 @@ test('[index-gate] L: a REFERENCE link and an inline link to the same target are
 
 	// Codex, PR #6: a definition inside raw HTML defines nothing on GitHub. First-wins made a commented-out
 	// old target shadow the live one, so --check passed a link GitHub renders somewhere else.
-	for (const block of ['<!--\n[VS-1]: slices/VS-1_first.md\n-->', '<details>\n[VS-1]: slices/VS-1_first.md\n</details>']) {
+	// The third: fences are not recognised INSIDE an HTML block, so a fence-looking pair there must not end
+	// the block early and leak the definition after it (Codex, second pass).
+	for (const block of ['<!--\n[VS-1]: slices/VS-1_first.md\n-->', '<details>\n[VS-1]: slices/VS-1_first.md\n</details>',
+		'<!--\n```\n```\n[VS-1]: slices/VS-1_first.md\n-->']) {
 		swap(gateRoadmap(dir), '[VS-1]: slices/VS-1_first.md', `${block}\n\n[VS-1]: slices/VS-1_other.md`);
 		assert.strictEqual(cli(['index', '--check'], dir).code, 1, `a definition inside ${block.split('\n')[0]}`);
 		swap(gateRoadmap(dir), `${block}\n\n[VS-1]: slices/VS-1_other.md`, '[VS-1]: slices/VS-1_first.md');
