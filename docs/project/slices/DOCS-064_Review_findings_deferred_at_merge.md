@@ -32,7 +32,7 @@ Every blocking finding was fixed before merge. These eight were not:
 | 5 | #7 | P2 | A document backed up to `slices/_legacy/` keeps its relative links, which now point one directory too deep | prose preserved; `links` reports the breakage after adoption |
 | 6 | #7 | P2 | A roadmap narrative backed up to `_legacy/` keeps relative links and loses the reference definitions it used | the same: prose preserved, breakage reported |
 | 7 | #7 | P2 | A backup filename with a space, `)` or `#` is interpolated into the generated link unescaped | the link is malformed; the prose and the backup are intact |
-| 8 | #6 | P2 | Several documents per id are refused outright (raised by the downstream census, not Codex) | a model question, recorded as open in `DOCS-062` |
+| 8 | #7 | — | Several documents per id are refused outright (raised by the downstream census, not Codex) | a model question, recorded as open in `DOCS-062` |
 
 Row 8 is a design decision, not a defect, and belongs to `DOCS-062`. It is listed here only so this
 table is the one place to look.
