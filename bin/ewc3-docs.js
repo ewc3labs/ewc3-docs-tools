@@ -19,7 +19,7 @@ const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
-const { extractSlices, normalizeId } = require('../lib/slices');
+const { extractSlices, inventorySlices, normalizeId } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
@@ -410,6 +410,55 @@ function cmdMigrateProject(root, config, argv) {
 
 	const problems = result.rows.filter((r) => r.owner === null || r.stale);
 
+	// EVERY SLICE DOCUMENT THAT ALREADY EXISTS, AND WHAT BECOMES OF IT - before anything is written. DOCS-062.
+	//
+	// Recognising an existing document only by an exact frontmatter `id:` made every older document
+	// invisible: no frontmatter, no `id:`, unreadable frontmatter, or `VS-004` for row `VS-4`. Each was
+	// regenerated without a word, and adopting the staged tree overwrote or orphaned the prose. Only the
+	// LIVE tree is read: `docs/project_v2/slices` is this command's own output, and reading it back would
+	// let a first run's generated documents look authored to the second.
+	const liveSlices = path.join(repo, 'docs/project/slices');
+	const inventory = fs.existsSync(liveSlices)
+		// `.md` in any case: `VS-4_notes.MD` was skipped entirely, and adoption deleted it (Codex, PR #7).
+		? inventorySlices(fs.readdirSync(liveSlices, { withFileTypes: true })
+			.filter((e) => e.isFile() && /\.md$/i.test(e.name)).map((e) => e.name).sort()
+			.map((name) => ({ name, text: fs.readFileSync(path.join(liveSlices, name), 'utf8') })))
+		: [];
+	const rowIds = new Set(indexRows(result.text).map((r) => r.id));
+	if (inventory.length) {
+		const FM = { ok: 'frontmatter ok', none: 'no frontmatter', 'no-id': 'no id: in frontmatter', unreadable: 'unreadable frontmatter' };
+		const width = Math.max(...inventory.map((e) => e.name.length));
+		console.log(`  inventory: docs/project/slices (${inventory.length} existing document(s))`);
+		for (const e of inventory) {
+			const noRow = e.id && !rowIds.has(e.id) ? ' - no row carries this id' : '';
+			// No id in frontmatter OR filename: not a slice document at all - a folder README, a note. It was
+			// backed up to _legacy/, so adopting the staged tree took the README out of slices/ in four
+			// repos (downstream census, 2026-09-17). It is copied verbatim to where it was.
+			const action = e.frontmatter === 'ok' ? `kept, copied verbatim${noRow}`
+				: !e.id ? 'no id in frontmatter or filename - not a slice document, copied verbatim'
+					: `backed up to slices/_legacy/${noRow || ', new document generated and linked to it'}`;
+			console.log(`    ${e.name.padEnd(width)}  ${(e.written || '-').padEnd(9)} ${FM[e.frontmatter]}`
+				+ `${e.reason ? ` (${e.reason})` : ''}  ->  ${action}`);
+		}
+	}
+
+	// Two existing documents for ONE slice - padding included, so VS-4_a.md and VS-004_b.md collide. Which
+	// of them the slice is, is not a tool decision, and staging both would carry the conflict into the
+	// adopted tree. Refused before anything is written, dry run or not.
+	const byId = new Map();
+	for (const e of inventory) {
+		if (!e.id) { continue; }
+		if (!byId.has(e.id)) { byId.set(e.id, []); }
+		byId.get(e.id).push(e.name);
+	}
+	const clashes = [...byId].filter(([, names]) => names.length > 1);
+	if (clashes.length) {
+		console.error(`  REFUSED: ${clashes.length} slice(s) with more than one document. Keep one per slice, then run again:`);
+		for (const [id, names] of clashes) { console.error(`    ${id}: ${names.join('  ')}`); }
+		console.error('  Nothing was written.');
+		return 1;
+	}
+
 	if (!write) {
 		console.log('  (dry run - pass --write to emit docs/project_v2/)');
 		return problems.length ? 1 : 0;
@@ -433,21 +482,37 @@ function cmdMigrateProject(root, config, argv) {
 	// Only the LIVE tree counts. `docs/project_v2/slices` is this command's own output, and reading
 	// it back would let a first run's generated documents look authored to the second - freezing the
 	// migration at whatever it happened to emit, and doing it silently.
-	const authored = new Map();
-	for (const dir of [path.join(repo, 'docs/project/slices')]) {
-		if (!fs.existsSync(dir)) { continue; }
-		for (const f of fs.readdirSync(dir)) {
-			if (!f.endsWith('.md')) { continue; }
-			let data;
-			// A document too malformed to declare an id cannot be matched to a row, so it is left
-			// alone AND not counted as covering one. Refusing the whole migration over one bad file
-			// would be worse; claiming to have covered a row it cannot read would be worse still.
-			try { data = frontmatter.read(fs.readFileSync(path.join(dir, f), 'utf8')).data; }
-			catch { continue; }
-			const id = data && data.id && String(data.id).trim();
-			if (id && !authored.has(id)) { authored.set(id, f); }
+	// Read off the inventory above. A document with usable frontmatter is authored: never regenerated.
+	// One without is backed up, and the document generated for its slice links to the backup.
+	const authored = new Map(inventory.filter((e) => e.frontmatter === 'ok').map((e) => [e.id, e.name]));
+	// Everything else under the live slices folder: files that are not markdown (an image a document
+	// embeds) and anything in a subfolder. None of it is a slice document to inventory, and all of it is
+	// deleted by "replace docs/project/" unless it is staged. Codex, PR #7.
+	const otherFiles = [];
+	const walk = (rel) => {
+		for (const e of fs.readdirSync(path.join(liveSlices, rel), { withFileTypes: true })) {
+			const p = rel ? `${rel}/${e.name}` : e.name;
+			if (e.isDirectory()) { walk(p); } else if (rel || !/\.md$/i.test(e.name)) { otherFiles.push(p); }
 		}
+	};
+	if (fs.existsSync(liveSlices)) { walk(''); }
+
+	// EVERY staged path is decided before anything is written, so no write can overwrite another. A repo
+	// adopted once already has slices/_legacy/, and a backup named like a file already there was written,
+	// then replaced by the verbatim copy of that file - the prose was lost and the generated document linked
+	// to the wrong one (Codex P1, PR #7). A taken backup name gets a -2, -3 suffix instead. Case-insensitive,
+	// because the filesystems these repos live on are.
+	const taken = new Set(otherFiles.map((p) => p.toLowerCase()));
+	const backupPath = new Map();
+	for (const e of inventory.filter((x) => x.frontmatter !== 'ok' && x.id)) {
+		const ext = path.extname(e.name);
+		const base = e.name.slice(0, e.name.length - ext.length);
+		let rel = `_legacy/${e.name}`;
+		for (let n = 2; taken.has(rel.toLowerCase()); n++) { rel = `_legacy/${base}-${n}${ext}`; }
+		taken.add(rel.toLowerCase());
+		backupPath.set(e.name, rel);
 	}
+	const legacy = new Map(inventory.filter((e) => backupPath.has(e.name)).map((e) => [e.id, backupPath.get(e.name)]));
 
 	const extracted = extractSlices(result.text, {
 		// A DECLARED width beats a detected one, and only a declared one is safe to WRITE with.
@@ -462,6 +527,17 @@ function cmdMigrateProject(root, config, argv) {
 		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
 		sourceName: path.basename(from),
 		existing: authored,
+		legacy,
+		reserved: new Set(inventory.filter((e) => e.frontmatter === 'ok' || !e.id).map((e) => e.name.toLowerCase())),
+		// The same allocator as the backups above, so a narrative backup cannot take a staged path either.
+		reservePath: (rel) => {
+			const ext = path.extname(rel);
+			const base = rel.slice(0, rel.length - ext.length);
+			let out = rel;
+			for (let n = 2; taken.has(out.toLowerCase()); n++) { out = `${base}-${n}${ext}`; }
+			taken.add(out.toLowerCase());
+			return out;
+		},
 	});
 
 	const outFile = path.join(outDir, path.basename(from));
@@ -478,19 +554,48 @@ function cmdMigrateProject(root, config, argv) {
 		if (heads.length) { console.log(`          this roadmap has: ${heads.slice(0, 6).join(' · ')}`); }
 	}
 
-	if (extracted.docs.length) {
+	if (extracted.docs.length || inventory.length || otherFiles.length) {
 		const sliceDir = path.join(outDir, 'slices');
-		// Regenerating must not leave last run's files behind: a slice document whose group was
-		// renamed would otherwise persist forever, and a stale orphan reads exactly like a current one.
-		if (fs.existsSync(sliceDir)) {
-			for (const f of fs.readdirSync(sliceDir)) {
-				if (f.endsWith('.md')) { fs.unlinkSync(path.join(sliceDir, f)); }
-			}
-		}
+		// The staged slices folder is GENERATED, all of it, so it is rebuilt from nothing on every run.
+		// Removing only last run's markdown left anything else behind: a stale backup, a copied file whose
+		// original was since deleted - and a stale orphan reads exactly like a current one.
+		fs.rmSync(sliceDir, { recursive: true, force: true });
 		fs.mkdirSync(sliceDir, { recursive: true });
 		for (const d of extracted.docs) { fs.writeFileSync(path.join(sliceDir, d.file), d.content); }
-		console.log(`  wrote:  docs/project_v2/slices/  (${extracted.docs.length} documents from `
-			+ `${extracted.rowCount} rows and ${extracted.noteCount} narrative sections)`);
+		if (extracted.docs.length) {
+			console.log(`  wrote:  docs/project_v2/slices/  (${extracted.docs.length} documents from `
+				+ `${extracted.rowCount} rows and ${extracted.noteCount} narrative sections)`);
+		}
+
+		// THE STAGED TREE IS COMPLETE, so adopting it in one move loses nothing a human wrote (DOCS-062).
+		// Kept documents used to stay only in the live tree - and the README below says to adopt by
+		// REPLACING docs/project/, which deleted every one of them. Copied byte-for-byte, never rewritten.
+		const backups = inventory.filter((e) => e.frontmatter !== 'ok' && e.id);
+		for (const e of inventory.filter((x) => x.frontmatter === 'ok' || !x.id)) {
+			fs.copyFileSync(path.join(liveSlices, e.name), path.join(sliceDir, e.name));
+		}
+		if (backups.length) {
+			fs.mkdirSync(path.join(sliceDir, '_legacy'), { recursive: true });
+			for (const e of backups) { fs.copyFileSync(path.join(liveSlices, e.name), path.join(sliceDir, backupPath.get(e.name))); }
+			console.log(`  backed up: ${backups.length} document(s) without usable frontmatter, verbatim, to `
+				+ 'docs/project_v2/slices/_legacy/');
+		}
+		for (const rel of otherFiles) {
+			fs.mkdirSync(path.dirname(path.join(sliceDir, rel)), { recursive: true });
+			fs.copyFileSync(path.join(liveSlices, rel), path.join(sliceDir, rel));
+		}
+		if (otherFiles.length) {
+			console.log(`  copied: ${otherFiles.length} other file(s) under slices/ verbatim, at the same path `
+				+ '(not markdown, or in a subfolder)');
+		}
+		for (const n of extracted.narratives) {
+			fs.mkdirSync(path.dirname(path.join(sliceDir, n.file)), { recursive: true });
+			fs.writeFileSync(path.join(sliceDir, n.file), n.content);
+		}
+		if (extracted.narratives.length) {
+			console.log(`  backed up: ${extracted.narratives.length} roadmap narrative section(s) whose slice already has `
+				+ 'a kept document, verbatim, to docs/project_v2/slices/_legacy/ - NOT merged');
+		}
 	}
 
 	// Said even when nothing was written, because "every row already has a document" and "the
@@ -514,7 +619,10 @@ function cmdMigrateProject(root, config, argv) {
 			'- To abandon it: `rm -rf docs/project_v2`. No revert needed.',
 			'- Add `docs/project_v2/` to .gitignore: it is regenerated, and a committed preview goes stale',
 			'  silently while still reading like a plan.',
-			'- To adopt it: replace `docs/project/` in one commit, once it reads right.',
+			'- To adopt it: replace `docs/project/` in one commit, once it reads right. Every existing slice',
+			'  document is already here: kept ones verbatim, older ones backed up to `slices/_legacy/`.',
+			'- `slices/_legacy/` is prose NOT merged into the generated documents that link to it. Carry',
+			'  what still holds forward by hand, then delete the backup.',
 			'',
 			'Do not hand-edit anything in this folder — edits are overwritten on the next run.',
 			'',
@@ -668,7 +776,9 @@ function cmdIndex(root, config, argv) {
 	const undeclared = [];
 	const byFile = new Map();
 	const unreadable = [];
-	for (const name of fs.readdirSync(sliceDir).filter((n) => n.endsWith('.md'))) {
+	// `.md` in any case: migration keeps an authored VS-1_one.MD, and a reader that skipped it made that
+	// slice read as undeclared after adoption (Codex, PR #7).
+	for (const name of fs.readdirSync(sliceDir).filter((n) => /\.md$/i.test(n))) {
 		// Frontmatter outside the supported subset is bad INPUT, not a crash: it is a finding about a
 		// named file. Thrown, it reached the top level as "did not run" and named nothing.
 		let data;

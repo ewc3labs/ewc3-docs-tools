@@ -24,6 +24,10 @@ EWC3 Labs documentation tools
                                           unclaimed - a repo cannot award itself a series another
                                           register may own. Dry run without --write. Idempotent;
                                           to abandon it, delete the folder.
+                                          Inventories every existing slice document first: kept
+                                          if its frontmatter is usable, else backed up verbatim
+                                          to slices/_legacy/ and linked. Two documents for one
+                                          slice refuse the run. VS-4 and VS-004 are one slice.
 
   ewc3-docs index                         Regenerate the Delivery Index from the slice
     [--repo <dir>]                        documents that declare its rows. The slice document
