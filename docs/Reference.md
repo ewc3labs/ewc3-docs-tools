@@ -34,7 +34,7 @@ the wrap has to see the result. Running `format` then `values` can leave a line 
 | `--table "<heading>"` | `slice new` only. The `###` sub-table under the Delivery Index for a prefix's FIRST row. Refused when the prefix already lives in a different table. |
 | `--slices <dir>` | Where the slice documents live. `index` only; defaults to docs/project/slices/ then docs/project_v2/slices/. |
 | `[files...]` | Positional globs override `include` for this run. `format` and `values` only. |
-| `--repo <dir>` | Operate on another repository. `migrate-project` only. Defaults to the working directory. |
+| `--repo <dir>` | Operate on another repository. **Every command** honours it; config is read from that repository too. Defaults to the working directory. |
 | `--owner <name>` | Name written into the ownership table's Owner column. Defaults to the repo folder name. |
 | `--write` | Emit `docs/project_v2/`. Without it, `migrate-project` reports and writes nothing. |
 
