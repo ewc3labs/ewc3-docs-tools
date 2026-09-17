@@ -22,7 +22,8 @@ const { migrateText } = require('../lib/migrate');
 const { extractSlices } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
-const { renderIndex, detectWidths } = require('../lib/deliveryindex');
+const { renderIndex, detectWidths, gfmCells, indexRows, referenceDefs } = require('../lib/deliveryindex');
+const gitbase = require('../lib/gitbase');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -524,6 +525,57 @@ function cmdMigrateProject(root, config, argv) {
 }
 
 /**
+ * L1: refuse to render over a row somebody typed into. Returns an exit code to stop with, or 0.
+ *
+ * A row may differ from its render because its document changed (render it) or because a person
+ * edited the row (rendering silently discards that edit). The row cannot say which; its history can.
+ * A row is untouched when its cells equal what was COMMITTED at HEAD or what this tool LAST WROTE
+ * since HEAD - the second is LabsHQ finding 3: render, edit the document, render again must not look
+ * like a typist. A row with neither baseline is new, and minting a placeholder row is how a human adds
+ * one, so it is allowed.
+ *
+ * Decided for every roadmap before any is written: a run that writes one register and refuses the next
+ * leaves the estate half-rendered.
+ */
+function gateWrite(repo, head, plans, sameCells, showCells) {
+	const last = gitbase.loadLastWritten(repo, head);
+	const edited = [];
+	for (const { file, rel, res, defs } of plans) {
+		const committed = gitbase.headText(repo, file);
+		if (committed === null) {
+			console.error(`index: did not run: ${rel} is not committed, so there is no baseline to tell a`
+				+ ' hand edit from a render. Commit it first.');
+			return 2;
+		}
+		const baselines = new Map();
+		const add = (id, cells) => { (baselines.get(id) || baselines.set(id, []).get(id)).push(cells); };
+		for (const row of indexRows(committed)) { add(row.id, gfmCells(row.raw, res.columns, referenceDefs(committed))); }
+		for (const [id, list] of Object.entries(last[rel] || {})) { list.forEach((cells) => add(id, cells)); }
+
+		for (const row of res.rows) {
+			if (row.rendered === null) { continue; }
+			const now = gfmCells(row.raw, res.columns, defs);
+			const want = gfmCells(row.rendered, res.columns, defs);
+			const known = baselines.get(row.id) || [];
+			if (sameCells(now, want) || !known.length || known.some((cells) => sameCells(cells, now))) { continue; }
+			edited.push({ rel, row, now, want, was: known[0] });
+		}
+	}
+	if (!edited.length) { return 0; }
+
+	console.error(`index: REFUSED - ${edited.length} row(s) hand-edited since they were last committed or written.`);
+	console.error('  The table is generated from the slice documents, so rendering would discard these edits:');
+	for (const { rel, row, now, want, was } of edited) {
+		console.error(`  ${rel}:${row.line + 1}  ${row.id}`);
+		console.error(`    row now:  ${showCells(now)}`);
+		console.error(`    was:      ${showCells(was)}`);
+		console.error(`    renders:  ${showCells(want)}`);
+	}
+	console.error('  Move each edit into its slice document, or restore the row, then run again. Nothing was written.');
+	return 1;
+}
+
+/**
  * Regenerate a Delivery Index from the slice documents that declare its rows.
  *
  *   ewc3-docs index [--repo <dir>] [--slices <dir>] [--write]
@@ -536,12 +588,35 @@ function cmdMigrateProject(root, config, argv) {
  * minted is reported, not added - minting is a human act in a planning surface. A row nothing
  * claims is left exactly as it was. A row with more cells than its header has columns is left
  * alone too, because given one pipe too many no tool can tell a literal from a missing column.
+ *
+ *   ewc3-docs index --check      (L2) every row equals what its document renders; writes nothing
+ *
+ * Once a repository has adopted slice documents the table is GENERATED, so two gates keep it that way
+ * (DOCS-056). `--write` refuses a row hand-edited since it was last committed or written, because
+ * rendering over it silently discards the edit (L1). `--check` fails on any row that differs from its
+ * render, which is the only thing that catches a hand edit that was already committed (L2). Both
+ * compare CELLS as GitHub renders them, never bytes, so padding is never a finding (DOCS-059).
+ *
+ * Exit codes, for every mode: 0 consistent, 1 diverged (always naming an id or a file), 2 did not run.
  */
 function cmdIndex(root, config, argv) {
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null; };
 	const repo = path.resolve(flag('--repo') || root);
 	const write = argv.includes('--write');
+	const check = argv.includes('--check');
+	if (write && check) {
+		console.error('index: --write and --check are exclusive - one renders the table, the other asserts it.');
+		return 2;
+	}
 
+	// Git is the baseline for "was this row typed or rendered?", so --write needs it. --check compares
+	// the tree with itself and needs no history - but a tree mid-merge may hold conflict markers, and
+	// naming ids from one would be a confident diagnosis of the wrong thing.
+	const repoState = write || check ? gitbase.state(repo) : null;
+	if (repoState && !repoState.ok && (write || repoState.git)) {
+		console.error(`index: did not run: ${repoState.reason}`);
+		return 2;
+	}
 
 	// Where the slice documents live. project_v2 is the migration staging area; project/slices is
 	// where they land once a repo has adopted the shape.
@@ -585,8 +660,18 @@ function cmdIndex(root, config, argv) {
 	const records = [];
 	const undeclared = [];
 	const byFile = new Map();
+	const unreadable = [];
 	for (const name of fs.readdirSync(sliceDir).filter((n) => n.endsWith('.md'))) {
-		const { data } = frontmatter.read(fs.readFileSync(path.join(sliceDir, name), 'utf8'));
+		// Frontmatter outside the supported subset is bad INPUT, not a crash: it is a finding about a
+		// named file. Thrown, it reached the top level as "did not run" and named nothing.
+		let data;
+		try {
+			({ data } = frontmatter.read(fs.readFileSync(path.join(sliceDir, name), 'utf8')));
+		} catch (err) {
+			if (!/frontmatter/.test(err.message)) { throw err; }
+			unreadable.push(`${name}: ${err.message}`);
+			continue;
+		}
 		// A slice document with no `id:` declares nothing. Guessing one from the filename is exactly
 		// the kind of help that writes a wrong row and looks deliberate doing it.
 		if (!data || !data.id) { undeclared.push(name); continue; }
@@ -621,6 +706,16 @@ function cmdIndex(root, config, argv) {
 	console.log(`  reading: ${path.relative(repo, sliceDir).split(path.sep).join('/')}`
 		+ ` (${records.length} declaring, ${undeclared.length} without an id:)`);
 
+	// Before the zero-declaring check, so a directory of nothing but unreadable documents names them.
+	// And before rendering in ANY mode: a row whose document cannot be read cannot be rendered or
+	// checked, and writing the rest would present a partial table as current.
+	if (unreadable.length) {
+		console.error(`index: ${unreadable.length} slice document(s) with frontmatter this tool cannot read:`);
+		unreadable.forEach((u) => console.error(`  ${path.relative(repo, sliceDir).split(path.sep).join('/')}/${u}`));
+		console.error('  Nothing was rendered or written.');
+		return 1;
+	}
+
 	// Nothing declared anything. Rendering zero rows over a live register and calling it
 	// "already current" is a pass about the wrong question - the table was never consulted.
 	if (!records.length) {
@@ -633,8 +728,12 @@ function cmdIndex(root, config, argv) {
 		return 2;
 	}
 
+	const sameCells = (a, b) => a.length === b.length && a.every((c, i) => c === b[i]);
+	const showCells = (cells) => cells.join(' | ');
+
 	let code = 0;
 	let anyIndex = false;
+	const plans = [];
 	for (const file of roadmaps) {
 		const rel = path.relative(repo, file).split(path.sep).join('/');
 		const text = fs.readFileSync(file, 'utf8');
@@ -646,9 +745,36 @@ function cmdIndex(root, config, argv) {
 		anyIndex = true;
 
 		const changed = res.text !== text;
+		plans.push({ file, rel, res, changed, defs: referenceDefs(text) });
 		console.log(`${rel}`);
 		console.log(`  ${res.rendered} row(s) rendered from ${records.length} slice document(s)`
 			+ `${res.rendered && !changed ? ' - already current' : ''}`);
+
+		// One id on two rows renders the same document twice and hides that the register disagrees
+		// with itself. Which row is the real one is a human call.
+		const lines = new Map();
+		for (const row of res.rows) {
+			if (!lines.has(row.id)) { lines.set(row.id, []); }
+			lines.get(row.id).push(row.line + 1);
+		}
+		for (const [id, at] of lines) {
+			if (at.length < 2) { continue; }
+			code = 1;
+			console.log(`  DUPLICATE ${id} on ${at.length} rows: ${at.map((n) => `${rel}:${n}`).join('  ')}`);
+		}
+
+		if (check) {
+			for (const row of res.rows) {
+				if (row.rendered === null) { continue; }
+				const now = gfmCells(row.raw, res.columns, plans[plans.length - 1].defs);
+				const want = gfmCells(row.rendered, res.columns, plans[plans.length - 1].defs);
+				if (sameCells(now, want)) { continue; }
+				code = 1;
+				console.log(`  DIVERGED ${row.id} at ${rel}:${row.line + 1}`);
+				console.log(`    row:      ${showCells(now)}`);
+				console.log(`    renders:  ${showCells(want)}`);
+			}
+		}
 
 		if (res.malformed.length) {
 			code = 1;
@@ -662,14 +788,16 @@ function cmdIndex(root, config, argv) {
 			console.log(`    ${res.unknown.join(' ')}`);
 		}
 		if (res.missing.length) {
+			// In an adopted repository - and one reaching this line is, because documents declare ids -
+			// a row nothing renders is a row nothing maintains. Archive the row with its document.
+			// Adoption is read off the documents, never a marker line, so deleting a marker cannot turn
+			// CI green (LabsHQ finding 6).
+			if (check) { code = 1; }
 			console.log(`  ${res.missing.length} row(s) no document claims, left untouched:`);
 			console.log(`    ${res.missing.slice(0, 20).join(' ')}`);
 		}
 
-		if (write && changed) {
-			fs.writeFileSync(file, res.text);
-			console.log('  written');
-		} else if (changed) {
+		if (changed && !write && !check) {
 			console.log('  (dry run - pass --write to update the table)');
 		}
 	}
@@ -682,6 +810,26 @@ function cmdIndex(root, config, argv) {
 		console.error('index: no roadmap in that tree carries a recognised Delivery Index.');
 		roadmaps.forEach((r) => console.error(`  looked at: ${path.relative(repo, r).split(path.sep).join('/')}`));
 		return 2;
+	}
+
+	if (write) {
+		const gate = gateWrite(repo, repoState.head, plans, sameCells, showCells);
+		if (gate) { return gate; }
+		const last = gitbase.loadLastWritten(repo, repoState.head);
+		for (const { file, rel, res, changed, defs } of plans) {
+			if (changed) {
+				fs.writeFileSync(file, res.text);
+				console.log(`${rel}: written`);
+			}
+			last[rel] = {};
+			for (const row of res.rows) {
+				if (row.rendered === null) { continue; }
+				(last[rel][row.id] = last[rel][row.id] || []).push(gfmCells(row.rendered, res.columns, defs));
+			}
+		}
+		gitbase.saveLastWritten(repo, repoState.head, last);
+	} else if (check && !code) {
+		console.log('index --check: every row matches the slice document that declares it.');
 	}
 
 	if (undeclared.length) {
@@ -719,6 +867,23 @@ function cmdTables(root, config, argv) {
 }
 
 // --- entry -----------------------------------------------------------------
+
+// A CRASH IS "DID NOT RUN" (2), NEVER "THE DOCUMENTS ARE WRONG" (1). LabsHQ control K2.
+//
+// Node exits 1 on an uncaught exception, and 1 is this tool's verdict that the documents diverge. So a
+// crash read as a finding: CI went red naming nothing, and a harness asserting "a diverged fixture
+// exits 1" counted the crash as a pass. PMO's first control run crashed on every case and each one
+// looked like a catch. The contract is 0 consistent, 1 diverged-and-named, 2 did not run - and only
+// the last is true of a tool that threw. Expected bad input (a malformed slice document) is NOT this:
+// it is handled where it is read, and exits 1 naming the file.
+const didNotRun = (err) => {
+	const reason = err && err.message ? err.message : String(err);
+	console.error(`ewc3-docs: did not run: ${reason}`);
+	if (process.env.EWC3_DOCS_DEBUG && err && err.stack) { console.error(err.stack); }
+	process.exit(2);
+};
+process.on('uncaughtException', didNotRun);
+process.on('unhandledRejection', didNotRun);
 
 const [, , command, ...argv] = process.argv;
 const repoFlag = process.argv.indexOf('--repo');
