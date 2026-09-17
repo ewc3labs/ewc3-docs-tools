@@ -2436,6 +2436,88 @@ test('[migrate-index] EVERY row\'s Status moves to its document body, followers 
 });
 
 // ---------------------------------------------------------------------------
+// DOCS-075. Evidence is gathered by id text, with no notion of time. A downstream register used two numbers
+// UNMINTED for some work, then minted them later for unrelated work - and migration filed the earlier STATUS line
+// under the new slice as its evidence. Set apart, never dropped: dated against the commit that added the row.
+
+/** XY-005 minted 08-01; XY-006/007 used unminted on 08-05, minted on 08-12, and really recorded on 08-20. */
+function mintedLateRepo() {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'late-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	const roadmap = (last, rows) => ['# R', '', '## Number Series', '', '| Prefix | Scope | Owner | Last Used | Series |',
+		'| --- | --- | --- | --- | --- |', `| XY | global | r | XY-${last} | slices |`, '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |', ...rows, ''].join('\n');
+	const commit = (date, msg) => { git(dir, 'add', '-A'); git(dir, 'commit', '-qm', msg, `--date=${date}T12:00:00+0000`); };
+	git(dir, 'init', '-q');
+	w('docs/project/R_Roadmap.md', roadmap('005', ['| XY-005 | planned | fifth | x |']));
+	commit('2026-08-01', 'register');
+	w('config/STATUS.yaml', ['done:', "  - '2026-08-05 [XY-007] gateway work, number not yet minted'", "  - 'XY-006 early gateway mention'", ''].join('\n'));
+	commit('2026-08-05', 'unminted use');
+	w('docs/project/R_Roadmap.md', roadmap('007', ['| XY-005 | planned | fifth | x |', '| XY-006 | planned | sixth | y |', '| XY-007 | planned | seventh | z |']));
+	commit('2026-08-12', 'mint 006 and 007');
+	fs.appendFileSync(path.join(dir, 'config/STATUS.yaml'), ["  - '2026-08-12 [XY-007] the real seventh work'", "  - 'XY-006 real sixth work'", ''].join('\n'));
+	commit('2026-08-20', 'real work');
+	return dir;
+}
+const stagedDoc = (dir, id) => {
+	const slices = path.join(dir, 'docs', 'project_v2', 'slices');
+	return fs.readFileSync(path.join(slices, fs.readdirSync(slices).find((n) => n.startsWith(`${id}_`))), 'utf8');
+};
+/** [evidence section before the set-apart group, the set-apart group] */
+const evidenceParts = (doc) => {
+	const ev = doc.slice(doc.indexOf('## Recorded evidence'));
+	const at = ev.indexOf('Mentioned before');
+	return at === -1 ? [ev, ''] : [ev.slice(0, at), ev.slice(at)];
+};
+
+test('[migrate-evidence] DOCS-075: a line recorded before its id was minted is SET APART, dated in-line or by blame', () => {
+	const dir = mintedLateRepo();
+	const r = cli(['migrate-project', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	const [seventh, seventhApart] = evidenceParts(stagedDoc(dir, 'XY-007'));
+	assert.ok(seventh.includes('the real seventh work'), `on the mint day it is evidence:\n${seventh}`);
+	assert.ok(!seventh.includes('gateway work'), `the earlier use is not evidence:\n${seventh}`);
+	assert.ok(seventhApart.includes('Mentioned before XY-007 was minted (2026-08-12)') && seventhApart.includes('gateway work'),
+		`kept, set apart, labelled:\n${seventhApart}`);
+	const [sixth, sixthApart] = evidenceParts(stagedDoc(dir, 'XY-006'));
+	assert.ok(sixth.includes('XY-006 real sixth work') && !sixth.includes('early gateway mention'), `an undated line is dated by blame:\n${sixth}`);
+	assert.ok(sixthApart.includes('early gateway mention'), sixthApart);
+	assert.ok(/set apart:\s+XY-006 \(1\), XY-007 \(1\)/.test(r.out), `reported:\n${r.out}`);
+});
+
+test('[migrate-evidence] DOCS-075: the dry run counts what will be set apart, per slice, for the owner review', () => {
+	const r = cli(['migrate-project'], mintedLateRepo());
+	assert.ok(/set apart:\s+XY-006 \(1\), XY-007 \(1\)/.test(r.out), r.out);
+});
+
+test('[migrate-evidence] DOCS-075: with no history to date against, nothing is split and the section says so', () => {
+	const src = mintedLateRepo();
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-'));
+	fs.cpSync(path.join(src, 'docs'), path.join(dir, 'docs'), { recursive: true });
+	fs.cpSync(path.join(src, 'config'), path.join(dir, 'config'), { recursive: true });
+	cli(['migrate-project', '--write'], dir);
+	const [seventh, apart] = evidenceParts(stagedDoc(dir, 'XY-007'));
+	assert.strictEqual(apart, '');
+	assert.ok(seventh.includes('gateway work') && seventh.includes('the real seventh work'), seventh);
+	assert.ok(/not checked against when/.test(seventh), seventh);
+});
+
+test('[migrate-evidence] DOCS-075: mint dates match ids padding-insensitively, and only a committed ROW mints', () => {
+	const { mintDates } = require('../lib/evidence');
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mintpad-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project'), { recursive: true });
+	git(dir, 'init', '-q');
+	fs.writeFileSync(path.join(dir, 'docs/project/R_Roadmap.md'), 'Prose mentions XY-9 early.\n\n| ID | State |\n| --- | --- |\n| XY-7 | planned |\n');
+	git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'a', '--date=2026-08-01T12:00:00+0000');
+	fs.appendFileSync(path.join(dir, 'docs/project/R_Roadmap.md'), '| XY-009 | planned |\n');
+	git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'b', '--date=2026-08-09T12:00:00+0000');
+	const m = mintDates(dir);
+	assert.strictEqual(m.ok, true, m.reason);
+	assert.strictEqual(m.dates.get('XY-7'), '2026-08-01');
+	assert.strictEqual(m.dates.get('XY-9'), '2026-08-09', 'a prose mention is not a mint; the padded row is');
+});
+
+// ---------------------------------------------------------------------------
 // A downstream pilot migrated a register kept OFF-CANON in docs/project/roadmap/, which already had a register in
 // the canonical `| Prefix |` shape. Two defects: every moved link was rebased as though the source sat in
 // docs/project/ (one level too deep), and the existing register went unrecognised, so a second one was synthesised.

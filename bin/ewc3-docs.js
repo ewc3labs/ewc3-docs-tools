@@ -19,7 +19,8 @@ const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
-const { extractSlices, inventorySlices, normalizeId, rebaseRelative } = require('../lib/slices');
+const { extractSlices, inventorySlices, normalizeId, rebaseRelative, splitEvidence, padId } = require('../lib/slices');
+const { evidenceDating } = require('../lib/evidence');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
@@ -471,6 +472,35 @@ function cmdMigrateProject(root, config, argv) {
 		return 1;
 	}
 
+	// EVIDENCE IS DATED BEFORE IT IS FILED (DOCS-075). A number used before it was minted put an earlier, unrelated
+	// STATUS line under the slice later minted with it. Counted here, in the dry run too, so the owner review sees what
+	// will be set apart before adopting it.
+	const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
+	const statusText = read(path.join(repo, 'config', 'STATUS.yaml'));
+	const pullupText = read(path.join(repo, 'config', 'STATUS-pullup.yaml'));
+	const dating = statusText || pullupText
+		? evidenceDating(repo, { statusFile: 'config/STATUS.yaml', statusText, pullupFile: 'config/STATUS-pullup.yaml', pullupText })
+		: null;
+	if (dating && !dating.ok) {
+		console.log(`  evidence: dates not checked against when ids were minted - ${dating.reason}`);
+	} else if (dating) {
+		const widths = { ...detectWidths(sourceText), ...((config.series || {}).widths || {}) };
+		const apart = [];
+		for (const id of [...rowIds].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))) {
+			const m = /^([A-Z][A-Z0-9]*)-(\d+)(.*)$/.exec(id);
+			if (!m) { continue; }
+			const parsed = { prefix: m[1], num: Number.parseInt(m[2], 10), suffix: m[3] };
+			const n = splitEvidence(statusText, [parsed], dating.status, dating.mint).apart.length
+				+ splitEvidence(pullupText, [parsed], dating.pullup, dating.mint).apart.length;
+			if (n) { apart.push(`${padId(parsed.prefix, parsed.num, parsed.suffix, widths[parsed.prefix] || 0)} (${n})`); }
+		}
+		if (apart.length) {
+			console.log(`  set apart: ${apart.join(', ')}`);
+			console.log('          evidence line(s) recorded before the id was minted - kept in the document under their own');
+			console.log('          heading, not as the slice\'s evidence. Check them in the owner review.');
+		}
+	}
+
 	if (!write) {
 		console.log('  (dry run - pass --write to emit docs/project_v2/)');
 		return problems.length ? 1 : 0;
@@ -481,7 +511,6 @@ function cmdMigrateProject(root, config, argv) {
 
 	// Pull the narrative out into slices/ before writing the roadmap, so the roadmap that lands is
 	// the thin one with its rows already pinned.
-	const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
 	// Padding is per PREFIX and is read off the register itself, so a migration does not renumber
 	// every id in the file on its first run. A fixed width of five did exactly that.
 	// SLICE DOCUMENTS THAT ALREADY EXIST ARE AUTHORED, AND MIGRATION IS A ONE-TIME IMPORT.
@@ -535,8 +564,9 @@ function cmdMigrateProject(root, config, argv) {
 		// dragged 92 three-digit ids to two. `series.widths` is the same map `resolveValues` reads,
 		// so the filename and the register marker cannot disagree about how wide an id is.
 		width: { ...detectWidths(result.text), ...((config.series || {}).widths || {}) },
-		statusText: read(path.join(repo, 'config', 'STATUS.yaml')),
-		pullupText: read(path.join(repo, 'config', 'STATUS-pullup.yaml')),
+		statusText,
+		pullupText,
+		dating,
 		sourceName: path.basename(from),
 		existing: authored,
 		legacy,
