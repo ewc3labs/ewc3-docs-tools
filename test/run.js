@@ -2523,6 +2523,22 @@ test('[migrate-evidence] DOCS-077: a tree whose register all arrives in its firs
 	git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'later row', '--date=2026-08-09T12:00:00+0000');
 	const again = cli(['migrate-project', '--write'], dir);
 	assert.ok(!/dates not checked/.test(again.out), `dating resumes:\n${again.out}`);
+
+	// Codex, PR #23: the test is which COMMIT added each row, not its calendar date. A later commit on the same day
+	// is still a later mint, and dating must stay on.
+	const sameDay = fs.mkdtempSync(path.join(os.tmpdir(), 'sameday-'));
+	const roadmapOf = (rows) => ['# R', '', '## Delivery Index', '', '| ID | State |', '| --- | --- |', ...rows, ''].join('\n');
+	fs.mkdirSync(path.join(sameDay, 'docs', 'project'), { recursive: true });
+	const file = path.join(sameDay, 'docs/project/R_Roadmap.md');
+	git(sameDay, 'init', '-q');
+	fs.writeFileSync(file, roadmapOf(['| XY-001 | planned |']));
+	git(sameDay, 'add', '-A'); git(sameDay, 'commit', '-qm', 'a', '--date=2026-08-01T09:00:00+0000');
+	fs.writeFileSync(file, roadmapOf(['| XY-001 | planned |', '| XY-002 | planned |']));
+	git(sameDay, 'add', '-A'); git(sameDay, 'commit', '-qm', 'b', '--date=2026-08-01T17:00:00+0000');
+	const { mintDates } = require('../lib/evidence');
+	const m = mintDates(sameDay);
+	assert.strictEqual(m.ok, true, `a second commit on the same day is still a second mint: ${m.reason}`);
+	assert.strictEqual(m.dates.get('XY-2'), '2026-08-01');
 });
 
 test('[migrate-evidence] DOCS-075: blame dates lines in a SHA-256 repository too', () => {
