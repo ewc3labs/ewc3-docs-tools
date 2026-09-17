@@ -2469,6 +2469,143 @@ test('[migrate-index] a register with no Doc column renders its pointer from ONE
 	for (const r of rows) { assert.ok(/See \[slice notes\]\(slices\/VS-\d+_[^)]+\.md\)\./.test(r), r); }
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-041. An adopted repository had no sanctioned way to mint. `index --write` refuses a document whose id
+// the register never minted - deliberately, because a generator that can mint can mint by accident - so the
+// only working path was typing the generated row by hand. `slice new` is the mint: one command derives the
+// id, writes the document, renders the row into the right table and refreshes Last Used.
+
+const MINT_ROW = (id, state, title, est) => `| ${id} | ${state} | ${title} | ${est} | [${id}](slices/${id}_${title.replace(/ /g, '_')}.md) |  |`;
+const MINT_DOC = (id, state, title, est) => `---\nid: ${id}\nstate: ${state}\ntitle: ${title}\nest: ${est}\ndoc: "[${id}](slices/${id}_${title.replace(/ /g, '_')}.md)"\nstatus: ""\n---\n\n# ${id}\n`;
+
+/** An adopted register: two sub-tables, a frozen series, a cited-only prefix, a declared prefix with no rows. */
+function mintRepo() {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mint-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	w('.ewc3-docs.json', JSON.stringify({
+		exclude: ['docs/_ARCHIVE/**.md'],
+		series: { widths: { VS: 3 } },
+		values: {
+			lastVSNum: { lastId: { prefix: 'VS' } }, lastVS: { template: { text: 'VS-${lastVSNum}' } },
+			lastFIXNum: { lastId: { prefix: 'FIX' } }, lastFIX: { template: { text: 'FIX-${lastFIXNum}' } },
+		},
+	}, null, 2));
+	w('docs/project/R_Roadmap.md', [
+		'# R', '',
+		'## ID Register', '',
+		'| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| VS | global | r | <!--ewc3:lastVS-->VS-002<!--/ewc3:lastVS--> | slices |',
+		'| FIX | repo-local | r | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | fixes |',
+		'| OPS | frozen at 8 | r | OPS-08 | retired |',
+		'| XY | global | r | - | a new series |',
+		'| DT | reference-only | other | - | cited, not ours |', '',
+		'## Delivery Index', '',
+		'### Vertical Slices', '',
+		'| ID | State | Slice | Est | Doc | Status |', '| --- | --- | --- | --- | --- | --- |',
+		MINT_ROW('VS-001', '⬜ planned', 'first', 'S'), MINT_ROW('VS-002', '🟨 coded', 'second', 'M'), '',
+		'### Hotfixes', '',
+		'| ID | State | Slice | Est | Doc | Status |', '| --- | --- | --- | --- | --- | --- |',
+		MINT_ROW('FIX-1', '⬜ planned', 'a fix', 'S'), '',
+		'## Notes', '', 'Nothing here.', '',
+	].join('\n'));
+	w('docs/project/slices/VS-001_first.md', MINT_DOC('VS-001', '⬜ planned', 'first', 'S'));
+	w('docs/project/slices/VS-002_second.md', MINT_DOC('VS-002', '🟨 coded', 'second', 'M'));
+	w('docs/project/slices/FIX-1_a_fix.md', MINT_DOC('FIX-1', '⬜ planned', 'a fix', 'S'));
+	// The highest VS id lives ONLY in the archive. An archived id is spent, and must never be minted again.
+	w('docs/_ARCHIVE/VS-007_retired_long_ago.md', '---\nid: VS-007\nstate: cancelled\ntitle: retired\n---\n');
+	return dir;
+}
+const mintRoadmap = (dir) => fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+const mintConsistent = (dir) => ['index --check', 'series', 'values --check']
+	.map((c) => [c, cli(c.split(' '), dir)]).filter(([, r]) => r.code !== 0).map(([c, r]) => `${c}: ${r.out}`);
+
+test('[slice-new] the fixture is consistent before any mint', () => {
+	assert.deepStrictEqual(mintConsistent(mintRepo()), []);
+});
+
+test('[slice-new] a dry run names the id, file and table, and writes nothing', () => {
+	const dir = mintRepo();
+	const before = mintRoadmap(dir);
+	const r = cli(['slice', 'new', 'VS', 'A new thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('VS-008') && r.out.includes('Vertical Slices') && r.out.includes('VS-008_A_new_thing.md'), r.out);
+	assert.strictEqual(mintRoadmap(dir), before);
+	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project', 'slices', 'VS-008_A_new_thing.md')));
+});
+
+test('[slice-new] --write mints past an ARCHIVED id, in the right table, and every check still passes', () => {
+	const dir = mintRepo();
+	const r = cli(['slice', 'new', 'VS', 'Title: with a colon', '--set', 'est=M', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	const file = path.join(dir, 'docs', 'project', 'slices', 'VS-008_Title_with_a_colon.md');
+	assert.ok(fs.existsSync(file), 'VS-008, not VS-003: the archived VS-007 is spent');
+	const { data } = frontmatter.read(fs.readFileSync(file, 'utf8'));
+	assert.deepStrictEqual([data.id, data.title, data.est], ['VS-008', 'Title: with a colon', 'M']);
+	assert.ok(/^title: "Title: with a colon"$/m.test(fs.readFileSync(file, 'utf8')), 'frontmatter quoted for strict YAML');
+
+	const lines = mintRoadmap(dir).split('\n');
+	const at = lines.findIndex((l) => l.startsWith('| VS-008 '));
+	assert.ok(at > lines.findIndex((l) => l.startsWith('| VS-002 ')) && at < lines.indexOf('### Hotfixes'), 'under Vertical Slices, after VS-002');
+	assert.ok(lines[at].includes('| M |') && lines[at].includes('slices/VS-008_Title_with_a_colon.md'), lines[at]);
+	assert.ok(mintRoadmap(dir).includes('<!--ewc3:lastVS-->VS-008<!--/ewc3:lastVS-->'), 'Last Used refreshed');
+	assert.deepStrictEqual(mintConsistent(dir), []);
+
+	assert.strictEqual(cli(['slice', 'new', 'VS', 'Another', '--write'], dir).code, 0);
+	assert.ok(fs.existsSync(path.join(dir, 'docs', 'project', 'slices', 'VS-009_Another.md')), 'the next mint is +1');
+	assert.deepStrictEqual(mintConsistent(dir), []);
+});
+
+test('[slice-new] a prefix mints into the table holding its highest row', () => {
+	const dir = mintRepo();
+	assert.strictEqual(cli(['slice', 'new', 'FIX', 'Small correction', '--write'], dir).code, 0);
+	const lines = mintRoadmap(dir).split('\n');
+	const at = lines.findIndex((l) => l.startsWith('| FIX-2 '));
+	assert.ok(at > lines.indexOf('### Hotfixes') && at < lines.indexOf('## Notes'), lines.join('\n'));
+	assert.deepStrictEqual(mintConsistent(dir), []);
+});
+
+test('[slice-new] a FROZEN, cited-only or undeclared prefix is refused, and nothing is written', () => {
+	for (const [prefix, why] of [['OPS', /frozen/i], ['DT', /not declared|does not own|reference/i], ['ZZ', /not declared/i]]) {
+		const dir = mintRepo();
+		const before = mintRoadmap(dir);
+		const r = cli(['slice', 'new', prefix, 'Nope', '--write'], dir);
+		assert.strictEqual(r.code, 1, `${prefix}: ${r.out}`);
+		assert.ok(why.test(r.out) && r.out.includes(prefix), `${prefix}: ${r.out}`);
+		assert.strictEqual(mintRoadmap(dir), before, `${prefix}: roadmap untouched`);
+	}
+});
+
+test('[slice-new] a prefix with NO rows needs --table, which must name an existing sub-table', () => {
+	const dir = mintRepo();
+	const none = cli(['slice', 'new', 'XY', 'First of its kind', '--write'], dir);
+	assert.strictEqual(none.code, 1, none.out);
+	assert.ok(none.out.includes('Vertical Slices') && none.out.includes('Hotfixes'), 'names the tables to choose from');
+	assert.strictEqual(cli(['slice', 'new', 'XY', 'First of its kind', '--table', 'Nope', '--write'], dir).code, 1);
+
+	const ok = cli(['slice', 'new', 'XY', 'First of its kind', '--table', 'Hotfixes', '--write'], dir);
+	assert.strictEqual(ok.code, 0, ok.out);
+	const lines = mintRoadmap(dir).split('\n');
+	assert.ok(lines.findIndex((l) => l.startsWith('| XY-1 ')) > lines.indexOf('### Hotfixes'));
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+});
+
+test('[slice-new] --table that disagrees with where a prefix already lives is refused, not ignored', () => {
+	const dir = mintRepo();
+	const r = cli(['slice', 'new', 'VS', 'Misplaced', '--table', 'Hotfixes', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('Vertical Slices'), r.out);
+	assert.strictEqual(cli(['slice', 'new', 'VS', 'Placed', '--table', 'vertical slices'], dir).code, 0, 'naming the right table is fine');
+});
+
+test('[slice-new] --set takes only a real column of that table, and never a derived one', () => {
+	const dir = mintRepo();
+	for (const bad of ['bogus=1', 'doc=x', 'id=VS-100', 'state=done', 'title=other', 'noequals']) {
+		const r = cli(['slice', 'new', 'VS', 'X', '--set', bad, '--write'], dir);
+		assert.strictEqual(r.code, bad === 'noequals' ? 2 : 1, `${bad}: ${r.out}`);
+	}
+	assert.strictEqual(cli(['slice', 'new', 'VS'], dir).code, 2, 'a title is required');
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');

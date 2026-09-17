@@ -24,6 +24,7 @@ const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
 const gitbase = require('../lib/gitbase');
+const { planMint } = require('../lib/mint');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -1027,6 +1028,52 @@ function cmdIndex(root, config, argv) {
  * Runs inside `check`, so it is a control rather than a habit. The repair stays human: given one
  * pipe too many, no tool can tell a literal pipe from a forgotten column.
  */
+/**
+ * Mint a slice in an adopted repository. DOCS-041.
+ *
+ *   ewc3-docs slice new <PREFIX> "<title>" [--state <state>] [--set <column>=<value>]... [--table "<heading>"] [--write]
+ *
+ * One command derives what a person would otherwise type: the next id (past every row, document, archived
+ * document and Last Used), the slice document, and its row in the table that already holds the prefix.
+ * Dry by default. `index --write` still never mints - this is the deliberate act that does.
+ */
+function cmdSlice(root, config, argv) {
+	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
+	const VALUED = new Set(['--state', '--set', '--table', '--repo', '--config']);
+	const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUED.has(argv[i - 1]));
+	if (positional[0] !== 'new') {
+		console.error('usage: ewc3-docs slice new <PREFIX> "<title>" [--state <s>] [--set <column>=<value>]... [--table "<heading>"] [--write]');
+		return 2;
+	}
+	const sets = argv.flatMap((a, i) => (a === '--set' && argv[i + 1] !== undefined ? [argv[i + 1]] : []));
+	const plan = planMint({
+		repo: path.resolve(flag('--repo') || root), config,
+		prefix: positional[1], title: positional[2], state: flag('--state'), sets, table: flag('--table'),
+	});
+	if (!plan.ok) {
+		plan.errors.forEach((e) => console.error(`slice new: ${e}`));
+		console.error('  Nothing was written.');
+		return plan.code;
+	}
+
+	const repo = path.resolve(flag('--repo') || root);
+	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
+	console.log(`  id:        ${plan.id}`);
+	console.log(`  document:  ${rel(plan.docPath)}`);
+	console.log(`  row in:    ${rel(plan.roadmap)} - ${plan.table ? `"${plan.table}"` : "the Delivery Index table (no sub-heading)"}`);
+	plan.notes.forEach((n) => console.log(`  note:      ${n}`));
+	if (!argv.includes('--write')) {
+		console.log('  (dry run - pass --write to mint)');
+		return 0;
+	}
+
+	fs.writeFileSync(plan.docPath, plan.docText);
+	fs.writeFileSync(plan.roadmap, plan.roadmapText);
+	console.log(`  minted:    ${plan.id}`);
+	// Last Used and any other derived value move with the mint, so `values --check` stays green.
+	return config.values ? cmdValues(repo, config, []) : 0;
+}
+
 function cmdTables(root, config, argv) {
 	const files = targetFiles(config, root, argv);
 	const problems = [];
@@ -1087,6 +1134,7 @@ switch (command) {
 	case 'migrate-project': code = cmdMigrateProject(root, config, argv); break;
 	case 'tables': code = cmdTables(root, config, argv); break;
 	case 'index': code = cmdIndex(root, config, argv); break;
+	case 'slice': code = cmdSlice(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':

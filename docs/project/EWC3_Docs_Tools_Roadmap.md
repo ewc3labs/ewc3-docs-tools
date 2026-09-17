@@ -59,7 +59,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-033 | ⬜ planned | Configurable template roots, with the builtin as the fallback | M | [DOCS-033][docs-033] · [One template beats three parsers][one-template-beats] |  |
 | DOCS-039 | ⬜ planned | A derived `Last Used` must refuse to reconcile DOWNWARD | S | [DOCS-039][docs-039] · [One template beats three parsers][one-template-beats] |  |
 | DOCS-040 | ⬜ planned | epo:slice qualified references, and a Registry column | M | [DOCS-040][docs-040] · [One template beats three parsers][one-template-beats] |  |
-| DOCS-041 | ⬜ planned | `slice new <PREFIX> "<title>"` — mint by creating the document | M | [DOCS-041][docs-041] · [Frontmatter is the declaration][frontmatter-is-the] |  |
+| DOCS-041 | 🟦 tested | `slice new <PREFIX> "<title>"` — mint by creating the document | M | [DOCS-041][docs-041] · [Frontmatter is the declaration][frontmatter-is-the] | built: slice new mints past rows, documents, archived documents and Last Used, into the table holding the prefix; unit-tested end to end, awaiting a downstream mint |
 | DOCS-042 | 🟦 tested | Read the Delivery Index columns by HEADER NAME, not by position | S | [DOCS-042][docs-042] | unit-tested; not re-run against HDCTranslators, where the positional defect was found |
 | DOCS-043 | 🟦 tested | A heading declares only its LEADING RUN of IDs | S | [DOCS-043][docs-043] | unit-tested; not re-run against HDCTranslators, where the cross-repo mint was found |
 | DOCS-044 | 🟦 tested | ID padding is a convention of a PREFIX, not of a file | S | [DOCS-044][docs-044] | unit-tested; narrowed by DOCS-058 - shortest-id holds as a description of a register, not as a rewrite rule, and width is now declared in series.widths |
