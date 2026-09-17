@@ -99,7 +99,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-075 | 🟦 tested | migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice | M | [DOCS-075][docs-075] |  |
 | DOCS-076 | ⬜ planned | slice new: a first mint into an empty register declared slice-documents creates slices/ | S | [DOCS-076][docs-076] |  |
 | DOCS-077 | 🟦 tested | migrate-project: a tree whose history begins at its import cannot date evidence, and says so | S | [DOCS-077][docs-077] |  |
-| DOCS-078 | ⬜ planned | a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named | S | [DOCS-078][docs-078] |  |
+| DOCS-078 | 🟦 tested | a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named | S | [DOCS-078][docs-078] |  |
 | DOCS-079 | ⬜ planned | migrate-project: evidence under an id's former name, bounded, and dated against the id it was written under | M | [DOCS-079][docs-079] |  |
 
 ## Done

@@ -1,10 +1,12 @@
 ---
 id: DOCS-078
-state: ⬜ planned
+state: 🟦 tested
 title: "a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named"
 est: S
 doc: "[DOCS-078](slices/DOCS-078_a_set_aside_is_a_prompt_for_the_owner_not_a_verdict_neutra.md)"
 status: ""
+state_sha: a61fb8804b81
+state_source: trailer
 ---
 
 # DOCS-078 — a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named
