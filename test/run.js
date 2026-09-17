@@ -3185,6 +3185,24 @@ test('[fold] DOCS-074: an unbackticked one-line legend, and an empty one, do not
 	assert.strictEqual(foldData(rich, 'VS-1').state, '🟦 coded');
 });
 
+test('[fold] DOCS-074: a State Legend inside a code fence is documentation - it neither defines states nor blocks the real one', () => {
+	const { readLegend } = require('../lib/fold');
+	// Codex P1, PR #20: a fenced `### State Legend` example was taken as the register's legend, so --write could
+	// silently spell a state the example's way.
+	const fencedOnly = ['# R', '', '```markdown', '### State Legend', '', '- 🔴 `coded` — example spelling', '```', ''].join('\n');
+	assert.deepStrictEqual(readLegend(fencedOnly), { found: false, legend: new Map(), unreadable: null });
+	// Codex P2: a four-backtick fence holding a three-backtick example closed on the inner fence.
+	const nested = ['## State Legend', '', '- ⬜ `planned` — not started', '- 🟦 `coded` — landed', '', '````markdown', '```',
+		'- ⬜ `planned` · 🟦 `coded`', '```', '````', ''].join('\n');
+	const read = readLegend(nested);
+	assert.strictEqual(read.unreadable, null, JSON.stringify(read.unreadable));
+	assert.deepStrictEqual([...read.legend.keys()], ['planned', 'coded']);
+	// Codex P2: prose with a middle dot lists no states, so it is not a legend written another way.
+	const prose = ['## State Legend', '', 'Lifecycle · delivery states only', '', '- ⬜ `planned` — not started', ''].join('\n');
+	assert.strictEqual(readLegend(prose).unreadable, null, 'a middle dot in prose is not a state list');
+	assert.ok(readLegend(['## State Legend', '', '⬜ planned · 🟦 coded · 💨 smoked', ''].join('\n')).unreadable, 'a real one-line list still is');
+});
+
 test('[fold] a trailer merged in from a branch counts', () => {
 	const dir = foldRepo();
 	git(dir, 'checkout', '-qb', 'feature/VS-1');
