@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-070<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-072<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -92,6 +92,8 @@ is never referenced from outside the repository it fixes.
 | DOCS-068 | 🟦 tested | migrate-project: an off-canon register's links and an existing Prefix register | M | [DOCS-068][docs-068] |  |
 | DOCS-069 | ⬜ planned | Anchors: migrate retargets moved headings, links checks fragments | M | [DOCS-069][docs-069] |  |
 | DOCS-070 | ⬜ planned | fold: a dry run reports provenance updates, and --help prints usage | S | [DOCS-070][docs-070] |  |
+| DOCS-071 | ⬜ planned | fold --check --since: say out-of-range trailers were not checked | S | [DOCS-071][docs-071] |  |
+| DOCS-072 | ⬜ planned | One frontmatter shape: migrate writes doc only for a Doc column, and no source | S | [DOCS-072][docs-072] |  |
 
 ## Done
 
@@ -183,6 +185,8 @@ caught.
 [docs-068]: slices/DOCS-068_migrate_project_an_off_canon_register_s_links_and_an_exist.md
 [docs-069]: slices/DOCS-069_Anchors_migrate_retargets_moved_headings_links_checks_frag.md
 [docs-070]: slices/DOCS-070_fold_a_dry_run_reports_provenance_updates_and_help_prints.md
+[docs-071]: slices/DOCS-071_fold_check_since_say_out_of_range_trailers_were_not_checke.md
+[docs-072]: slices/DOCS-072_One_frontmatter_shape_migrate_writes_doc_only_for_a_Doc_co.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
