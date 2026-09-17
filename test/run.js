@@ -2466,7 +2466,7 @@ const stagedDoc = (dir, id) => {
 /** [evidence section before the set-apart group, the set-apart group] */
 const evidenceParts = (doc) => {
 	const ev = doc.slice(doc.indexOf('## Recorded evidence'));
-	const at = ev.indexOf('Mentioned before');
+	const at = ev.indexOf('### Recorded before this row existed');
 	return at === -1 ? [ev, ''] : [ev.slice(0, at), ev.slice(at)];
 };
 
@@ -2477,7 +2477,7 @@ test('[migrate-evidence] DOCS-075: a line recorded before its id was minted is S
 	const [seventh, seventhApart] = evidenceParts(stagedDoc(dir, 'XY-007'));
 	assert.ok(seventh.includes('the real seventh work'), `on the mint day it is evidence:\n${seventh}`);
 	assert.ok(!seventh.includes('gateway work'), `the earlier use is not evidence:\n${seventh}`);
-	assert.ok(seventhApart.includes('Mentioned before XY-007 was minted (2026-08-12)') && seventhApart.includes('gateway work'),
+	assert.ok(seventhApart.includes('Recorded before this row existed (2026-08-12)') && seventhApart.includes('gateway work'),
 		`kept, set apart, labelled:\n${seventhApart}`);
 	const [sixth, sixthApart] = evidenceParts(stagedDoc(dir, 'XY-006'));
 	assert.ok(sixth.includes('XY-006 real sixth work') && !sixth.includes('early gateway mention'), `an undated line is dated by blame:\n${sixth}`);
@@ -2500,6 +2500,29 @@ test('[migrate-evidence] DOCS-075: with no history to date against, nothing is s
 	assert.strictEqual(apart, '');
 	assert.ok(seventh.includes('gateway work') && seventh.includes('the real seventh work'), seventh);
 	assert.ok(/not checked against when/.test(seventh), seventh);
+});
+
+test('[migrate-evidence] DOCS-078: a set-aside is a PROMPT - neutral wording, and the backfill shape named from the data', () => {
+	// Measured downstream: a row backfilled for work already delivered had every one of its evidence lines set apart
+	// under "most likely an earlier, unminted use of the number" - mechanically right, and exactly backwards.
+	const dir = mintedLateRepo();
+	assert.strictEqual(cli(['migrate-project', '--write'], dir).code, 0);
+	const [, apart] = evidenceParts(stagedDoc(dir, 'XY-007'));
+	assert.ok(/### Recorded before this row existed \(2026-08-12\)/.test(apart), apart);
+	assert.ok(/XY-007/.test(apart) && !/unminted use/.test(apart), `no story is asserted:\n${apart}`);
+	assert.ok(/some earlier|recorded before the row and some after|decide/i.test(apart), apart);
+	assert.ok(!/every line for/.test(apart), 'XY-007 has a later line too, so it is not the backfill shape');
+
+	// A row whose evidence is ALL earlier than itself: the shape of a row written down after the work.
+	const back = mintedLateRepo();
+	fs.appendFileSync(path.join(back, 'config/STATUS.yaml'), "  - '2026-08-02 [XY-009] backfilled work, delivered before its row'\n");
+	const roadmap = path.join(back, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(roadmap, fs.readFileSync(roadmap, 'utf8').replace('| XY-007 | planned | seventh | z |', '| XY-007 | planned | seventh | z |\n| XY-009 | planned | ninth | v |'));
+	git(back, 'add', '-A'); git(back, 'commit', '-qm', 'backfill', '--date=2026-08-25T12:00:00+0000');
+	cli(['migrate-project', '--write'], back);
+	const [, ninth] = evidenceParts(stagedDoc(back, 'XY-009'));
+	assert.ok(/### Recorded before this row existed \(2026-08-25\)/.test(ninth), ninth);
+	assert.ok(/Every line for XY-009 \(2026-08-25\) predates its row/.test(ninth), `the backfill shape is named:\n${ninth}`);
 });
 
 test('[migrate-evidence] DOCS-077: a tree whose register all arrives in its first commit cannot date evidence', () => {
