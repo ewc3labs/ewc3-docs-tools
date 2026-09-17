@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-063<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-064<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -85,6 +85,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-061 | 🟦 tested | `format` lifts reference definitions out of fenced code and re-emits them as live links | S | [DOCS-061][docs-061] | unit-tested against the exact lines it destroyed, failing before and passing after; not yet re-run across another repo |
 | DOCS-062 | 🟦 tested | `migrate-project` regenerates over slice documents that predate frontmatter, and adoption deletes the kept ones | M | [DOCS-062][docs-062] | every existing document is inventoried and staged byte-for-byte; ids match padding-insensitively; unit-tested, and a read-only census of a 57-repo downstream estate found 33 older documents, most in one repo migration cannot reach |
 | DOCS-063 | ⬜ planned | Public docs, comments and tests still name a downstream estate | M | [DOCS-063][docs-063] |  |
+| DOCS-064 | ⬜ planned | Review findings deferred when the index gate and legacy-document migration merged | M | [DOCS-064][docs-064] |  |
 
 ## Done
 
@@ -169,6 +170,7 @@ caught.
 [docs-061]: slices/DOCS-061_Format_lifts_definitions_out_of_fenced_code.md
 [docs-062]: slices/DOCS-062_Migration_regenerates_over_older_slice_documents.md
 [docs-063]: slices/DOCS-063_Public_docs_and_tests_name_a_downstream_estate.md
+[docs-064]: slices/DOCS-064_Review_findings_deferred_at_merge.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
