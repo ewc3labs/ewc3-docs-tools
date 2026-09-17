@@ -1078,7 +1078,11 @@ function cmdSlice(root, config, argv) {
 	fs.writeFileSync(plan.roadmap, plan.roadmapText);
 	console.log(`  minted:    ${plan.id}`);
 	// Last Used and any other derived value move with the mint, so `values --check` stays green.
-	return config.values ? cmdValues(repo, config, []) : 0;
+	const valuesCode = config.values ? cmdValues(repo, config, []) : 0;
+	// Values first, then format - as `fix` does. A refreshed value that grows across a wrap boundary would
+	// otherwise leave a register that was format-clean before the mint unformatted after it (Codex, PR #13).
+	if (plan.reformat) { formatFiles([plan.roadmap], { ...(config.format || {}) }); }
+	return valuesCode;
 }
 
 function cmdTables(root, config, argv) {

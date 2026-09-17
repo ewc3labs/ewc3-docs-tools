@@ -2589,6 +2589,36 @@ test('[slice-new] a register kept format-clean stays format-clean, so index --ch
 	assert.strictEqual(cli(['format', '--check', roadmap], dir).code, 0, 'still format-clean');
 });
 
+test('[slice-new] a value refreshed by the mint cannot leave a format-clean register unformatted', () => {
+	// Codex, PR #13: formatting ran BEFORE values were refreshed, so a computed value in prose that grew across
+	// a wrap boundary (FIX-1 to FIX-10) left the register unformatted. Values first, then format - as `fix` does.
+	const dir = mintRepo();
+	const roadmap = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	const marker = (v) => `<!--ewc3:lastFIX-->${v}<!--/ewc3:lastFIX-->`;
+	const base = mintRoadmap(dir);
+	let chosen = null;
+	// Word lengths step by five characters, so vary the padding too until the value's growth crosses the edge.
+	for (let n = 1; n < 40 && !chosen; n++) {
+		for (let k = 0; k < 5 && !chosen; k++) {
+			const candidate = format(base.replace('Nothing here.', `${'word '.repeat(n)}${'x'.repeat(k)} the last fix is ${marker('FIX-1')} and more words follow here to wrap.`));
+			// Every occurrence, as `values` does - the register's Last Used cell holds the same marker.
+			const grown = candidate.split(marker('FIX-1')).join(marker('FIX-10'));
+			if (format(grown) !== grown) { chosen = candidate; }
+		}
+	}
+	assert.ok(chosen, 'fixture: a paragraph on the wrap boundary');
+	fs.writeFileSync(roadmap, chosen);
+	fs.writeFileSync(path.join(dir, 'docs', '_ARCHIVE', 'FIX-9_old.md'), '---\nid: FIX-9\ntitle: old\n---\n');
+	assert.deepStrictEqual(mintConsistent(dir), [], 'fixture: consistent');
+	assert.strictEqual(cli(['format', '--check', 'docs/project/R_Roadmap.md'], dir).code, 0, 'fixture: format-clean');
+
+	const r = cli(['slice', 'new', 'FIX', 'Crossing the boundary', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(mintRoadmap(dir).includes(marker('FIX-10')), 'the value moved');
+	assert.strictEqual(cli(['format', '--check', 'docs/project/R_Roadmap.md'], dir).code, 0, 'still format-clean');
+	assert.deepStrictEqual(mintConsistent(dir), []);
+});
+
 test('[slice-new] a prefix mints into the table holding its highest row', () => {
 	const dir = mintRepo();
 	assert.strictEqual(cli(['slice', 'new', 'FIX', 'Small correction', '--write'], dir).code, 0);
