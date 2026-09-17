@@ -4,7 +4,7 @@ state: ⬜ planned
 title: "`fold`: git trailers become frontmatter state, idempotently"
 est: L
 doc: '[DOCS-036](slices/DOCS-036_fold_git_trailers_become_frontmatter_state_idempotently.md) · [One thing to edit][one-thing-to-edit]'
-status: ""
+status: "built: fold reads Slice:/State: trailers on the branch, newest first, and writes frontmatter state in the legend spelling; unit-tested, awaiting a downstream pilot"
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 
@@ -17,5 +17,43 @@ source: EWC3_Docs_Tools_Roadmap.md
 
 Slice:/State: ride the commit that did the work so they cannot drift from it; newest wins, and
 state_source: human is never overwritten
+
+## Built, 2026-09-17
+
+Built on request (Wilson, relayed by the downstream hub): *"The slice doc is the object. It becomes
+roadmap table as if by magic and status happens to it as if by magic."* The trailer contract was
+agreed with the hub before any lane wrote history, and the first real trailers already exist
+downstream.
+
+`ewc3-docs fold [--write | --check] [--since <rev>]`
+
+- **Parse:** trailers in a commit's last paragraph. Each `State:` belongs to the nearest `Slice:`
+  above it, so one commit can advance several slices. A `Slice:` with no `State:` is a timeline
+  event.
+- **Newest wins** in `git log --topo-order` on the checked-out branch, so trailers merged from a
+  branch count. The winning sha is recorded as `state_sha` (12 characters) and printed.
+- **Spelling:** the State word is the legend's bare word, case-insensitive, written in the
+  register's own spelling. That comes from `## State Legend` bullets (`- 💨 \`smoked\` — ...`; a
+  bullet starting with `_` is a note, not a state), else from the spellings the register's rows and
+  documents already use. A word with no spelling or two spellings is refused.
+- **Humans win:** `state_source: human` is never overwritten; the disagreement is named.
+- **Rows follow:** `--write` patches frontmatter, keeping comments and order, then renders the rows
+  through the `index` gate.
+- **The check compares the state value only.** A commit cannot contain its own sha, so a check that
+  also required `state_sha` would fail every trailer commit until a second commit folded it. A
+  commit that edits frontmatter state and carries the matching trailer passes on its own; `--write`
+  records provenance whenever it runs.
+- **Scope, not wholesale:** a slice with no trailer is never read or written, so frontmatter states
+  outside the legend in an adopted repository do not turn the check red on day one.
+- **Boundary:** fold writes slice frontmatter only. It never writes STATUS or anything
+  cross-repository; current state is read from frontmatter, and roll-ups belong to the estate's own
+  tooling (agreed with the owner of the estate's tooling).
+
+### Not built
+
+- **Adoption warnings** from the design's refusal table: a slice-doc commit without `Slice:`, and
+  code-only commits with no associable slice. Next.
+- **A commit-msg hook.** It is an open question in the design and needs Wilson's call.
+- **Cross-repository roll-up.** Explicitly not fold's job.
 
 [one-thing-to-edit]: ../../design/one-thing-to-edit.md

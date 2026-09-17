@@ -4,7 +4,7 @@ state: ⬜ planned
 title: "Refuse a Slice: trailer naming an ID with no slice document"
 est: S
 doc: '[DOCS-038](slices/DOCS-038_Refuse_a_Slice_trailer_naming_an_ID_with_no_slice_document.md) · [One thing to edit][one-thing-to-edit]'
-status: ""
+status: "built into fold: a Slice: naming no slice document is an error for commits after --since and a warning in full history; unit-tested"
 source: EWC3_Docs_Tools_Roadmap.md
 ---
 
@@ -17,5 +17,16 @@ source: EWC3_Docs_Tools_Roadmap.md
 
 measured: a commit tagged [VS-24] for VS-08 work was caught only because a human noticed, and a
 wrong pointer fails louder than a missing one
+
+## Built, 2026-09-17, inside `fold` (DOCS-036)
+
+`fold` reports a `Slice:` trailer whose id matches no slice document, live or archived under
+`docs/_ARCHIVE/`. Two other malformed shapes get the same treatment: a `State:` word outside the
+legend, and a `State:` with no `Slice:` above it.
+
+**History cannot be rewritten**, so a full-history check that failed on one old mislabel would stay
+red forever. Malformed trailers are therefore **errors for commits after `--since <rev>`**, which is
+how pull-request CI runs (`--since origin/main`), and **warnings** in full history. Each is named
+with its sha.
 
 [one-thing-to-edit]: ../../design/one-thing-to-edit.md

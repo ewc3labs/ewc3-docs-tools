@@ -2780,6 +2780,154 @@ test('[slice-new] --set on the pointer cell of a table with no Doc column is ref
 	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-036 / DOCS-038. `fold`: git trailers become slice-document state. The slice document is the object; a
+// commit that did the work records `Slice: <ID>` and `State: <word>`, and fold writes the newest one into
+// that document's frontmatter, from which `index` renders the row. Contract agreed with the downstream hub.
+
+const FOLD_LEGEND = [
+	'## State Legend', '',
+	'- ⬜ `planned` — not started',
+	'- 🟦 `coded` — source landed',
+	'- 💨 `smoked` — smoke-verified',
+	'- 🟩 `go` — good to go',
+	'- ⏸️ `deferred` — intentionally postponed',
+	'- _`tested` is **reserved** and is not a state_', '',
+];
+
+/** An adopted, committed repository with a State Legend: VS-1 and VS-2 planned. */
+function foldRepo({ legend = true } = {}) {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	w('docs/project/R_Roadmap.md', ['# R', '', ...(legend ? FOLD_LEGEND : []),
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		`| VS-1 | ${legend ? '⬜ planned' : 'planned'} | first | x |`, `| VS-2 | ${legend ? '⬜ planned' : 'coded'} | second | y |`, ''].join('\n'));
+	w('docs/project/slices/VS-1_first.md', GATE_DOC('VS-1', legend ? '⬜ planned' : 'planned', 'first', 'x'));
+	w('docs/project/slices/VS-2_second.md', GATE_DOC('VS-2', legend ? '⬜ planned' : 'coded', 'second', 'y'));
+	git(dir, 'init', '-q');
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'adopted');
+	return dir;
+}
+/** A commit whose message ends in a trailer block. Empty, because trailers are what fold reads. */
+function trailerCommit(dir, subject, trailers) {
+	git(dir, 'commit', '--allow-empty', '-qm', subject, '-m', [...trailers, 'Co-Authored-By: t <t@t>'].join('\n'));
+	return git(dir, 'rev-parse', 'HEAD');
+}
+const foldData = (dir, id) => frontmatter.read(fs.readFileSync(gateDoc(dir, id), 'utf8')).data;
+
+test('[fold] parseTrailers pairs each State with the nearest Slice above it', () => {
+	const { parseTrailers } = require('../lib/fold');
+	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'State: coded', 'Slice: VS-2', 'State: smoked', 'Co-Authored-By: x']),
+		{ pairs: [{ slice: 'VS-1', state: 'coded' }, { slice: 'VS-2', state: 'smoked' }], errors: [] });
+	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'Slice: VS-2', 'State: go']).pairs,
+		[{ slice: 'VS-1', state: null }, { slice: 'VS-2', state: 'go' }], 'a Slice with no State is a timeline event');
+	assert.ok(/State: with no Slice:/.test(parseTrailers(['State: coded']).errors[0]), 'a State with no Slice is an error');
+});
+
+test('[fold] the legend is read from State Legend bullets, glyph and all, and a reserved bullet is not a state', () => {
+	const { legendOf } = require('../lib/fold');
+	const legend = legendOf(['# R', '', ...FOLD_LEGEND].join('\n'));
+	assert.strictEqual(legend.get('smoked'), '💨 smoked');
+	assert.strictEqual(legend.get('deferred'), '⏸️ deferred', 'a two-codepoint glyph survives');
+	assert.ok(!legend.has('tested'), 'a reserved italic bullet is not a state');
+});
+
+test('[fold] --write folds the newest trailer into frontmatter and renders the row; a second run changes nothing', () => {
+	const dir = foldRepo();
+	trailerCommit(dir, '[VS-1] build it', ['Slice: VS-1', 'State: coded']);
+	const sha = trailerCommit(dir, '[VS-1] ship it', ['Slice: VS-1', 'State: SMOKED']);
+	const r = cli(['fold', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	const data = foldData(dir, 'VS-1');
+	assert.deepStrictEqual([data.state, data.state_source, data.state_sha], ['💨 smoked', 'trailer', sha.slice(0, 12)], 'newest wins, in the legend spelling');
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-1 | 💨 smoked | first | x |'), 'the row is rendered');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+	assert.strictEqual(cli(['fold', '--check'], dir).code, 0, r.out);
+	const before = fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8');
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	assert.strictEqual(fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8'), before, 'idempotent');
+});
+
+test('[fold] --check fails when frontmatter is behind its newest trailer, naming the slice and sha, and writes nothing', () => {
+	const dir = foldRepo();
+	const sha = trailerCommit(dir, 'work', ['Slice: VS-2', 'State: go']);
+	const before = fs.readFileSync(gateDoc(dir, 'VS-2'), 'utf8');
+	const r = cli(['fold', '--check'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('VS-2') && r.out.includes(sha.slice(0, 12)), r.out);
+	assert.strictEqual(fs.readFileSync(gateDoc(dir, 'VS-2'), 'utf8'), before);
+});
+
+test('[fold] one commit may advance several slices; ids match padding-insensitively', () => {
+	const dir = foldRepo();
+	trailerCommit(dir, 'both', ['Slice: VS-001', 'State: coded', 'Slice: VS-2', 'State: deferred']);
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded');
+	assert.strictEqual(foldData(dir, 'VS-2').state, '⏸️ deferred');
+});
+
+test('[fold] state_source: human is never overwritten, and the conflict is named', () => {
+	const dir = foldRepo();
+	swap(gateDoc(dir, 'VS-1'), 'state: ⬜ planned', 'state: ⏸️ deferred\nstate_source: human');
+	git(dir, 'commit', '-qam', 'a person decided');
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	const r = cli(['fold', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '⏸️ deferred');
+	assert.ok(/human/.test(r.out) && r.out.includes('VS-1'), r.out);
+	assert.strictEqual(cli(['fold', '--check'], dir).code, 0, 'a human decision is current by definition');
+});
+
+test('[fold] DOCS-038: a malformed trailer is an ERROR after --since, and a warning in full history', () => {
+	// History cannot be rewritten, so a full-history check that failed on one old mistake would stay red forever.
+	for (const [trailers, why] of [[['Slice: VS-9', 'State: coded'], /no slice document/], [['Slice: VS-1', 'State: shipped'], /not in the legend/], [['State: coded'], /State: with no Slice:/]]) {
+		const dir = foldRepo();
+		const base = git(dir, 'rev-parse', 'HEAD');
+		const sha = trailerCommit(dir, 'mislabelled', trailers);
+		const pr = cli(['fold', '--check', '--since', base], dir);
+		assert.strictEqual(pr.code, 1, `${trailers}: ${pr.out}`);
+		assert.ok(why.test(pr.out) && pr.out.includes(sha.slice(0, 12)), pr.out);
+		const full = cli(['fold', '--check'], dir);
+		assert.strictEqual(full.code, 0, `${trailers}: ${full.out}`);
+		assert.ok(/warning/i.test(full.out) && why.test(full.out), full.out);
+	}
+});
+
+test('[fold] a slice with no trailer is never touched - frontmatter states outside the legend stay as written', () => {
+	const dir = foldRepo();
+	swap(gateDoc(dir, 'VS-2'), 'state: ⬜ planned', 'state: ✅ done');
+	swap(gateRoadmap(dir), '| VS-2 | ⬜ planned |', '| VS-2 | ✅ done |');
+	git(dir, 'commit', '-qam', 'legacy state');
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-2').state, '✅ done');
+	assert.strictEqual(cli(['fold', '--check'], dir).code, 0);
+});
+
+test('[fold] with no State Legend, a word takes the spelling the register already uses', () => {
+	const dir = foldRepo({ legend: false });
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: Coded']);
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, 'coded');
+});
+
+test('[fold] a trailer merged in from a branch counts', () => {
+	const dir = foldRepo();
+	git(dir, 'checkout', '-qb', 'feature/VS-1');
+	trailerCommit(dir, 'on the branch', ['Slice: VS-1', 'State: go']);
+	git(dir, 'checkout', '-q', '-');
+	git(dir, 'merge', '-q', '--no-ff', '-m', 'merge', 'feature/VS-1');
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟩 go');
+});
+
+test('[fold] outside a git work tree, fold does not run', () => {
+	const dir = foldRepo();
+	fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });
+	assert.strictEqual(cli(['fold', '--check'], dir).code, 2);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');

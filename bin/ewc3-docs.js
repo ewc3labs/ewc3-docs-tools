@@ -25,6 +25,7 @@ const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
 const gitbase = require('../lib/gitbase');
 const { planMint } = require('../lib/mint');
+const { planFold, applyFold } = require('../lib/fold');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -1037,6 +1038,83 @@ function cmdIndex(root, config, argv) {
  * document and Last Used), the slice document, and its row in the table that already holds the prefix.
  * Dry by default. `index --write` still never mints - this is the deliberate act that does.
  */
+/**
+ * Fold git trailers into slice-document state. DOCS-036, DOCS-038.
+ *
+ *   ewc3-docs fold [--write | --check] [--since <rev>]
+ *
+ * Reads `Slice:`/`State:` trailers on the checked-out branch, newest first, and writes the newest state for
+ * each slice into its frontmatter (`state`, `state_sha`, `state_source: trailer`), then renders the rows.
+ * Dry by default. `--check` fails when a slice's frontmatter state is behind its newest trailer. A malformed
+ * trailer is an ERROR for commits after `--since` (for pull-request CI) and a WARNING in full history, which
+ * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
+ */
+function cmdFold(root, config, argv) {
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config']);
+	const VALUED = new Set(['--since', '--repo', '--config']);
+	for (const [i, a] of argv.entries()) {
+		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
+		if (VALUED.has(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) { console.error(`fold: ${a} needs a value`); return 2; }
+		if (!a.startsWith('--') && !VALUED.has(argv[i - 1])) { console.error(`fold: unexpected argument ${a}`); return 2; }
+	}
+	const write = argv.includes('--write');
+	const check = argv.includes('--check');
+	if (write && check) { console.error('fold: --write and --check are exclusive.'); return 2; }
+	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
+	const repo = path.resolve(flag('--repo') || root);
+
+	// History is the input, so git is required; a tree with unresolved conflicts is not read, and --write also
+	// refuses mid-operation because it renders rows through the index gate.
+	const repoState = gitbase.state(repo);
+	if (!repoState.git) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
+	if (write ? !repoState.ok : repoState.conflicts) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
+
+	const sliceDir = path.join(repo, 'docs', 'project', 'slices');
+	if (!fs.existsSync(sliceDir)) { console.error('fold: did not run: no docs/project/slices - fold writes into an adopted repository'); return 2; }
+	const project = path.join(repo, 'docs', 'project');
+	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps).filter((file) => {
+		const rel = path.relative(project, file);
+		return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+	});
+
+	let sinceShas = null;
+	const since = flag('--since');
+	if (since) {
+		sinceShas = gitbase.commitsSince(repo, since);
+		if (!sinceShas) { console.error(`fold: did not run: --since ${since} is not a commit`); return 2; }
+	}
+
+	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas });
+	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
+	const errors = plan.issues.filter((i) => i.inScope);
+	const warnings = plan.issues.filter((i) => !i.inScope);
+
+	console.log(`fold: states spelled from the ${plan.legendSource}`);
+	for (const c of plan.changes) { console.log(`  ${c.id}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
+	for (const c of plan.conflicts) {
+		console.log(`  ${c.id}: KEPT ${c.human} - state_source: human; the newest trailer says ${c.to || c.trailer} (${c.sha})`);
+	}
+	for (const i of errors) { console.error(`  error:   ${i.sha}  ${i.message}`); }
+	for (const i of warnings) { console.log(`  warning: ${i.sha}  ${i.message}`); }
+
+	if (check) {
+		if (plan.changes.length) { console.error(`fold --check: ${plan.changes.length} slice(s) behind their newest trailer - run \`ewc3-docs fold --write\``); }
+		const code = plan.changes.length || errors.length ? 1 : 0;
+		if (!code) { console.log('fold --check: every slice with a trailer matches its newest state'); }
+		return code;
+	}
+	if (!write) {
+		if (plan.changes.length || plan.provenance.length) { console.log('  (dry run - pass --write to fold)'); }
+		return errors.length ? 1 : 0;
+	}
+
+	[...plan.changes, ...plan.provenance].forEach(applyFold);
+	console.log(`fold: wrote ${plan.changes.length} state change(s) and ${plan.provenance.length} provenance update(s)`);
+	// The row follows the document: render through the index gate, which refuses a hand-edited row.
+	const indexCode = plan.changes.length ? cmdIndex(repo, config, ['--write']) : 0;
+	return Math.max(indexCode, errors.length ? 1 : 0);
+}
+
 function cmdSlice(root, config, argv) {
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
 	// `--state --write` must not store the state "--write" and then mint (Codex, PR #12).
@@ -1157,6 +1235,7 @@ switch (command) {
 	case 'tables': code = cmdTables(root, config, argv); break;
 	case 'index': code = cmdIndex(root, config, argv); break;
 	case 'slice': code = cmdSlice(root, config, argv); break;
+	case 'fold': code = cmdFold(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':
