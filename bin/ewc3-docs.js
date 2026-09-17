@@ -740,6 +740,7 @@ function cmdIndex(root, config, argv) {
 
 	let code = 0;
 	let anyIndex = false;
+	let duplicateRows = false;
 	const plans = [];
 	for (const file of roadmaps) {
 		const rel = path.relative(repo, file).split(path.sep).join('/');
@@ -777,6 +778,7 @@ function cmdIndex(root, config, argv) {
 		for (const [id, at] of lines) {
 			if (at.length < 2) { continue; }
 			code = 1;
+			duplicateRows = true;
 			console.log(`  DUPLICATE ${id} on ${at.length} rows: ${at.map((n) => `${rel}:${n}`).join('  ')}`);
 		}
 
@@ -829,6 +831,13 @@ function cmdIndex(root, config, argv) {
 		console.error('index: no roadmap in that tree carries a recognised Delivery Index.');
 		roadmaps.forEach((r) => console.error(`  looked at: ${path.relative(repo, r).split(path.sep).join('/')}`));
 		return 2;
+	}
+
+	// Never write a register that carries one id twice: both rows would be rendered from the one
+	// document, and whatever made them differ is gone before the exit code reports it (Codex, PR #6).
+	if (write && duplicateRows) {
+		console.error('index: REFUSED - an id on more than one row. Keep one row per id, then run again. Nothing was written.');
+		return 1;
 	}
 
 	if (write) {

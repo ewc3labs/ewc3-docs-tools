@@ -2072,6 +2072,20 @@ test('[index-gate] J: one id with two rows fails, naming BOTH lines', () => {
 	assert.ok(r.out.includes('R_Roadmap.md:7') && r.out.includes('R_Roadmap.md:9'), r.out);
 });
 
+test('[index-gate] J: one id with two rows REFUSES --write - both rows would be rendered from one document', () => {
+	// Codex, PR #6. Both committed rows matched their baseline, so the gate let them through and both were
+	// overwritten with the same document's values - exit 1, after the content was already gone.
+	const dir = gateRepo();
+	swap(gateRoadmap(dir), '| VS-2 | coded | second | y |\n', '| VS-2 | coded | second | y |\n| VS-001 | planned | a different row | z |\n');
+	git(dir, 'commit', '-qam', 'duplicate, committed');
+	swap(gateDoc(dir, 'VS-1'), 'title: first', 'title: renamed');
+	const before = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('R_Roadmap.md:7') && r.out.includes('R_Roadmap.md:9'), r.out);
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), before, 'nothing written');
+});
+
 test('[index-gate] K1: malformed slice frontmatter exits 1 NAMING THE FILE, and writes nothing', () => {
 	// Expected bad input is a finding, not a crash - a raw stack trace exiting 1 names nothing.
 	const dir = gateRepo();
