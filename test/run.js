@@ -2425,7 +2425,7 @@ test('[migrate-legacy] a second run leaves no stale backup behind', () => {
 });
 
 test('[migrate-legacy] a document with no id ANYWHERE is not a slice - staged in place, not backed up as legacy', () => {
-	// PMO census, 2026-09-17: the slices folder README.md in SX_DW, SX_Coder, DevTools and AI Runtime went
+	// Downstream census, 2026-09-17: the slices folder README.md in all four repositories that had one went
 	// to _legacy/, so adopting the staged tree removed it from slices/. With no id in frontmatter or
 	// filename it is not a slice document at all; it is copied verbatim to where it was.
 	const readme = '# Slices\n\nOne document per slice. Edit the document, never the row.\n';
@@ -2441,8 +2441,8 @@ test('[migrate-legacy] a document with no id ANYWHERE is not a slice - staged in
 });
 
 test('[migrate-legacy] the inventory shows an id AS WRITTEN, so a grep for it finds the line', () => {
-	// PMO census: the inventory printed DW-12 while the filename, the row and the frontmatter all said
-	// DW-012. Matching stays padding-insensitive; only the display changes.
+	// Downstream census: the inventory printed XX-12 while the filename, the row and the frontmatter all
+	// said XX-012. Matching stays padding-insensitive; only the display changes.
 	const { dir } = legacyRepo({ 'VS-0006_no_row.md': 'An older document, id in the filename only.\n' });
 	const r = cli(['migrate-project'], dir);
 	assert.ok(/VS-004_padded\.md\s+VS-004\s/.test(r.out), r.out);

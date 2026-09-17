@@ -433,7 +433,7 @@ function cmdMigrateProject(root, config, argv) {
 			const noRow = e.id && !rowIds.has(e.id) ? ' - no row carries this id' : '';
 			// No id in frontmatter OR filename: not a slice document at all - a folder README, a note. It was
 			// backed up to _legacy/, so adopting the staged tree took the README out of slices/ in four
-			// repos (PMO census, 2026-09-17). It is copied verbatim to where it was.
+			// repos (downstream census, 2026-09-17). It is copied verbatim to where it was.
 			const action = e.frontmatter === 'ok' ? `kept, copied verbatim${noRow}`
 				: !e.id ? 'no id in frontmatter or filename - not a slice document, copied verbatim'
 					: `backed up to slices/_legacy/${noRow || ', new document generated and linked to it'}`;
