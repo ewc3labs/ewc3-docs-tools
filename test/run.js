@@ -2502,6 +2502,45 @@ test('[migrate-evidence] DOCS-075: with no history to date against, nothing is s
 	assert.ok(/not checked against when/.test(seventh), seventh);
 });
 
+test('[migrate-evidence] DOCS-077: a tree whose register all arrives in its first commit cannot date evidence', () => {
+	// An exported tree re-initialised (git archive, then git init) is NOT shallow, so every id looked minted on the
+	// day of the import: dated lines were all set apart, undated ones never were, and a green run proved nothing.
+	const src = mintedLateRepo();
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'import-'));
+	fs.cpSync(path.join(src, 'docs'), path.join(dir, 'docs'), { recursive: true });
+	fs.cpSync(path.join(src, 'config'), path.join(dir, 'config'), { recursive: true });
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'import', '--date=2026-08-01T12:00:00+0000');
+	const r = cli(['migrate-project', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/dates not checked/.test(r.out) && /first commit/.test(r.out), `the report says so:\n${r.out}`);
+	const [seventh, apart] = evidenceParts(stagedDoc(dir, 'XY-007'));
+	assert.strictEqual(apart, '', 'nothing is set apart from an import date');
+	assert.ok(seventh.includes('gateway work') && /not checked against when/.test(seventh), seventh);
+
+	// A register that did NOT all arrive at once is dated as usual.
+	const roadmap = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(roadmap, fs.readFileSync(roadmap, 'utf8').replace('| XY-007 | planned | seventh | z |', '| XY-007 | planned | seventh | z |\n| XY-008 | planned | eighth | w |'));
+	git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'later row', '--date=2026-08-09T12:00:00+0000');
+	const again = cli(['migrate-project', '--write'], dir);
+	assert.ok(!/dates not checked/.test(again.out), `dating resumes:\n${again.out}`);
+
+	// Codex, PR #23: the test is which COMMIT added each row, not its calendar date. A later commit on the same day
+	// is still a later mint, and dating must stay on.
+	const sameDay = fs.mkdtempSync(path.join(os.tmpdir(), 'sameday-'));
+	const roadmapOf = (rows) => ['# R', '', '## Delivery Index', '', '| ID | State |', '| --- | --- |', ...rows, ''].join('\n');
+	fs.mkdirSync(path.join(sameDay, 'docs', 'project'), { recursive: true });
+	const file = path.join(sameDay, 'docs/project/R_Roadmap.md');
+	git(sameDay, 'init', '-q');
+	fs.writeFileSync(file, roadmapOf(['| XY-001 | planned |']));
+	git(sameDay, 'add', '-A'); git(sameDay, 'commit', '-qm', 'a', '--date=2026-08-01T09:00:00+0000');
+	fs.writeFileSync(file, roadmapOf(['| XY-001 | planned |', '| XY-002 | planned |']));
+	git(sameDay, 'add', '-A'); git(sameDay, 'commit', '-qm', 'b', '--date=2026-08-01T17:00:00+0000');
+	const { mintDates } = require('../lib/evidence');
+	const m = mintDates(sameDay);
+	assert.strictEqual(m.ok, true, `a second commit on the same day is still a second mint: ${m.reason}`);
+	assert.strictEqual(m.dates.get('XY-2'), '2026-08-01');
+});
+
 test('[migrate-evidence] DOCS-075: blame dates lines in a SHA-256 repository too', () => {
 	// Codex, PR #21: the porcelain header matched 40 hex characters only, so a SHA-256 repository dated no line.
 	const { lineDates } = require('../lib/evidence');

@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-076<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-077<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -98,6 +98,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-074 | 🟦 tested | fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend | S | [DOCS-074][docs-074] |  |
 | DOCS-075 | 🟦 tested | migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice | M | [DOCS-075][docs-075] |  |
 | DOCS-076 | ⬜ planned | slice new: a first mint into an empty register declared slice-documents creates slices/ | S | [DOCS-076][docs-076] |  |
+| DOCS-077 | 🟦 tested | migrate-project: a tree whose history begins at its import cannot date evidence, and says so | S | [DOCS-077][docs-077] |  |
 
 ## Done
 
@@ -195,6 +196,7 @@ caught.
 [docs-074]: slices/DOCS-074_fold_a_State_Legend_it_cannot_fully_read_does_not_run_rath.md
 [docs-075]: slices/DOCS-075_migrate_project_evidence_recorded_before_an_ID_was_minted.md
 [docs-076]: slices/DOCS-076_slice_new_a_first_mint_into_an_empty_register_declared_sli.md
+[docs-077]: slices/DOCS-077_migrate_project_a_tree_whose_history_begins_at_its_import.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
