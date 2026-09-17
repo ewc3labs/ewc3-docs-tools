@@ -2555,13 +2555,38 @@ test('[slice-new] --write mints past an ARCHIVED id, in the right table, and eve
 	const lines = mintRoadmap(dir).split('\n');
 	const at = lines.findIndex((l) => l.startsWith('| VS-008 '));
 	assert.ok(at > lines.findIndex((l) => l.startsWith('| VS-002 ')) && at < lines.indexOf('### Hotfixes'), 'under Vertical Slices, after VS-002');
-	assert.ok(lines[at].includes('| M |') && lines[at].includes('slices/VS-008_Title_with_a_colon.md'), lines[at]);
+	// The link may be inline or, in a format-clean register, a reference to a definition - either way it resolves.
+	assert.ok(lines[at].includes('| M |') && lines[at].includes('[VS-008]') && mintRoadmap(dir).includes('slices/VS-008_Title_with_a_colon.md'), lines[at]);
 	assert.ok(mintRoadmap(dir).includes('<!--ewc3:lastVS-->VS-008<!--/ewc3:lastVS-->'), 'Last Used refreshed');
 	assert.deepStrictEqual(mintConsistent(dir), []);
 
 	assert.strictEqual(cli(['slice', 'new', 'VS', 'Another', '--write'], dir).code, 0);
 	assert.ok(fs.existsSync(path.join(dir, 'docs', 'project', 'slices', 'VS-009_Another.md')), 'the next mint is +1');
 	assert.deepStrictEqual(mintConsistent(dir), []);
+});
+
+test('[slice-new] a register kept format-clean stays format-clean, so index --check passes after a mint', () => {
+	// Found dogfooding on this repository: the mint added a long INLINE doc link to a register whose links
+	// `format` had moved into reference definitions. The roadmap outside its rows stopped being format's
+	// output, so index --check stopped accepting the formatted form for every row - and every older row
+	// read as diverged. A format-clean register is formatted again after the row is inserted.
+	const dir = mintRepo();
+	const roadmap = path.join('docs', 'project', 'R_Roadmap.md');
+	for (const [from, to] of [['VS-001_first.md', 'VS-001_a_first_slice_with_a_long_enough_name.md'], ['VS-002_second.md', 'VS-002_a_second_slice_with_a_long_enough_name.md']]) {
+		const slices = path.join(dir, 'docs', 'project', 'slices');
+		fs.renameSync(path.join(slices, from), path.join(slices, to));
+		fs.writeFileSync(path.join(slices, to), fs.readFileSync(path.join(slices, to), 'utf8').replace(from, to));
+		fs.writeFileSync(path.join(dir, roadmap), mintRoadmap(dir).replace(from, to));
+	}
+	assert.strictEqual(cli(['format', roadmap], dir).code, 0);
+	assert.ok(mintRoadmap(dir).includes(']: slices/VS-001_a_first_slice'), 'fixture: format moved links into definitions');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'fixture: consistent and formatted');
+
+	const r = cli(['slice', 'new', 'VS', 'Another slice with a long enough title to move', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 0, check.out);
+	assert.strictEqual(cli(['format', '--check', roadmap], dir).code, 0, 'still format-clean');
 });
 
 test('[slice-new] a prefix mints into the table holding its highest row', () => {
@@ -2705,7 +2730,8 @@ test('[slice-new] --set on the pointer cell of a table with no Doc column is ref
 	const ok = cli(['slice', 'new', 'VS', 'Visible pointer', '--set', 'est=M', '--write'], dir);
 	assert.strictEqual(ok.code, 0, ok.out);
 	const row = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8').split('\n').find((l) => l.startsWith('| VS-2 '));
-	assert.ok(row.includes('See [slice notes](slices/VS-2_Visible_pointer.md).') && row.includes('| M |'), row);
+	const text = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	assert.ok(row.includes('See [slice notes]') && row.includes('| M |') && text.includes('slices/VS-2_Visible_pointer.md'), row);
 	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
 });
 

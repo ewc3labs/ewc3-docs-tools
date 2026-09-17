@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-066<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-067<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -88,6 +88,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-064 | ⬜ planned | Review findings deferred when the index gate and legacy-document migration merged | M | [DOCS-064][docs-064] |  |
 | DOCS-065 | 🟦 tested | `migrate-project` and `index` disagree about every row of the register migrate writes, and the moved prose breaks links | M | [DOCS-065][docs-065] | migrate renders its register with index's own renderer; every row's Status moves to its body; moved links are repointed and evidence is quoted; unit-tested end to end on both register shapes, awaiting a downstream re-run |
 | DOCS-066 | 🟦 tested | Frontmatter is written in a form strict YAML rejects, so GitHub shows an error on every migrated document | S | [DOCS-066][docs-066] | plain only when strict YAML agrees; format re-quotes existing unsafe values without churning quoted ones; verified out-of-band with js-yaml, awaiting a downstream PyYAML gate |
+| DOCS-067 | ⬜ planned | slice new: match a bare --state word to the register's own spelling | S | [DOCS-067][docs-067] |  |
 
 ## Done
 
@@ -175,6 +176,7 @@ caught.
 [docs-064]: slices/DOCS-064_Review_findings_deferred_at_merge.md
 [docs-065]: slices/DOCS-065_Migrate_and_index_disagree_about_the_register.md
 [docs-066]: slices/DOCS-066_Frontmatter_written_that_strict_YAML_rejects.md
+[docs-067]: slices/DOCS-067_slice_new_match_a_bare_state_word_to_the_register_s_own_sp.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md

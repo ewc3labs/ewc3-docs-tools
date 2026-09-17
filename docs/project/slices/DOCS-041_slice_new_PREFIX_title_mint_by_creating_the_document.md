@@ -70,6 +70,15 @@ Codex and Copilot found six ways a mint could go quietly wrong. Each is fixed an
 - **With no Doc column, the pointer cell cannot be `--set`.** Filling it would hide the new
   document.
 
+### Dogfood, on this repository
+
+The first real mint here, `DOCS-067`, made `index --check` fail on **48 rows**. This register is
+kept `format`-clean, so its doc links are reference-style. The new row's link was inline, so the
+roadmap outside its rows stopped being `format`'s output, and the gate stopped accepting the
+formatted form for every row. A register that was `format`-clean before a mint is now formatted
+again after the row is inserted, and `format` never changes a word. Downstream verification had
+passed because that register is not kept `format`-clean. A test pins both shapes.
+
 ### Not built
 
 - **A mint interrupted between writing the document and the row** leaves a document `index` reports
