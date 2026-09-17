@@ -2055,6 +2055,27 @@ test('[index-gate] P: an edge character GFM does NOT trim is still a difference'
 	assert.strictEqual(check.code, 1, check.out);
 });
 
+test('[index-gate] --write keeps a format-clean register format-clean - no churn of every row', () => {
+	// Found dogfooding fold: one state change made `index --write` re-render EVERY row with inline links in a
+	// register `format` had moved to reference style - a 98-line diff, and `check` red until `fix`.
+	const dir = gateRepo();
+	const target = 'slices/VS-1_a_path_long_enough_that_format_moves_it.md';
+	swap(gateDoc(dir, 'VS-1'), 'status: x', `status: see [VS-1](${target})`);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	assert.strictEqual(cli(['format', 'docs/project/R_Roadmap.md'], dir).code, 0);
+	git(dir, 'commit', '-qam', 'formatted register');
+	const formatted = fs.readFileSync(gateRoadmap(dir), 'utf8');
+
+	swap(gateDoc(dir, 'VS-2'), 'state: coded', 'state: planned');
+	const r = cli(['index', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.strictEqual(cli(['format', '--check', 'docs/project/R_Roadmap.md'], dir).code, 0, 'still format-clean');
+	const changed = git(dir, 'diff', '--numstat', '--', 'docs/project/R_Roadmap.md').split('\t').slice(0, 2).map(Number);
+	assert.deepStrictEqual(changed, [1, 1], `only the VS-2 row changes:\n${git(dir, 'diff')}`);
+	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8') !== formatted);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+});
+
 test('[index-gate] L: a row as `format` rewrote it is consistent - with no link syntax parsed at all', () => {
 	// Found dogfooding: `index` renders `[DOCS-001](slices/...)` and `format` rewrites it to
 	// `[DOCS-001][docs-001]` plus a definition, so all 43 rows here read as diverged. Six review rounds
@@ -2839,6 +2860,7 @@ test('[fold] --write folds the newest trailer into frontmatter and renders the r
 	const sha = trailerCommit(dir, '[VS-1] ship it', ['Slice: VS-1', 'State: SMOKED']);
 	const r = cli(['fold', '--write'], dir);
 	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('VS-1: ⬜ planned -> 💨 smoked'), `the id as written, not normalised:\n${r.out}`);
 	const data = foldData(dir, 'VS-1');
 	assert.deepStrictEqual([data.state, data.state_source, data.state_sha], ['💨 smoked', 'trailer', sha.slice(0, 12)], 'newest wins, in the legend spelling');
 	assert.ok(fs.readFileSync(gateRoadmap(dir), 'utf8').includes('| VS-1 | 💨 smoked | first | x |'), 'the row is rendered');
@@ -2920,6 +2942,61 @@ test('[fold] a trailer merged in from a branch counts', () => {
 	git(dir, 'merge', '-q', '--no-ff', '-m', 'merge', 'feature/VS-1');
 	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
 	assert.strictEqual(foldData(dir, 'VS-1').state, '🟩 go');
+});
+
+test('[fold] NO REGISTER is an explicit no-op; a register with no slices still checks; a half-adopted repo does not run', () => {
+	// Ruled downstream: a repository with no register may carry `Slice:` trailers as EVIDENCE for another
+	// repository's slices, and must never fail on them. Distinct from a register with zero slices.
+	const none = fs.mkdtempSync(path.join(os.tmpdir(), 'fold-none-'));
+	fs.writeFileSync(path.join(none, 'README.md'), '# app\n');
+	git(none, 'init', '-q');
+	git(none, 'add', '-A');
+	git(none, 'commit', '-qm', 'app');
+	const base = git(none, 'rev-parse', 'HEAD');
+	trailerCommit(none, 'evidence for another repository', ['Slice: VS-900', 'State: coded']);
+	for (const argv of [['--check'], ['--check', '--since', base], ['--write'], []]) {
+		const r = cli(['fold', ...argv], none);
+		assert.strictEqual(r.code, 0, `${argv.join(' ')}: ${r.out}`);
+		assert.ok(/no register/i.test(r.out), r.out);
+	}
+
+	const empty = foldRepo();
+	for (const n of fs.readdirSync(path.join(empty, 'docs', 'project', 'slices'))) { fs.unlinkSync(path.join(empty, 'docs', 'project', 'slices', n)); }
+	fs.writeFileSync(path.join(empty, 'docs', 'project', 'slices', 'README.md'), '# slices\n');
+	git(empty, 'add', '-A');
+	git(empty, 'commit', '-qm', 'no slices yet');
+	const emptyBase = git(empty, 'rev-parse', 'HEAD');
+	trailerCommit(empty, 'mislabel', ['Slice: VS-9', 'State: coded']);
+	const zero = cli(['fold', '--check', '--since', emptyBase], empty);
+	assert.strictEqual(zero.code, 1, zero.out);
+	assert.ok(/no slice document/.test(zero.out) && !/no register/i.test(zero.out), zero.out);
+
+	// A register kept as hand-edited ROWS (a Delivery Index, no slice documents) is a legitimate mode, not a
+	// broken adoption: nothing to fold, exit 0 (ruled downstream - most of an estate runs this way).
+	const rows = foldRepo();
+	fs.rmSync(path.join(rows, 'docs', 'project', 'slices'), { recursive: true, force: true });
+	const rowsRun = cli(['fold', '--check'], rows);
+	assert.strictEqual(rowsRun.code, 0, rowsRun.out);
+	assert.ok(/rows register/i.test(rowsRun.out), rowsRun.out);
+
+	// A DECLARED mode that the documents contradict did not run - either way round. Adoption is read off the
+	// documents, so deleting a declaration can never turn a check green.
+	const declaredSlices = foldRepo();
+	fs.rmSync(path.join(declaredSlices, 'docs', 'project', 'slices'), { recursive: true, force: true });
+	fs.writeFileSync(path.join(declaredSlices, '.ewc3-docs.json'), JSON.stringify({ planning: 'slice-documents' }));
+	const r1 = cli(['fold', '--check'], declaredSlices);
+	assert.strictEqual(r1.code, 2, r1.out);
+	assert.ok(/did not run/.test(r1.out) && /slice-documents/.test(r1.out), r1.out);
+
+	const declaredRows = foldRepo();
+	fs.writeFileSync(path.join(declaredRows, '.ewc3-docs.json'), JSON.stringify({ planning: 'roadmap-rows' }));
+	const r2 = cli(['fold', '--check'], declaredRows);
+	assert.strictEqual(r2.code, 2, r2.out);
+	assert.ok(/did not run/.test(r2.out) && /roadmap-rows/.test(r2.out), r2.out);
+
+	const bogus = foldRepo();
+	fs.writeFileSync(path.join(bogus, '.ewc3-docs.json'), JSON.stringify({ planning: 'slices' }));
+	assert.strictEqual(cli(['fold', '--check'], bogus).code, 2, 'an unknown planning value is refused');
 });
 
 test('[fold] outside a git work tree, fold does not run', () => {

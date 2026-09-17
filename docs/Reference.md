@@ -117,6 +117,7 @@ Declaring a default back to the tool reads, later, as deliberate divergence.
 | `links.skipDirs` | see below | directory **names** never descended into, at any depth |
 | `series.roadmaps` | `["docs/project/*Roadmap.md", "docs/project/*ROADMAP.md", "docs/project/roadmap/*Roadmap.md", "docs/project/roadmap/*ROADMAP.md", "docs/project/backlog/*Backlog.md", "docs/project/*Backlog.md"]` | the planning surfaces allowed to mint an ID |
 | `series.widths` | `{}` | the **declared** minimum digit width per prefix, e.g. `{ "DOCS": 3 }`; see below |
+| `planning` | read off the layout | `"slice-documents"` or `"roadmap-rows"`: how this repository keeps its register. `fold` folds only slice documents; a rows register, or no register, is a no-op. A declaration the documents contradict is refused, so deleting it never turns a check green. |
 | `values` | `{}` | see [Resolvers](#resolvers) |
 
 Default `skipDirs`: `node_modules`, `.git`, `dist`, `out`, `.vscode-test`, `archive`, `scratch`,

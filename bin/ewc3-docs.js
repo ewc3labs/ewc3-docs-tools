@@ -999,8 +999,15 @@ function cmdIndex(root, config, argv) {
 		const last = gitbase.loadLastWritten(repo, repoState.head);
 		for (const { file, rel, res, changed, everyForm } of plans) {
 			if (changed) {
+				// A REGISTER KEPT FORMAT-CLEAN STAYS FORMAT-CLEAN. Rows render with inline links; in a register
+				// `format` moved to reference style, one state change re-rendered EVERY row - a whole-table diff,
+				// and `check` red until `fix` (found folding on this repository). `format` never changes a word.
+				const before = fs.readFileSync(file, 'utf8');
+				const lf = before.split('\r\n').join('\n');
+				const formatOptions = { ...(config.format || {}) };
 				fs.writeFileSync(file, res.text);
-				console.log(`${rel}: written`);
+				if (format(lf, formatOptions) === lf) { formatFiles([file], formatOptions); }
+				console.log(fs.readFileSync(file, 'utf8') === before ? `${rel}: already current` : `${rel}: written`);
 			}
 			// Both forms, so render -> `fix` -> render is not read as a hand edit of the formatted row. The
 			// formatted form is recorded even when it was not accepted for comparison: it is what `fix` makes
@@ -1069,13 +1076,37 @@ function cmdFold(root, config, argv) {
 	if (!repoState.git) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
 	if (write ? !repoState.ok : repoState.conflicts) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
 
-	const sliceDir = path.join(repo, 'docs', 'project', 'slices');
-	if (!fs.existsSync(sliceDir)) { console.error('fold: did not run: no docs/project/slices - fold writes into an adopted repository'); return 2; }
 	const project = path.join(repo, 'docs', 'project');
+	const sliceDir = path.join(project, 'slices');
 	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps).filter((file) => {
 		const rel = path.relative(project, file);
 		return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 	});
+
+	// WHICH KIND OF REGISTER THIS IS. A repository may keep a hand-edited Delivery Index (roadmap-rows) - most of
+	// an estate legitimately does - or slice documents, or no register at all, while still carrying `Slice:`
+	// trailers as evidence for another repository's slices. Only slice documents fold. The mode is DECLARED by the
+	// optional `planning` config key, else read off the layout; a declaration the documents contradict did not run,
+	// either way round, so deleting a declaration can never turn a check green.
+	const hasIndex = roadmaps.some((f) => /^##\s+Delivery Index/im.test(fs.readFileSync(f, 'utf8')));
+	const idDocs = fs.existsSync(sliceDir) && inventorySlices(fs.readdirSync(sliceDir).filter((n) => /\.md$/i.test(n))
+		.map((name) => ({ name, text: fs.readFileSync(path.join(sliceDir, name), 'utf8') }))).some((e) => e.frontmatter === 'ok');
+	const declared = config.planning;
+	if (declared !== undefined && declared !== 'slice-documents' && declared !== 'roadmap-rows') {
+		console.error(`fold: did not run: planning is ${JSON.stringify(declared)}; it must be "slice-documents" or "roadmap-rows"`);
+		return 2;
+	}
+	if (declared === 'slice-documents' && !fs.existsSync(sliceDir)) {
+		console.error('fold: did not run: planning is declared "slice-documents" but there is no docs/project/slices');
+		return 2;
+	}
+	if (declared === 'roadmap-rows' && idDocs) {
+		console.error('fold: did not run: planning is declared "roadmap-rows" but slice documents in docs/project/slices declare ids');
+		return 2;
+	}
+	const mode = declared || (fs.existsSync(sliceDir) ? 'slice-documents' : hasIndex ? 'roadmap-rows' : null);
+	if (mode === 'roadmap-rows') { console.log('fold: rows register: nothing to fold - the Delivery Index is kept as rows, not slice documents'); return 0; }
+	if (!mode) { console.log('fold: no register: nothing to fold - no Delivery Index and no slice documents; Slice: trailers here are evidence only'); return 0; }
 
 	let sinceShas = null;
 	const since = flag('--since');
@@ -1090,9 +1121,9 @@ function cmdFold(root, config, argv) {
 	const warnings = plan.issues.filter((i) => !i.inScope);
 
 	console.log(`fold: states spelled from the ${plan.legendSource}`);
-	for (const c of plan.changes) { console.log(`  ${c.id}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
+	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
 	for (const c of plan.conflicts) {
-		console.log(`  ${c.id}: KEPT ${c.human} - state_source: human; the newest trailer says ${c.to || c.trailer} (${c.sha})`);
+		console.log(`  ${c.written}: KEPT ${c.human} - state_source: human; the newest trailer says ${c.to || c.trailer} (${c.sha})`);
 	}
 	for (const i of errors) { console.error(`  error:   ${i.sha}  ${i.message}`); }
 	for (const i of warnings) { console.log(`  warning: ${i.sha}  ${i.message}`); }
