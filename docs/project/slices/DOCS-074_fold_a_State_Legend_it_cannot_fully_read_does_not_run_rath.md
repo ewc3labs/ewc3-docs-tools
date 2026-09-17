@@ -1,10 +1,12 @@
 ---
 id: DOCS-074
-state: ⬜ planned
+state: 🟦 tested
 title: "fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend"
 est: S
 doc: "[DOCS-074](slices/DOCS-074_fold_a_State_Legend_it_cannot_fully_read_does_not_run_rath.md)"
 status: ""
+state_sha: 4c29f88ae6ba
+state_source: trailer
 ---
 
 # DOCS-074 — fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend

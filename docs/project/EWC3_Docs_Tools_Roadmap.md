@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-074<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-075<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -95,7 +95,8 @@ is never referenced from outside the repository it fixes.
 | DOCS-071 | ⬜ planned | fold --check --since: say out-of-range trailers were not checked | S | [DOCS-071][docs-071] |  |
 | DOCS-072 | ⬜ planned | One frontmatter shape: migrate writes doc only for a Doc column, and no source | S | [DOCS-072][docs-072] |  |
 | DOCS-073 | ⬜ planned | fold --check-message: validate a commit message's trailers before it is committed | M | [DOCS-073][docs-073] |  |
-| DOCS-074 | ⬜ planned | fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend | S | [DOCS-074][docs-074] |  |
+| DOCS-074 | 🟦 tested | fold: a State Legend it cannot fully read does not run, rather than folding against a partial legend | S | [DOCS-074][docs-074] |  |
+| DOCS-075 | ⬜ planned | migrate-project: evidence recorded before an ID was minted is set apart, not attributed to the slice | M | [DOCS-075][docs-075] |  |
 
 ## Done
 
@@ -191,6 +192,7 @@ caught.
 [docs-072]: slices/DOCS-072_One_frontmatter_shape_migrate_writes_doc_only_for_a_Doc_co.md
 [docs-073]: slices/DOCS-073_fold_check_message_validate_a_commit_message_s_trailers_be.md
 [docs-074]: slices/DOCS-074_fold_a_State_Legend_it_cannot_fully_read_does_not_run_rath.md
+[docs-075]: slices/DOCS-075_migrate_project_evidence_recorded_before_an_ID_was_minted.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
