@@ -1361,6 +1361,15 @@ test('[frontmatter] normalize re-quotes only unsafe lines, keeping comments, ord
 	assert.strictEqual(normalize(out), out, 'idempotent');
 });
 
+test('[frontmatter] repairing a list quotes only its unsafe elements; quoted and safe ones are kept as written', () => {
+	// Copilot, PR #10: the list repair re-emitted EVERY element through `quoted`, so a list with one unsafe
+	// element churned its already-quoted neighbours - single quotes became double, escapes were rewritten.
+	const block = "tags: ['kept single', \"kept double\", plain, a: b]";
+	const out = frontmatter.normalize(block);
+	assert.strictEqual(out, "tags: ['kept single', \"kept double\", plain, \"a: b\"]");
+	assert.deepStrictEqual(frontmatter.parse(out), frontmatter.parse(block));
+});
+
 test('[format] frontmatter ALREADY quoted - double or single - is never churned', () => {
 	// A downstream repo re-quoted its unsafe values by hand before this fix, in both styles. `format --check`
 	// on it must report nothing for frontmatter, or the repair becomes a second round of churn.
