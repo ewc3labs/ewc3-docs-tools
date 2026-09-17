@@ -48,8 +48,11 @@ The downstream re-run at `c5e8130` passed `index --check` with 0 divergent rows,
   guard split the line before links were matched and hid the target too. Links are now matched on
   the whole line, and one is skipped only when it starts inside a code span (`codeSpans`, which
   closes a run of N backticks only at a run of exactly N).
-- **A GitHub twin that moved into frontmatter** stopped pairing with its relative link in the body.
-  `links` now collects twins from frontmatter too; frontmatter is still never link-checked.
+- **`links` now collects GitHub twins from frontmatter too**, for a twin that sits in another cell
+  of the same row. ⚠️ **That was a hypothesis, and it was wrong about the case that prompted it.**
+  The re-run at `7a115dd` showed the twin was in a *different row's* Status (see Not built below).
+  The change is kept because it is correct for the shape it describes, but it fixed nothing
+  observed.
 
 And Codex on PR #8:
 
@@ -66,6 +69,15 @@ reported before**. Separately, every member's Status is in its body with an empt
 register with no Doc column links every row to its document.
 
 ## Not built
+
+- **A GitHub twin does not follow its relative link across a split.** `links` pairs a cross-repo
+  relative link with a twin *in the same file*. In the roadmap, one row's Status held the relative
+  link and a different row's Status held the twin for the same target. Migration put those rows in
+  separate documents, so the relative link lost its twin: the rehearsal's last new link problem (at
+  `7a115dd`, 1 remaining, every other check green). Per-file twins are defensible, because a reader
+  of that document has no twin in front of them. The consumer fixed it by adding the twin to the row
+  before adoption, and the delta reached 0. **Design question, open:** should migrate carry a twin
+  into every document that holds the relative half, or should the fix stay a pre-adoption edit?
 
 - **`_legacy/` backups keep their relative links unrepointed.** They are byte-for-byte by design;
   recorded in `DOCS-064`.
