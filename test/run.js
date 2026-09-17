@@ -1948,6 +1948,14 @@ test('[index-gate] L: a REFERENCE link and an inline link to the same target are
 	assert.strictEqual(cli(['index', '--check'], dir).code, 1, 'a definition inside a fence');
 	swap(gateRoadmap(dir), '```\n[VS-1]: slices/VS-1_first.md\n```', '[VS-1]: slices/VS-1_first.md');
 
+	// Codex, PR #6: a definition inside raw HTML defines nothing on GitHub. First-wins made a commented-out
+	// old target shadow the live one, so --check passed a link GitHub renders somewhere else.
+	for (const block of ['<!--\n[VS-1]: slices/VS-1_first.md\n-->', '<details>\n[VS-1]: slices/VS-1_first.md\n</details>']) {
+		swap(gateRoadmap(dir), '[VS-1]: slices/VS-1_first.md', `${block}\n\n[VS-1]: slices/VS-1_other.md`);
+		assert.strictEqual(cli(['index', '--check'], dir).code, 1, `a definition inside ${block.split('\n')[0]}`);
+		swap(gateRoadmap(dir), `${block}\n\n[VS-1]: slices/VS-1_other.md`, '[VS-1]: slices/VS-1_first.md');
+	}
+
 	// Render, format, render: the formatted row equals the last write, so it is not a hand edit.
 	assert.strictEqual(cli(['index', '--write'], dir).code, 0, 'render, format, render is not a hand edit');
 });
@@ -2002,13 +2010,36 @@ test('[index-gate] G: a linked worktree, where .git is a FILE, gates exactly lik
 	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
 });
 
-test('[index-gate] H: a merge in progress - neither command runs', () => {
+test('[index-gate] H: unresolved merge conflicts - neither command runs', () => {
+	// The tree may hold conflict markers, and ids named from one are a diagnosis of the wrong thing.
 	const dir = gateRepo();
-	fs.writeFileSync(git(dir, 'rev-parse', '--path-format=absolute', '--git-path', 'MERGE_HEAD'), git(dir, 'rev-parse', 'HEAD'));
+	git(dir, 'checkout', '-q', '-b', 'other');
+	swap(gateRoadmap(dir), '| first |', '| theirs |');
+	git(dir, 'commit', '-qam', 'theirs');
+	git(dir, 'checkout', '-q', '-');
+	swap(gateRoadmap(dir), '| first |', '| ours |');
+	git(dir, 'commit', '-qam', 'ours');
+	assert.throws(() => git(dir, 'merge', 'other'), 'fixture: a real conflict');
 	for (const mode of ['--write', '--check']) {
 		const r = cli(['index', mode], dir);
 		assert.strictEqual(r.code, 2, `${mode}: ${r.out}`);
-		assert.ok(/merge in progress/.test(r.out), r.out);
+		assert.ok(/unresolved conflicts/.test(r.out), r.out);
+		assert.ok(!r.out.includes('VS-1'), 'no id diagnosis');
+	}
+});
+
+test('[index-gate] H: an operation in progress with NO conflicts - --write refuses, --check still runs', () => {
+	// Codex, PR #6. --check compares the tree with itself; what makes a tree unreadable is conflict
+	// markers, not the operation. --write is different: mid-operation, HEAD is the wrong baseline.
+	for (const [name, what] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert'], ['rebase-merge', 'rebase']]) {
+		const dir = gateRepo();
+		const at = git(dir, 'rev-parse', '--path-format=absolute', '--git-path', name);
+		if (name === 'rebase-merge') { fs.mkdirSync(at); } else { fs.writeFileSync(at, git(dir, 'rev-parse', 'HEAD')); }
+		const w = cli(['index', '--write'], dir);
+		assert.strictEqual(w.code, 2, `${what} --write: ${w.out}`);
+		assert.ok(w.out.includes(`${what} in progress`), w.out);
+		const c = cli(['index', '--check'], dir);
+		assert.strictEqual(c.code, 0, `${what} --check: ${c.out}`);
 	}
 });
 

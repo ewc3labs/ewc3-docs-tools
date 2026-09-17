@@ -547,29 +547,33 @@ function gateWrite(repo, head, plans, sameCells, showCells) {
 				+ ' hand edit from a render. Commit it first.');
 			return 2;
 		}
+		// Every baseline a row may legitimately equal, labelled, so a refusal says WHICH it departed from.
+		// Definitions are read once per file: per row, they re-parsed the whole register for each of
+		// SX_Coder's 619 rows (Copilot, PR #6).
 		const baselines = new Map();
-		const add = (id, cells) => { (baselines.get(id) || baselines.set(id, []).get(id)).push(cells); };
-		for (const row of indexRows(committed)) { add(row.id, gfmCells(row.raw, res.columns, referenceDefs(committed))); }
-		for (const [id, list] of Object.entries(last[rel] || {})) { list.forEach((cells) => add(id, cells)); }
+		const add = (id, label, cells) => { (baselines.get(id) || baselines.set(id, []).get(id)).push({ label, cells }); };
+		const committedDefs = referenceDefs(committed);
+		for (const row of indexRows(committed)) { add(row.id, 'committed', gfmCells(row.raw, res.columns, committedDefs)); }
+		for (const [id, list] of Object.entries(last[rel] || {})) { list.forEach((cells) => add(id, 'last written', cells)); }
 
 		for (const row of res.rows) {
 			if (row.rendered === null) { continue; }
 			const now = gfmCells(row.raw, res.columns, defs);
 			const want = gfmCells(row.rendered, res.columns, defs);
 			const known = baselines.get(row.id) || [];
-			if (sameCells(now, want) || !known.length || known.some((cells) => sameCells(cells, now))) { continue; }
-			edited.push({ rel, row, now, want, was: known[0] });
+			if (sameCells(now, want) || !known.length || known.some((b) => sameCells(b.cells, now))) { continue; }
+			edited.push({ rel, row, now, want, known });
 		}
 	}
 	if (!edited.length) { return 0; }
 
 	console.error(`index: REFUSED - ${edited.length} row(s) hand-edited since they were last committed or written.`);
 	console.error('  The table is generated from the slice documents, so rendering would discard these edits:');
-	for (const { rel, row, now, want, was } of edited) {
+	for (const { rel, row, now, want, known } of edited) {
 		console.error(`  ${rel}:${row.line + 1}  ${row.id}`);
-		console.error(`    row now:  ${showCells(now)}`);
-		console.error(`    was:      ${showCells(was)}`);
-		console.error(`    renders:  ${showCells(want)}`);
+		console.error(`    row now:       ${showCells(now)}`);
+		for (const b of known) { console.error(`    ${`${b.label}:`.padEnd(14)} ${showCells(b.cells)}`); }
+		console.error(`    renders:       ${showCells(want)}`);
 	}
 	console.error('  Move each edit into its slice document, or restore the row, then run again. Nothing was written.');
 	return 1;
@@ -609,11 +613,11 @@ function cmdIndex(root, config, argv) {
 		return 2;
 	}
 
-	// Git is the baseline for "was this row typed or rendered?", so --write needs it. --check compares
-	// the tree with itself and needs no history - but a tree mid-merge may hold conflict markers, and
-	// naming ids from one would be a confident diagnosis of the wrong thing.
+	// Git is the baseline for "was this row typed or rendered?", so --write needs it, and needs it not
+	// mid-operation. --check compares the tree with itself and needs no history - but a tree with
+	// unresolved conflicts may hold markers, and naming ids from one is a diagnosis of the wrong thing.
 	const repoState = write || check ? gitbase.state(repo) : null;
-	if (repoState && !repoState.ok && (write || repoState.git)) {
+	if (repoState && (write ? !repoState.ok : repoState.conflicts)) {
 		console.error(`index: did not run: ${repoState.reason}`);
 		return 2;
 	}

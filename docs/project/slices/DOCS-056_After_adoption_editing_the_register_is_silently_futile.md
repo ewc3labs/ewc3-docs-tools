@@ -4,7 +4,7 @@ state: 🟦 tested
 title: 'After adoption, editing a Delivery Index row is silently discarded by the next `index --write`'
 est: M
 doc: '[DOCS-056](slices/DOCS-056_After_adoption_editing_the_register_is_silently_futile.md)'
-status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 24 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
+status: 'L1 and L2 built: index --write refuses a hand-edited row, index --check fails a diverged one; 25 controls unit-tested, index --check green locally on all 43 rows here and added to CI; not yet run on an estate register'
 priority: high
 lane: index
 ---
@@ -198,6 +198,11 @@ what was built differs in three places, each for a stated reason:
 - **L2, `index --check`**, fails on a diverged row, a row with no document, a document with no row,
   and one ID on two rows. It needs no git history. **Only L2 catches a hand edit that was
   committed.**
+- **Two hazards, two gates** (control H, refined by Codex on PR #6). An operation in progress
+  (merge, rebase, cherry-pick or revert) makes HEAD the wrong baseline, so `--write` refuses and
+  `--check`, which never reads HEAD, still runs. Unresolved conflicts make the tree itself
+  unreadable, so both refuse. The first build refused `--check` on the operation, which was the
+  wrong signal.
 - **Exit contract, every command:** 0 consistent, 1 diverged (always named), 2 did not run. A crash
   exits 2. It used to exit 1 with a stack trace, and the first control run counted every crash as a
   catch.
@@ -212,10 +217,15 @@ reference link to its definition, which is what GitHub does. A definition pointi
 sitting inside a fence, still differs, so the comparison hides no real change. Control L pins all
 three cases.
 
+Codex found the hole in that claim on PR #6. A definition inside raw HTML, such as a comment,
+defines nothing on GitHub, but the parser read it. The first definition wins, so a commented-out old
+target shadowed the live one and `--check` passed a link GitHub renders somewhere else. HTML blocks
+are now excluded like fences, and control L pins a comment and a `<details>` block.
+
 ### Not built
 
 - **The generated-file banner** is still worth its one line and is still missing.
 - **`index --write` and `format` still undo each other** (DOCS-059). The gates no longer care, but
   the churn in `git diff` remains.
-- **Not yet run on an estate register.** 24 controls, one repository, green locally. The next
+- **Not yet run on an estate register.** 25 controls, one repository, green locally. The next
   evidence is `index --check` on an adopted MedAR register.
