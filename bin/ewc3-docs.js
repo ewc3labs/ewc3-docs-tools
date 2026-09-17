@@ -19,7 +19,7 @@ const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
-const { extractSlices } = require('../lib/slices');
+const { extractSlices, normalizeId } = require('../lib/slices');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
@@ -693,7 +693,9 @@ function cmdIndex(root, config, argv) {
 	const byId = new Map();
 	const duplicated = new Map();
 	for (const [file, id] of byFile) {
-		const key = id.toUpperCase();
+		// Normalised, so VS-4 and VS-004 are one id - renderIndex normalises, and a check that did not
+		// let it keep one document of two and exit 0 (Codex P1, PR #6). Not an id at all: compared as written.
+		const key = normalizeId(id) || id.toUpperCase();
 		if (byId.has(key)) {
 			if (!duplicated.has(key)) { duplicated.set(key, [byId.get(key)]); }
 			duplicated.get(key).push(file);
