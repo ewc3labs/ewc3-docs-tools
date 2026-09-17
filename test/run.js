@@ -2538,6 +2538,40 @@ test('[migrate-offcanon] a register already in the canonical Prefix shape is kep
 	assert.ok(staged.includes(block), 'the register, reference-only and frozen rows included, byte-for-byte');
 });
 
+test('[migrate-offcanon] only a table with the full ownership header is the canonical register', () => {
+	// Copilot and Codex, PR #16: ANY `| Prefix |` table short-circuited migration, so an unrelated one hid a real
+	// legacy register further down, which then never migrated.
+	const { migrateText } = require('../lib/migrate');
+	const text = ['# R', '', '| Prefix | Meaning |', '| --- | --- |', '| XY | our slices |', '',
+		'## Register', '', '| Series | Last Num | Series Description |', '| --- | --- | --- |', '| Slices | XY-003 | the slices |', '',
+		'## Delivery Index', '', '| ID | State | Slice |', '| --- | --- | --- |', '| XY-003 | planned | third |', ''].join('\n');
+	const r = migrateText(text, { owner: 'this-repo', width: 3 });
+	assert.ok(!r.canonical, 'the Prefix/Meaning table is not the register');
+	assert.ok(r.text.includes('| Prefix | Scope | Owner | Last Used | Series |'), 'the legacy register was migrated');
+});
+
+test('[migrate-offcanon] a canonical register\'s generated "unclaimed" owner is still unresolved', () => {
+	// Codex P1, PR #16: the owner cell `**?** _unclaimed_` was read as an owner, so re-running migration on a
+	// previously bootstrapped register passed a global series nobody had adjudicated.
+	const { migrateText } = require('../lib/migrate');
+	const text = ['## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| XY | global | **?** _unclaimed_ | XY-003 | — |', '', '## Delivery Index', '', '| ID | State | Slice |', '| --- | --- | --- |', '| XY-003 | planned | third |', ''].join('\n');
+	const row = migrateText(text, { owner: 'this-repo' }).rows.find((x) => x.prefix === 'XY');
+	assert.strictEqual(row.owner, null);
+});
+
+test('[migrate-offcanon] a canonical register is STALE when any declaring position is past Last Used', () => {
+	// Codex P1, PR #16: only first-cell table ids counted, so `### XY-010 — ...` past Last Used XY-003 read clean
+	// and the next mint could reuse a live number. The same declaration rules as `series`.
+	const { migrateText } = require('../lib/migrate');
+	const text = ['## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| XY | global | this-repo | XY-003 | slices |', '', '## Delivery Index', '', '| ID | State | Slice |', '| --- | --- | --- |',
+		'| XY-003 | planned | third |', '', '## Slice Notes', '', '### XY-010 — a heading that declares', '', 'Body.', ''].join('\n');
+	const row = migrateText(text, { owner: 'this-repo' }).rows.find((x) => x.prefix === 'XY');
+	assert.strictEqual(row.highestUsed, 10);
+	assert.strictEqual(row.stale, true);
+});
+
 test('[migrate-offcanon] a SYNTHESISED register writes markers values can read, at the width the ids are written', () => {
 	// The bootstrap wrote `<!--/-->` - a close `values` never matches - and padded to five digits regardless.
 	const dir = offCanonRepo({ register: false });
