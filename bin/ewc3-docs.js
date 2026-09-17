@@ -1047,7 +1047,18 @@ function cmdSlice(root, config, argv) {
 		}
 	}
 	const VALUED = new Set(['--state', '--set', '--table', '--repo', '--config']);
+	// An unknown flag or a stray argument is refused, never dropped. `--slices elsewhere` was ignored and the
+	// mint went to docs/project/slices with exit 0; a misspelled `--write` would quietly dry-run.
+	const unknown = argv.filter((a) => a.startsWith('--') && !VALUED.has(a) && a !== '--write');
+	if (unknown.length) {
+		console.error(`slice new: unknown option(s): ${unknown.join(' ')} - see \`ewc3-docs\` for usage. Nothing was written.`);
+		return 2;
+	}
 	const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUED.has(argv[i - 1]));
+	if (positional.length > 3) {
+		console.error(`slice new: unexpected argument(s): ${positional.slice(3).join(' ')} - quote the title. Nothing was written.`);
+		return 2;
+	}
 	if (positional[0] !== 'new') {
 		console.error('usage: ewc3-docs slice new <PREFIX> "<title>" [--state <s>] [--set <column>=<value>]... [--table "<heading>"] [--write]');
 		return 2;

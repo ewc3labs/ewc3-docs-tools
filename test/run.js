@@ -2685,6 +2685,21 @@ test('[slice-new] a freeze recorded by ANY register is honoured, not only the fi
 	assert.strictEqual(mintRoadmap(dir), before);
 });
 
+test('[slice-new] an unknown flag or a stray argument is a usage error, never silently ignored', () => {
+	// Found reviewing a downstream skill: `slice new ... --slices elsewhere` ignored the flag and minted into
+	// docs/project/slices, exit 0. A misspelled `--wirte` would quietly dry-run. A flag that is dropped is
+	// worse than one that errors - the rule this toolkit already applies to --repo.
+	const dir = mintRepo();
+	const before = mintRoadmap(dir);
+	for (const argv of [['--slices', 'elsewhere', '--write'], ['--wirte'], ['--check'], ['extra-positional', '--write']]) {
+		const r = cli(['slice', 'new', 'VS', 'X', ...argv], dir);
+		assert.strictEqual(r.code, 2, `${argv.join(' ')}: ${r.out}`);
+		assert.ok(/unknown|unexpected/i.test(r.out), `${argv.join(' ')}: ${r.out}`);
+	}
+	assert.strictEqual(mintRoadmap(dir), before, 'nothing written');
+	assert.ok(!fs.readdirSync(path.join(dir, 'docs', 'project', 'slices')).some((n) => n.startsWith('VS-008')));
+});
+
 test('[slice-new] an option given no value is a usage error, never a value', () => {
 	// Codex, PR #12: `--state --write` stored the literal state "--write" and minted.
 	const dir = mintRepo();
