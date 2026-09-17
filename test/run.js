@@ -2236,12 +2236,12 @@ function agreeRepo({ docColumn }) {
 		row('VS-1', 'coded', 'first', 'Built. See [the design](../design/first.md) and [notes](notes.md). Smoked twice.'),
 		row('VS-2', 'planned', 'second', 'Two sentences here. And [a ref][design-ref].'),
 		row('VS-3', 'planned', 'third', 'A follower\'s own paragraph. It is long enough to matter.'),
-		row('VS-4', 'planned', 'fourth', 'short'),
+		row('VS-4', 'planned', 'fourth', 'short, per [`design/first.md`](../design/first.md)'),
 		'',
 		'## Slice Notes', '',
 		'### VS-2 through VS-3 — second and third', '',
 		'Narrative with [a relative link](../design/second.md), a sibling [handoff](Handoff_01.md),',
-		'an ![image](diagram.png), and a [site](https://example.com/x).', '',
+		'an ![image](diagram.png), a [site](https://example.com/x), and [`the ref`](../design/ref.md).', '',
 		'```', 'not a link to rebase: [x](../design/second.md)', '```', '',
 		'[design-ref]: ../design/ref.md', '',
 	].join('\n'));
@@ -2297,6 +2297,58 @@ test('[migrate-index] EVERY row\'s Status moves to its document body, followers 
 		assert.strictEqual(data.status, '', `${id} frontmatter status`);
 		assert.ok(body.includes(text), `${id} body carries its Status:\n${body}`);
 	}
+});
+
+test('[migrate-index] rebaseRelative repoints a link whose TEXT is a code span, and nothing inside a code span', () => {
+	// A downstream re-run: `[\`docs/x.md\`](../x.md)` stayed at the old depth, because the code-span guard
+	// split the line before links were matched and hid the target along with the text.
+	const { rebaseRelative } = require('../lib/slices');
+	assert.strictEqual(rebaseRelative('[`docs/x.md`](../x.md)'), '[`docs/x.md`](../../x.md)');
+	assert.strictEqual(rebaseRelative('see [a `b` c](y.md) and `[not](a.md)` here'), 'see [a `b` c](../y.md) and `[not](a.md)` here');
+	assert.strictEqual(rebaseRelative('![`img`](p.png)'), '![`img`](../p.png)');
+});
+
+test('[links] a GitHub twin in FRONTMATTER still pairs with its relative link in the body', () => {
+	// Migration moves a row's other cells into frontmatter and its Status into the body, so a twin that sat in
+	// another cell of the same row now lives in frontmatter. Frontmatter is never link-CHECKED (DOCS-052), but
+	// a twin is evidence, not a link to resolve.
+	const r = crossRepo([
+		'---', "title: 'x [twin](https://github.com/example-org/Sibling/blob/main/docs/X.md)'", '---', '',
+		'See [x](../../Sibling/docs/X.md).', '',
+	].join('\n'));
+	assert.deepStrictEqual(r.problems, [], JSON.stringify(r.problems));
+	assert.strictEqual(r.unverified, 1);
+});
+
+test('[migrate-index] a KEPT document with no doc: field is still linked from a Doc-column register', () => {
+	// Codex P1, PR #8: the final render replaced migrate's pointer with an empty Doc cell, so a kept document
+	// with valid frontmatter but no `doc:` became unreachable after adoption. An empty Doc cell links to the
+	// document, from the same helper the pointer uses.
+	const dir = agreeRepo({ docColumn: true });
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'VS-4 kept notes.md'),
+		'---\nid: VS-4\nstate: planned\ntitle: fourth\n---\n\nKept prose.\n');
+	cli(['migrate-project', '--write'], dir);
+	adopt(dir);
+	const row = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8').split('\n').find((l) => l.startsWith('| VS-4 '));
+	assert.ok(row.includes('[VS-4](slices/VS-4%20kept%20notes.md)'), row);
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 0, check.out);
+	assert.ok(!checkLinks(dir, { orphanRoot: 'docs' }).orphans.some((o) => o.includes('VS-4')), 'not an orphan');
+});
+
+test('[migrate-index] a filename that is not URL-safe is encoded in the pointer, and links resolves it', () => {
+	// Codex, PR #8: `slices/VS-1 notes.md` in a link destination is not a link on GitHub, and the link checker
+	// split it at the space. Percent-encoded, both read it; `links` decodes relative targets.
+	const { pointerCell } = require('../lib/slices');
+	assert.strictEqual(pointerCell('VS-1 notes (old).md'), 'See [slice notes](slices/VS-1%20notes%20%28old%29.md).');
+	assert.strictEqual(pointerCell('VS-1_plain.md'), 'See [slice notes](slices/VS-1_plain.md).');
+});
+
+test('[migrate-index] quoteEvidence leaves a multi-backtick code span whole', () => {
+	// Codex, PR #8: splitting on any backtick run closed `\`\`foo\` ...\`\`` at the inner backtick.
+	const { quoteEvidence } = require('../lib/slices');
+	assert.strictEqual(quoteEvidence('``a` [x](y)`` then [z]'), '``a` [x](y)`` then \\[z\\]');
 });
 
 test('[migrate-index] a register with no Doc column renders its pointer from ONE place', () => {

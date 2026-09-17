@@ -21,7 +21,7 @@ stopped arriving, so the merge was decided by judgement rather than by an empty 
 A finding **blocks** a merge when normal use can **silently destroy something a person wrote**. It
 **waits** when it is loud (a false failure, a reported broken link), when it is a coverage gap (a
 file not checked), or when it needs an input contrived enough that nobody meets it by accident.
-Every blocking finding was fixed before merge. These eight were not:
+Every blocking finding was fixed before merge. These were not:
 
 | # | PR | severity | finding | why it waited |
 | --- | --- | --- | --- | --- |
@@ -33,6 +33,7 @@ Every blocking finding was fixed before merge. These eight were not:
 | 6 | #7 | P2 | A roadmap narrative backed up to `_legacy/` keeps relative links and loses the reference definitions it used | the same: prose preserved, breakage reported |
 | 7 | #7 | P2 | A backup filename with a space, `)` or `#` is interpolated into the generated link unescaped | the link is malformed; the prose and the backup are intact |
 | 8 | #7 | — | Several documents per id are refused outright (raised by the downstream census, not Codex) | a model question, recorded as open in `DOCS-062` |
+| 9 | #8 | P2 | `rebaseRelative` repoints link-shaped text that is escaped (`\[x](a.md)`), which was never a link | literal example text shifts by `../`; nothing is lost, and the example is still readable |
 
 Row 8 is a design decision, not a defect, and belongs to `DOCS-062`. It is listed here only so this
 table is the one place to look.
@@ -47,7 +48,8 @@ table is the one place to look.
   `migrate`).
 - **5, 6:** reuse `definitionsFor(..., deeper)`, which already repoints relative targets and carries
   definitions for generated slice documents. Apply it to both kinds of backup.
-- **7:** emit backup links in the angle-bracket destination form, or percent-encode the path.
+- **7:** percent-encode the path, as `sliceHref` now does for register pointers (`DOCS-065`).
+- **9:** skip a `[` preceded by an odd run of backslashes when matching links to repoint.
 
 ## The lesson worth keeping
 

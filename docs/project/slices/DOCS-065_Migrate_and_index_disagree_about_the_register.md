@@ -42,6 +42,22 @@ separately, and each was right about itself.
 - **Evidence is quoted** (`quoteEvidence`): brackets, and a `(` straight after one, are escaped, so
   a line renders as the same characters and no checker reads it as a link.
 
+The downstream re-run at `c5e8130` passed `index --check` with 0 divergent rows, and found the rest:
+
+- **A link whose text is a code span was not repointed** (`[\`docs/x.md\`](../x.md)`). The code-span
+  guard split the line before links were matched and hid the target too. Links are now matched on
+  the whole line, and one is skipped only when it starts inside a code span (`codeSpans`, which
+  closes a run of N backticks only at a run of exactly N).
+- **A GitHub twin that moved into frontmatter** stopped pairing with its relative link in the body.
+  `links` now collects twins from frontmatter too; frontmatter is still never link-checked.
+
+And Codex on PR #8:
+
+- **An empty Doc cell links to its document** (`sliceHref`). A kept document with valid frontmatter
+  but no `doc:` otherwise rendered unreachable after adoption.
+- **Filenames are percent-encoded** in pointers and Doc links, so a space or parenthesis cannot
+  split a destination. `links` decodes relative targets.
+
 ## Tests
 
 End to end, on both register shapes (with and without a Doc column): migrate, adopt the staged tree,
