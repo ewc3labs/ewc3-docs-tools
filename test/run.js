@@ -2999,6 +2999,36 @@ test('[fold] NO REGISTER is an explicit no-op; a register with no slices still c
 	assert.strictEqual(cli(['fold', '--check'], bogus).code, 2, 'an unknown planning value is refused');
 });
 
+test('[fold] when the index gate refuses the row, the frontmatter is rolled back - all or nothing', () => {
+	// Codex P1, PR #15: frontmatter was written before `index --write` refused a hand-edited row, so fold exited
+	// 1 saying nothing was written while the document had already changed.
+	const dir = foldRepo();
+	swap(gateRoadmap(dir), '| VS-1 | ⬜ planned | first | x |', '| VS-1 | ⬜ planned | typed by hand | x |');
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	const doc = fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8');
+	const roadmap = fs.readFileSync(gateRoadmap(dir), 'utf8');
+	const r = cli(['fold', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/rolled back/i.test(r.out), r.out);
+	assert.strictEqual(fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8'), doc, 'the document is untouched');
+	assert.strictEqual(fs.readFileSync(gateRoadmap(dir), 'utf8'), roadmap, 'and so is the row');
+});
+
+test('[fold] a state word two State Legends spell differently is refused, not decided by file order', () => {
+	// Codex P2, PR #15: the first legend read won, so the spelling depended on glob order.
+	const dir = foldRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'S_Roadmap.md'), ['# S', '', '## State Legend', '', '- 🟨 `coded` — elsewhere', ''].join('\n'));
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'second register');
+	const base = git(dir, 'rev-parse', 'HEAD');
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded']);
+	const r = cli(['fold', '--check', '--since', base], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/coded/.test(r.out) && /🟦 coded/.test(r.out) && /🟨 coded/.test(r.out), r.out);
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0, 'no --since: a warning, and nothing folded');
+	assert.strictEqual(foldData(dir, 'VS-1').state, '⬜ planned');
+});
+
 test('[fold] outside a git work tree, fold does not run', () => {
 	const dir = foldRepo();
 	fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });

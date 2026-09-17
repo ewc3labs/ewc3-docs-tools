@@ -1139,10 +1139,20 @@ function cmdFold(root, config, argv) {
 		return errors.length ? 1 : 0;
 	}
 
-	[...plan.changes, ...plan.provenance].forEach(applyFold);
-	console.log(`fold: wrote ${plan.changes.length} state change(s) and ${plan.provenance.length} provenance update(s)`);
-	// The row follows the document: render through the index gate, which refuses a hand-edited row.
+	// ALL OR NOTHING. The row follows the document through the index gate, which refuses a hand-edited row -
+	// and when it refuses it writes no roadmap. Frontmatter written before that refusal left a document and its
+	// row disagreeing while the output said nothing was written (Codex P1, PR #15), so it is restored.
+	const entries = [...plan.changes, ...plan.provenance];
+	const roadmapsBefore = roadmaps.map((f) => fs.readFileSync(f, 'utf8'));
+	entries.forEach(applyFold);
 	const indexCode = plan.changes.length ? cmdIndex(repo, config, ['--write']) : 0;
+	const roadmapUntouched = roadmaps.every((f, i) => fs.readFileSync(f, 'utf8') === roadmapsBefore[i]);
+	if (indexCode !== 0 && plan.changes.length && roadmapUntouched) {
+		entries.forEach((e) => fs.writeFileSync(e.file, e.text));
+		console.error('fold: rolled back - the index refused to render the rows, so no slice document was changed either');
+		return indexCode;
+	}
+	console.log(`fold: wrote ${plan.changes.length} state change(s) and ${plan.provenance.length} provenance update(s)`);
 	return Math.max(indexCode, errors.length ? 1 : 0);
 }
 
