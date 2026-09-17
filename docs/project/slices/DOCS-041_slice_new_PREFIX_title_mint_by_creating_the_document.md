@@ -56,4 +56,24 @@ declared prefix with no rows, and an archived id above every live one. A mint wr
 and the row in the right table, skips past the archived id, keeps `index --check`, `series` and
 `values --check` at exit 0, and a second mint gets the next number. Refusals write nothing.
 
+### Review, PR #12
+
+Codex and Copilot found six ways a mint could go quietly wrong. Each is fixed and tested:
+
+- **A freeze recorded by any register refuses.** Only the first scope record found used to be
+  checked.
+- **`--state --write` is a usage error.** It used to store the state `--write` and mint.
+- **An unheaded table is named `(no heading)`**, the label the refusal prints.
+- **A target table with other columns than the first is refused.** `index` renders every table with
+  the first table's header.
+- **No row says "planned": `--state` is required**, rather than guessing a spelling.
+- **With no Doc column, the pointer cell cannot be `--set`.** Filling it would hide the new
+  document.
+
+### Not built
+
+- **A mint interrupted between writing the document and the row** leaves a document `index` reports
+  as never minted. It is loud, and re-running `slice new` refuses the existing file, so recovery is
+  to delete that file and mint again. Writing both atomically is not built.
+
 [frontmatter-is-the]: ../../design/frontmatter-is-the-declaration.md

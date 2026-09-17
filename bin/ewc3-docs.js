@@ -1039,6 +1039,13 @@ function cmdIndex(root, config, argv) {
  */
 function cmdSlice(root, config, argv) {
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
+	// `--state --write` must not store the state "--write" and then mint (Codex, PR #12).
+	for (const [i, a] of argv.entries()) {
+		if (['--state', '--set', '--table', '--repo', '--config'].includes(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) {
+			console.error(`slice new: ${a} needs a value`);
+			return 2;
+		}
+	}
 	const VALUED = new Set(['--state', '--set', '--table', '--repo', '--config']);
 	const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUED.has(argv[i - 1]));
 	if (positional[0] !== 'new') {

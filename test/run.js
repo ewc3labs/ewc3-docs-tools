@@ -2615,6 +2615,100 @@ test('[slice-new] --set takes only a real column of that table, and never a deri
 	assert.strictEqual(cli(['slice', 'new', 'VS'], dir).code, 2, 'a title is required');
 });
 
+test('[slice-new] a freeze recorded by ANY register is honoured, not only the first one read', () => {
+	// Codex P1, PR #12: the first scope found won, so a freeze recorded by a second surface was ignored and a
+	// retired number was minted.
+	const dir = mintRepo();
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'S_Roadmap.md'), [
+		'# S', '', '## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| VS | reference-only, frozen at 7 | r | VS-007 | retired here |', '',
+	].join('\n'));
+	const before = mintRoadmap(dir);
+	const r = cli(['slice', 'new', 'VS', 'Should not mint', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/frozen/i.test(r.out), r.out);
+	assert.strictEqual(mintRoadmap(dir), before);
+});
+
+test('[slice-new] an option given no value is a usage error, never a value', () => {
+	// Codex, PR #12: `--state --write` stored the literal state "--write" and minted.
+	const dir = mintRepo();
+	const before = mintRoadmap(dir);
+	for (const argv of [['--state', '--write'], ['--table', '--write'], ['--set', '--write']]) {
+		const r = cli(['slice', 'new', 'VS', 'X', ...argv], dir);
+		assert.strictEqual(r.code, 2, `${argv.join(' ')}: ${r.out}`);
+	}
+	assert.strictEqual(mintRoadmap(dir), before, 'nothing written');
+	assert.ok(!fs.readdirSync(path.join(dir, 'docs', 'project', 'slices')).some((n) => n.startsWith('VS-008')));
+});
+
+test('[slice-new] an unheaded table is chosen by the name the refusal shows', () => {
+	// Codex, PR #12: the refusal offered "(no heading)", and passing it was rejected.
+	const dir = mintRepo();
+	const file = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(file, mintRoadmap(dir).replace('### Vertical Slices\n\n', '').replace(/### Hotfixes\n\n\| ID [^\n]*\n\| ---[^\n]*\n\| FIX-1 [^\n]*\n\n/, ''));
+	fs.unlinkSync(path.join(dir, 'docs', 'project', 'slices', 'FIX-1_a_fix.md'));
+	const refused = cli(['slice', 'new', 'XY', 'First', '--write'], dir);
+	assert.strictEqual(refused.code, 1, refused.out);
+	assert.ok(refused.out.includes('(no heading)'), refused.out);
+	const ok = cli(['slice', 'new', 'XY', 'First', '--table', '(no heading)', '--write'], dir);
+	assert.strictEqual(ok.code, 0, ok.out);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+});
+
+test('[slice-new] a target table whose columns differ from the first table is refused', () => {
+	// Copilot, PR #12: rows render against the FIRST table's header, so a mint into a table with other columns
+	// would put values in the wrong cells.
+	const dir = mintRepo();
+	const file = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(file, mintRoadmap(dir).replace('### Hotfixes\n\n| ID | State | Slice | Est | Doc | Status |', '### Hotfixes\n\n| ID | Slice | State | Est | Doc | Status |'));
+	const r = cli(['slice', 'new', 'FIX', 'Wrong columns', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/columns/i.test(r.out), r.out);
+});
+
+test('[slice-new] with no "planned" row to copy, --state is required rather than guessed', () => {
+	// Copilot, PR #12: a register whose rows are all past planning minted a bare "planned", a spelling it
+	// may never use.
+	const dir = mintRepo();
+	const file = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(file, mintRoadmap(dir).split('⬜ planned').join('🟨 coded'));
+	for (const n of fs.readdirSync(path.join(dir, 'docs', 'project', 'slices'))) {
+		const p = path.join(dir, 'docs', 'project', 'slices', n);
+		fs.writeFileSync(p, fs.readFileSync(p, 'utf8').split('⬜ planned').join('🟨 coded'));
+	}
+	const r = cli(['slice', 'new', 'VS', 'No legend row', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('--state'), r.out);
+	assert.strictEqual(cli(['slice', 'new', 'VS', 'No legend row', '--state', '⬜ planned', '--write'], dir).code, 0);
+});
+
+test('[slice-new] --set on the pointer cell of a table with no Doc column is refused', () => {
+	// Copilot, PR #12: a table with no Doc column points at the document from its LAST cell when that cell is
+	// empty; setting it would leave the new document unreachable. An explicit no-Doc register, so the refusal
+	// is provably for this reason and not another.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mint-nodoc-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	w('docs/project/R_Roadmap.md', [
+		'# R', '', '## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| VS | global | r | VS-1 | slices |', '',
+		'## Delivery Index', '', '| ID | State | Slice | Est | Status |', '| --- | --- | --- | --- | --- |',
+		'| VS-1 | planned | first | S | See [slice notes](slices/VS-1_first.md). |', '',
+	].join('\n'));
+	w('docs/project/slices/VS-1_first.md', '---\nid: VS-1\nstate: planned\ntitle: first\nest: S\nstatus: ""\n---\n');
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'fixture: consistent');
+
+	const refused = cli(['slice', 'new', 'VS', 'Hidden pointer', '--set', 'status=done', '--write'], dir);
+	assert.strictEqual(refused.code, 1, refused.out);
+	assert.ok(refused.out.includes('--set status: with no Doc column, that cell is the pointer'), refused.out);
+
+	const ok = cli(['slice', 'new', 'VS', 'Visible pointer', '--set', 'est=M', '--write'], dir);
+	assert.strictEqual(ok.code, 0, ok.out);
+	const row = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8').split('\n').find((l) => l.startsWith('| VS-2 '));
+	assert.ok(row.includes('See [slice notes](slices/VS-2_Visible_pointer.md).') && row.includes('| M |'), row);
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
