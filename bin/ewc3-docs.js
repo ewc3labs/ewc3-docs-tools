@@ -485,7 +485,34 @@ function cmdMigrateProject(root, config, argv) {
 	// Read off the inventory above. A document with usable frontmatter is authored: never regenerated.
 	// One without is backed up, and the document generated for its slice links to the backup.
 	const authored = new Map(inventory.filter((e) => e.frontmatter === 'ok').map((e) => [e.id, e.name]));
-	const legacy = new Map(inventory.filter((e) => e.frontmatter !== 'ok' && e.id).map((e) => [e.id, `_legacy/${e.name}`]));
+	// Everything else under the live slices folder: files that are not markdown (an image a document
+	// embeds) and anything in a subfolder. None of it is a slice document to inventory, and all of it is
+	// deleted by "replace docs/project/" unless it is staged. Codex, PR #7.
+	const otherFiles = [];
+	const walk = (rel) => {
+		for (const e of fs.readdirSync(path.join(liveSlices, rel), { withFileTypes: true })) {
+			const p = rel ? `${rel}/${e.name}` : e.name;
+			if (e.isDirectory()) { walk(p); } else if (rel || !/\.md$/i.test(e.name)) { otherFiles.push(p); }
+		}
+	};
+	if (fs.existsSync(liveSlices)) { walk(''); }
+
+	// EVERY staged path is decided before anything is written, so no write can overwrite another. A repo
+	// adopted once already has slices/_legacy/, and a backup named like a file already there was written,
+	// then replaced by the verbatim copy of that file - the prose was lost and the generated document linked
+	// to the wrong one (Codex P1, PR #7). A taken backup name gets a -2, -3 suffix instead. Case-insensitive,
+	// because the filesystems these repos live on are.
+	const taken = new Set(otherFiles.map((p) => p.toLowerCase()));
+	const backupPath = new Map();
+	for (const e of inventory.filter((x) => x.frontmatter !== 'ok' && x.id)) {
+		const ext = path.extname(e.name);
+		const base = e.name.slice(0, e.name.length - ext.length);
+		let rel = `_legacy/${e.name}`;
+		for (let n = 2; taken.has(rel.toLowerCase()); n++) { rel = `_legacy/${base}-${n}${ext}`; }
+		taken.add(rel.toLowerCase());
+		backupPath.set(e.name, rel);
+	}
+	const legacy = new Map(inventory.filter((e) => backupPath.has(e.name)).map((e) => [e.id, backupPath.get(e.name)]));
 
 	const extracted = extractSlices(result.text, {
 		// A DECLARED width beats a detected one, and only a declared one is safe to WRITE with.
@@ -518,18 +545,6 @@ function cmdMigrateProject(root, config, argv) {
 		if (heads.length) { console.log(`          this roadmap has: ${heads.slice(0, 6).join(' · ')}`); }
 	}
 
-	// Everything else under the live slices folder: files that are not markdown (an image a document
-	// embeds) and anything in a subfolder. None of it is a slice document to inventory, and all of it is
-	// deleted by "replace docs/project/" unless it is staged. Codex, PR #7.
-	const otherFiles = [];
-	const walk = (rel) => {
-		for (const e of fs.readdirSync(path.join(liveSlices, rel), { withFileTypes: true })) {
-			const p = rel ? `${rel}/${e.name}` : e.name;
-			if (e.isDirectory()) { walk(p); } else if (rel || !/\.md$/i.test(e.name)) { otherFiles.push(p); }
-		}
-	};
-	if (fs.existsSync(liveSlices)) { walk(''); }
-
 	if (extracted.docs.length || inventory.length || otherFiles.length) {
 		const sliceDir = path.join(outDir, 'slices');
 		// The staged slices folder is GENERATED, all of it, so it is rebuilt from nothing on every run.
@@ -552,7 +567,7 @@ function cmdMigrateProject(root, config, argv) {
 		}
 		if (backups.length) {
 			fs.mkdirSync(path.join(sliceDir, '_legacy'), { recursive: true });
-			for (const e of backups) { fs.copyFileSync(path.join(liveSlices, e.name), path.join(sliceDir, '_legacy', e.name)); }
+			for (const e of backups) { fs.copyFileSync(path.join(liveSlices, e.name), path.join(sliceDir, backupPath.get(e.name))); }
 			console.log(`  backed up: ${backups.length} document(s) without usable frontmatter, verbatim, to `
 				+ 'docs/project_v2/slices/_legacy/');
 		}
@@ -744,7 +759,9 @@ function cmdIndex(root, config, argv) {
 	const undeclared = [];
 	const byFile = new Map();
 	const unreadable = [];
-	for (const name of fs.readdirSync(sliceDir).filter((n) => n.endsWith('.md'))) {
+	// `.md` in any case: migration keeps an authored VS-1_one.MD, and a reader that skipped it made that
+	// slice read as undeclared after adoption (Codex, PR #7).
+	for (const name of fs.readdirSync(sliceDir).filter((n) => /\.md$/i.test(n))) {
 		// Frontmatter outside the supported subset is bad INPUT, not a crash: it is a finding about a
 		// named file. Thrown, it reached the top level as "did not run" and named nothing.
 		let data;

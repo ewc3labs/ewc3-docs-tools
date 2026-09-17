@@ -2252,7 +2252,9 @@ function legacyRepo(extra = {}) {
 		...extra,
 	};
 	for (const [name, body] of Object.entries(docs)) {
-		if (body !== null) { fs.writeFileSync(path.join(project, 'slices', name), body); }
+		if (body === null) { continue; }
+		fs.mkdirSync(path.dirname(path.join(project, 'slices', name)), { recursive: true });
+		fs.writeFileSync(path.join(project, 'slices', name), body);
 	}
 	return { dir, docs };
 }
@@ -2363,6 +2365,33 @@ test('[migrate-legacy] a kept document\'s filename is never overwritten by ANOTH
 	assert.ok(/^id: VS-0*2$/m.test(fs.readFileSync(path.join(staged, two[0]), 'utf8')));
 	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project_v2', 'R_Roadmap.md'), 'utf8');
 	assert.ok(roadmap.includes(`slices/${two[0]}`), 'row VS-2 points at the renamed document');
+});
+
+test('[migrate-legacy] a backup never overwrites a live _legacy/ file of the same name - it is renamed', () => {
+	// Codex P1, PR #7. A repo adopted once already has slices/_legacy/. Backing up a top-level document of
+	// the same name, then copying the live _legacy/ file over it, lost the top-level prose, and the
+	// generated document linked to the wrong file.
+	const older = 'AN EARLIER ADOPTION\'S BACKUP.\n';
+	const { dir, docs } = legacyRepo({ '_legacy/VS-1_no_frontmatter_at_all.md': older });
+	cli(['migrate-project', '--write'], dir);
+	const legacyDir = path.join(stagedSlices(dir), '_legacy');
+	assert.strictEqual(fs.readFileSync(path.join(legacyDir, 'VS-1_no_frontmatter_at_all.md'), 'utf8'), older,
+		'the live _legacy file is staged verbatim at its own path');
+	const generated = fs.readFileSync(path.join(stagedSlices(dir), 'VS-1_no_frontmatter_at_all.md'), 'utf8');
+	const link = /\]\((_legacy\/[^)]+)\)/.exec(generated);
+	assert.ok(link && link[1] !== '_legacy/VS-1_no_frontmatter_at_all.md', `renamed backup: ${generated}`);
+	assert.strictEqual(fs.readFileSync(path.join(stagedSlices(dir), link[1]), 'utf8'),
+		docs['VS-1_no_frontmatter_at_all.md'], 'and the link reaches THIS document\'s prose');
+});
+
+test('[index] a slice document with an uppercase .MD extension is read', () => {
+	// Codex P2, PR #7: migration keeps VS-1_one.MD, but index enumerated `.md` case-sensitively, so after
+	// adoption the slice read as undeclared.
+	const dir = stagedRepo();
+	const slices = path.join(dir, 'docs', 'project_v2', 'slices');
+	fs.renameSync(path.join(slices, 'VS-1_first.md'), path.join(slices, 'VS-1_first.MD'));
+	const r = cli(['index'], dir);
+	assert.ok(/1 declaring/.test(r.out), r.out);
 });
 
 test('[migrate-legacy] a second run leaves no stale backup behind', () => {
