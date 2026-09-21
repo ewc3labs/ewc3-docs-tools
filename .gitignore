@@ -2,3 +2,13 @@ node_modules/
 *.log
 */scratch/
 docs/project_v2/
+
+# Machine-local AI tooling: written and rewritten by an extension on this workstation,
+# never repo canon. AGENTS.md and .github/copilot-instructions.md ARE tracked - every clone
+# and GitHub read them. See "Files this repo does NOT commit" in AGENTS.md.
+CLAUDE.md
+.codex/
+.cavemanrc
+.aicache/
+.codegraph/
+.vscode/settings.json

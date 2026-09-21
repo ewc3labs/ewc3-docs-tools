@@ -1,4 +1,9 @@
 {
+  "include": [
+    "README.md",
+    "AGENTS.md",
+    "docs/**.md"
+  ],
   "exclude": [
     "docs/project_v2/**.md"
   ],
