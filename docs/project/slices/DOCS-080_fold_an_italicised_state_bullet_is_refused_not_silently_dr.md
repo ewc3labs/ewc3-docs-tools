@@ -1,10 +1,12 @@
 ---
 id: DOCS-080
-state: ⬜ planned
+state: 🟦 tested
 title: "fold: an italicised state bullet is refused, not silently dropped from the legend"
 est: S
 doc: "[DOCS-080](slices/DOCS-080_fold_an_italicised_state_bullet_is_refused_not_silently_dr.md)"
 status: ""
+state_sha: 45573ed8f500
+state_source: trailer
 ---
 
 # DOCS-080 — fold: an italicised state bullet is refused, not silently dropped from the legend

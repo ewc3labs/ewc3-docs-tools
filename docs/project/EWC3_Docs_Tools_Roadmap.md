@@ -101,7 +101,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-077 | 🟦 tested | migrate-project: a tree whose history begins at its import cannot date evidence, and says so | S | [DOCS-077][docs-077] |  |
 | DOCS-078 | 🟦 tested | a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named | S | [DOCS-078][docs-078] |  |
 | DOCS-079 | ⬜ planned | migrate-project: evidence under an id's former name, bounded, and dated against the id it was written under | M | [DOCS-079][docs-079] |  |
-| DOCS-080 | ⬜ planned | fold: an italicised state bullet is refused, not silently dropped from the legend | S | [DOCS-080][docs-080] |  |
+| DOCS-080 | 🟦 tested | fold: an italicised state bullet is refused, not silently dropped from the legend | S | [DOCS-080][docs-080] |  |
 
 ## Done
 
