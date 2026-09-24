@@ -3413,6 +3413,12 @@ test('[fold] DOCS-080: an ITALICISED state bullet is refused; a reserved-state n
 	const inside = readLegend(['## State Legend', '', '- ⬜ `planned` — not started', '- 🗃️ _`retired` — the number was withdrawn_', ''].join('\n'));
 	assert.strictEqual(inside.unreadable, null, 'a glyph before the emphasis is a state, not a note');
 	assert.strictEqual(inside.legend.get('retired'), '🗃️ retired', 'the spelling is the glyph and the word, with no emphasis');
+	// Codex P1, PR #26: a keycap glyph CONTAINS a literal asterisk, so stripping every `*` ate the glyph itself and
+	// fold would write the corrupted spelling into frontmatter - the very defect this slice is about.
+	const keycap = readLegend(['## State Legend', '', '- *️⃣ `coded` — source landed', '- *️⃣ _`smoked` — verified_', ''].join('\n'));
+	assert.strictEqual(keycap.unreadable, null, keycap.unreadable && keycap.unreadable.why);
+	assert.strictEqual(keycap.legend.get('coded'), '*️⃣ coded', 'a keycap glyph survives whole');
+	assert.strictEqual(keycap.legend.get('smoked'), '*️⃣ smoked', 'and survives beside emphasis');
 
 	const dir = legendRepo(['## State Legend', '', '- ⬜ `planned` — not started', '- 🟦 `coded` — source landed',
 		'- _🟧 `blocked` — waiting on a dependency or a decision_']);
