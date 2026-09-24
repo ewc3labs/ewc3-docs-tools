@@ -3395,6 +3395,32 @@ test('[fold] DOCS-074: a State Legend inside a code fence is documentation - it 
 	assert.ok(readLegend(['## State Legend', '', '⬜ planned · 🟦 coded · 💨 smoked', ''].join('\n')).unreadable, 'a real one-line list still is');
 });
 
+test('[fold] DOCS-080: an ITALICISED state bullet is refused; a reserved-state note (no glyph) is still skipped', () => {
+	// DOCS-074's silent shrink, one layer up: the `_` skip is a sound convention for a reserved-state note, and
+	// indistinguishable from emphasis - so italicising a real state deleted it from the legend, exit 0, and every
+	// trailer using the word was then refused with a red pointing at the COMMIT. Measured downstream on two registers.
+	const { readLegend } = require('../lib/fold');
+	const note = ['## State Legend', '', '- ⬜ `planned` — not started', '- 🟦 `coded` — source landed',
+		'- _`tested` (unit + integration regression) is **reserved** — not a state_', ''].join('\n');
+	const read = readLegend(note);
+	assert.strictEqual(read.unreadable, null, 'a note has no glyph, and is still skipped');
+	assert.deepStrictEqual([...read.legend.keys()], ['planned', 'coded']);
+	assert.strictEqual(readLegend(['## State Legend', '', '- ⬜ `planned` — not started', '- _⚠️ these are legacy_', ''].join('\n')).unreadable,
+		null, 'a glyph with no backticked word is prose, not a state');
+
+	const dir = legendRepo(['## State Legend', '', '- ⬜ `planned` — not started', '- 🟦 `coded` — source landed',
+		'- _🟧 `blocked` — waiting on a dependency or a decision_']);
+	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: blocked']);
+	const before = fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8');
+	for (const mode of [[], ['--write'], ['--check']]) {
+		const r = cli(['fold', ...mode], dir);
+		assert.strictEqual(r.code, 2, `fold ${mode.join(' ')}:\n${r.out}`);
+		assert.ok(/State Legend at docs\/project\/R_Roadmap\.md:\d+ could not be read/.test(r.out), r.out);
+		assert.ok(r.out.includes('blocked'), `the vanished state is named, not the commit:\n${r.out}`);
+	}
+	assert.strictEqual(fs.readFileSync(gateDoc(dir, 'VS-1'), 'utf8'), before, 'nothing written');
+});
+
 test('[fold] a trailer merged in from a branch counts', () => {
 	const dir = foldRepo();
 	git(dir, 'checkout', '-qb', 'feature/VS-1');
