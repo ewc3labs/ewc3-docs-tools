@@ -3408,6 +3408,12 @@ test('[fold] DOCS-080: an ITALICISED state bullet is refused; a reserved-state n
 	assert.strictEqual(readLegend(['## State Legend', '', '- ⬜ `planned` — not started', '- _⚠️ these are legacy_', ''].join('\n')).unreadable,
 		null, 'a glyph with no backticked word is prose, not a state');
 
+	// The OTHER placement: a glyph outside the emphasis renders near-identically and was kept - but its spelling
+	// carried the underscore, so fold would have written `🗃️ _ retired` into frontmatter and every row.
+	const inside = readLegend(['## State Legend', '', '- ⬜ `planned` — not started', '- 🗃️ _`retired` — the number was withdrawn_', ''].join('\n'));
+	assert.strictEqual(inside.unreadable, null, 'a glyph before the emphasis is a state, not a note');
+	assert.strictEqual(inside.legend.get('retired'), '🗃️ retired', 'the spelling is the glyph and the word, with no emphasis');
+
 	const dir = legendRepo(['## State Legend', '', '- ⬜ `planned` — not started', '- 🟦 `coded` — source landed',
 		'- _🟧 `blocked` — waiting on a dependency or a decision_']);
 	trailerCommit(dir, 'work', ['Slice: VS-1', 'State: blocked']);
