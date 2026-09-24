@@ -96,6 +96,14 @@ Deliberately out:
 - **Tests** — one file, plain `node:assert`, no framework. **Every fix starts with a failing test**,
   and the commit says it failed. Green means `N passing, 0 failing` plus `check`, `index --check`
   and `fold --check` all exiting 0 here.
+- **Assert the value, not that something is there.** A count, a `size`, a `has(word)` — each passes
+  over a value that survived *incorrectly*. A legend read that kept a state and stored its spelling
+  as `🗃️ _ retired` passed every count-based check, and `fold` would have written that into every
+  row: consistent with itself at every surface, so nothing disagreed with anything.
+- **A sanitiser is tested against a legal value that resembles what it strips.** Stripping emphasis
+  from a glyph was tested against glyphs that needed stripping and passed; the case that broke it
+  was a keycap — `*️⃣` **is** an asterisk — which no register had yet used. Test the property that
+  could break it, not the property that motivated it.
 - **CI** — tests on Node 18, 20, 22 and 24, plus "Check our own docs", which runs this tool against
   this repository. If the toolkit cannot keep its own documentation honest, it is not ready to be
   pointed at anyone else's.
