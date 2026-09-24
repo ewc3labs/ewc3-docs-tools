@@ -1169,7 +1169,7 @@ function cmdFold(root, config, argv) {
 	const legendUnreadable = (u) => {
 		console.error(`fold: did not run: the State Legend at ${rel(u.file)}:${u.line} could not be read:`);
 		console.error(`    ${u.text.trim()}`);
-		console.error('  expected one state per bullet: - <glyph> `word` — meaning');
+		console.error(u.why ? `  ${u.why}` : '  expected one state per bullet: - <glyph> `word` — meaning');
 		return 2;
 	};
 
