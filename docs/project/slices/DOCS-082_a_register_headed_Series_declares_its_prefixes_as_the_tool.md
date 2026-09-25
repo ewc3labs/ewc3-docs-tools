@@ -59,10 +59,15 @@ So position decided which register was authoritative. Three rules fix that:
 1. **An archive does not declare.** Nothing inside a `<details>` block declares a prefix.
 2. **The canonical spelling wins.** Where both headers exist, `Prefix` is the live shape and
    `Series` is what a register carried before migration, so order never decides.
-3. **A `Series` header alone is not a register.** `Series` is an ordinary English word, so a
-   glossary headed `| Series | Meaning |` claimed every prefix in its first column — and, sitting
-   first, hid the real register beneath it. A register carries a scope, an owner or a counter; a
-   glossary carries none. `Prefix` needs no such test: it is this toolkit's own word.
+3. **A header alone is not a register**, under *either* word. A glossary headed
+   `| Series | Meaning |` claimed every prefix in its first column and, sitting first, hid the real
+   register beneath it. A register carries a scope, an owner or a counter; a glossary carries none.
+
+   This rule was applied to `Series` alone at first, reasoning that `Prefix` is this toolkit's own
+   word and needed no such test. **That exemption was argued, not measured, and it cost:** a
+   `| Prefix | Meaning |` glossary then took precedence over a real register, declared its first
+   cell, and carried no counter — so minting fell back to the rows and re-issued a recorded id. The
+   test is symmetric now. An exemption argued from what a word *means* is not a measurement.
 
 And one rule that is not about reading at all. **Accepting a shape means accepting its counter.**
 The counter column was recognised only as `Last Used`, while the newly accepted shape spells it

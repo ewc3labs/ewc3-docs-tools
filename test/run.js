@@ -949,6 +949,31 @@ test('[mint] DOCS-082: a counter headed `Last Num` is read, so an accepted shape
 	assert.ok(!r.out.includes('AIR-28'), 'AIR-28 is already recorded');
 });
 
+test('[series] DOCS-082: a `Prefix` glossary is not a register either - the exemption was reasoned, not measured', () => {
+	// Codex P1, PR #30: the register-column test was applied to `Series` and NOT to `Prefix`, on the reasoning that
+	// `Prefix` is this toolkit's own word. Measured, that exemption costs: a `| Prefix | Meaning |` glossary wins
+	// precedence over a real `Series` register, still declares AIR from its first cell, and carries no counter - so
+	// minting fell back to the rows and returned AIR-28 with the register's own counter already at AIR-28.
+	const glossary = '| Prefix | Meaning |\n| --- | --- |\n| AIR | the runtime, described in prose |\n';
+	const register = '| Series | Scope | Meaning | Last Num | Next |\n| --- | --- | --- | --- | --- |\n'
+		+ '| AIR | global | runtime | AIR-28 | AIR-29 |\n';
+	const read = readSeries(path.join(roadmapRepo(`${glossary}\n${register}\n| ID | Slice |\n| --- | --- |\n| AIR-27 | a |\n`),
+		'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared], ['AIR'], 'the register declares, not the glossary');
+	assert.strictEqual(read.scopes.get('AIR').declared, 'global', 'and its scope comes from the register');
+
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pfxgloss-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '', glossary, register,
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |', '| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('AIR-29'), `the register's counter is read past the glossary:\n${r.out}`);
+});
+
 test('[mint] DOCS-082: minting reads the SAME register the declaration does - an archived counter never picks the id', () => {
 	// Codex P1, PR #30, after the first counter fix: `lastUsedCell` had its own scan, which knew nothing about
 	// <details> or about `Prefix` winning. With an archival register above the live one, the declaration reader
