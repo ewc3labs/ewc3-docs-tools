@@ -99,7 +99,14 @@ as it should.
 
 - every register shape the toolkit supports, under both headings, declares its prefix with scope
   read the same way;
-- the legacy name-keyed shape declares nothing, while the id in use is still seen.
+- the legacy name-keyed shape declares nothing, while the id in use is still seen;
+- an archival register inside `<details>` declares nothing in **either** order, and an id that
+  appears only inside it still sets the high-water mark;
+- a glossary headed `| Series | Meaning |` **or** `| Prefix | Meaning |` declares nothing and does
+  not hide the real register — checked through the reader *and* through `slice new`;
+- a counter spelled `Last Num` is read, so an accepted shape cannot re-issue a recorded id;
+- minting and the declaration reader choose the same register: an archived counter above a live one
+  never picks the next id.
 
 ## The lesson, which is already in AGENTS.md
 
