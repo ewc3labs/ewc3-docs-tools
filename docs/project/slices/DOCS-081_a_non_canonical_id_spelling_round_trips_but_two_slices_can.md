@@ -113,11 +113,30 @@ cell is an output; the width is an input; they were already separate.
 
 ## A document count is not the invariant
 
-A downstream suggestion was to gate the cutover on `documents emitted == register rows`. That one
-would false-alarm here: **one document may serve several rows on purpose** — a narrative heading
-covering `XY-371 through XY-375` becomes one document for five rows, which is the whole reason
-groups exist. The invariant that holds is the one implemented above: **no two rows share a number,
-and every row's number is represented by exactly one document.**
+A downstream suggestion was to gate the cutover on `documents emitted == register rows`.
+
+**My first answer to that was wrong, and it was wrong because I read the module's design note
+instead of running it.** The note says one file per narrative *group*; the extractor emits **one
+document per row**, with followers carrying `see: <anchor>`. Measured: a heading covering
+`XY-371 through XY-373` plus one ungrouped row gives **4 documents from 4 rows**. Grouping is
+therefore *not* a reason the gate false-alarms, and I had told the downstream lane it was.
+
+**What actually breaks that gate is a KEPT document.** Migration does not regenerate a slice
+document that already exists, so the line it prints counts generated documents only:
+
+```text
+  wrote:  docs/project_v2/slices/  (2 documents from 3 rows and 0 narrative sections)
+  kept:   1 authored document(s), not regenerated
+  staged: XY-1_a.md  XY-2_authored.md  XY-3_c.md
+```
+
+Two documents, three rows, and nothing wrong: the **staged tree** holds three. So the gate is sound
+when measured over the staged tree, and false-alarms when measured on that line — which is the
+number a reader would reach for. For a first conversion, where nothing is kept, it would have caught
+the collision.
+
+The invariant that holds without those caveats is the one implemented above: **no two rows share a
+number, and every row's number is represented by exactly one document in the staged tree.**
 
 The second suggested gate — every row's id byte-identical to its document's id — is what
 `index --check` already does by comparing the whole rendered row, and the id is rendered from

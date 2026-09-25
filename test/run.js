@@ -1997,6 +1997,34 @@ test('[index-gate] DOCS-081: two spellings of ONE number are refused, naming bot
 	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), 'and nothing was staged');
 });
 
+test('[index-gate] DOCS-081: a FENCED or COMMENTED example row is not a row - it neither collides, nor sets a width, nor is rewritten', () => {
+	// Codex P1, PR #28: the new collision check read rows from raw text, so a roadmap documenting its own row syntax
+	// refused itself. index's own duplicate check and renderIndex had the same hole - and renderIndex REWRITES the
+	// rows it finds, so an example inside the section could have been rewritten. This repository's own rule.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fenced-'));
+	const example = '| XY-1 | planned | an EXAMPLE of the same id | x |';
+	const commented = '<!-- | XY-1 | planned | a commented-out row | x | -->';
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '',
+		'## Number Series', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| XY | global | this-repo | XY-1 | slices |', '',
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| XY-001 | planned | a | x |', '', 'A row looks like this:', '', '```markdown', example, '```', '',
+		commented, ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'XY-001_a.md'), GATE_DOC('XY-001', 'planned', 'a', 'x'));
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'the example is not a duplicate of the row it documents');
+	const migrate = cli(['migrate-project'], dir);
+	assert.ok(!/more than one row/.test(migrate.out), `and migration does not refuse over it:\n${migrate.out}`);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	const after = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	assert.ok(after.includes(example) && after.includes(commented), `neither example was rewritten:\n${after}`);
+	// The narrow example id must not drag the series' detected width down either.
+	const { detectWidths } = require('../lib/deliveryindex');
+	assert.strictEqual(detectWidths(after).XY, 3, 'the width comes from the real row, not the example');
+});
+
 test('[index-gate] DOCS-081: two ROWS at one number are refused by migrate - the row that arrives second is not lost', () => {
 	// Measured on shipped code: with no documents yet, migrate exited 0, staged ONE document for the two rows under the
 	// canonical spelling with the OTHER row's title, and reported "2 documents from 3 rows". The second row's state,
