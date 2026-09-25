@@ -1,10 +1,12 @@
 ---
 id: DOCS-081
-state: ⬜ planned
+state: 🟦 tested
 title: a non-canonical id spelling round-trips, but two slices cannot share one number
 est: M
 doc: "[DOCS-081](slices/DOCS-081_a_non_canonical_id_spelling_round_trips_but_two_slices_can.md)"
 status: ""
+state_sha: 67804e82eec2
+state_source: trailer
 ---
 
 # DOCS-081 — a non-canonical id spelling round-trips, but two slices cannot share one number
