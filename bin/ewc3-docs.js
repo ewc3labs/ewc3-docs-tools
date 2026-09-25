@@ -19,7 +19,7 @@ const { checkLinks } = require('../lib/links');
 const { resolveValues, syncFiles } = require('../lib/values');
 const { expand } = require('../lib/glob');
 const { migrateText } = require('../lib/migrate');
-const { extractSlices, inventorySlices, normalizeId, rebaseRelative, splitEvidence, padId } = require('../lib/slices');
+const { extractSlices, inventorySlices, normalizeId, rebaseRelative, splitEvidence, padId, rowCells } = require('../lib/slices');
 const { evidenceDating } = require('../lib/evidence');
 const { checkTable } = require('../lib/tables');
 const frontmatter = require('../lib/frontmatter');
@@ -437,7 +437,30 @@ function cmdMigrateProject(root, config, argv) {
 			.filter((e) => e.isFile() && /\.md$/i.test(e.name)).map((e) => e.name).sort()
 			.map((name) => ({ name, text: fs.readFileSync(path.join(liveSlices, name), 'utf8') })))
 		: [];
-	const rowIds = new Set(indexRows(result.text).map((r) => r.id));
+	// TWO ROWS AT ONE NUMBER LOSE A ROW, SILENTLY (DOCS-081). A number identifies a slice, so `XY-01` and `XY-001` are
+	// one id and one generated document - and the second row's title, state and prose went into no document at all
+	// while this exited 0 saying "2 documents from 3 rows". The count was the only tell. Refused before anything is
+	// written, dry run included: which row is the slice is a human decision, and a migration advertised as
+	// non-destructive must not make it by arriving second.
+	const rows = indexRows(result.text);
+	const rowIds = new Set(rows.map((r) => r.id));
+	const rowsByNumber = new Map();
+	for (const r of rows) {
+		if (!rowsByNumber.has(r.id)) { rowsByNumber.set(r.id, []); }
+		rowsByNumber.get(r.id).push(r);
+	}
+	const sharedNumbers = [...rowsByNumber].filter(([, at]) => at.length > 1);
+	if (sharedNumbers.length) {
+		const rel = path.relative(repo, from).split(path.sep).join('/');
+		console.error(`  REFUSED: ${sharedNumbers.length} number(s) carried by more than one row. A number is one slice,`);
+		console.error('           so these rows would share one document and all but one would be lost:');
+		for (const [id, at] of sharedNumbers) {
+			console.error(`    ${id}: ${at.map((r) => `${rel}:${r.line + 1} (${(rowCells(r.raw)[0] || '').trim()})`).join('  ')}`);
+		}
+		console.error('  Keep one row per number - retire the other by recording its id as TEXT, outside the index.');
+		console.error('  Nothing was written.');
+		return 1;
+	}
 	if (inventory.length) {
 		const FM = { ok: 'frontmatter ok', none: 'no frontmatter', 'no-id': 'no id: in frontmatter', unreadable: 'unreadable frontmatter' };
 		const width = Math.max(...inventory.map((e) => e.name.length));

@@ -1941,6 +1941,105 @@ function gateRepo() {
 	git(dir, 'commit', '-qm', 'adopted');
 	return dir;
 }
+/**
+ * DOCS-081. A register with a NON-CANONICAL id spelling: `XY-01` in a series that pads to three, recorded exactly as
+ * issued because one commit citation depends on the spelling. `live` adds the canonical spelling of the SAME number.
+ */
+function narrowIdRepo({ live = false } = {}) {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narrow-'));
+	const slices = path.join(dir, 'docs', 'project', 'slices');
+	fs.mkdirSync(slices, { recursive: true });
+	fs.writeFileSync(path.join(dir, '.ewc3-docs.json'), JSON.stringify({ series: { widths: { XY: 3 } } }) + '\n');
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '',
+		'## Number Series', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| XY | global | this-repo | XY-111 | slices |', '',
+		'## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| XY-01 | retired | mis-minted, one citation | DO NOT RE-SPELL |',
+		...(live ? ['| XY-001 | planned | the live slice at this number | x |'] : []),
+		'| XY-111 | planned | latest | y |', ''].join('\n'));
+	fs.writeFileSync(path.join(slices, 'XY-01_tombstone.md'), GATE_DOC('XY-01', 'retired', 'mis-minted, one citation', 'DO NOT RE-SPELL'));
+	if (live) { fs.writeFileSync(path.join(slices, 'XY-001_live.md'), GATE_DOC('XY-001', 'planned', 'the live slice at this number', 'x')); }
+	fs.writeFileSync(path.join(slices, 'XY-111_latest.md'), GATE_DOC('XY-111', 'planned', 'latest', 'y'));
+	git(dir, 'init', '-q');
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'adopted');
+	return dir;
+}
+
+test('[index-gate] DOCS-081: a non-canonical id spelling round-trips - nothing pads an id that already exists', () => {
+	// A tombstone recorded EXACTLY AS ISSUED: padding it would break the one citation the row exists to resolve.
+	const dir = narrowIdRepo();
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	const roadmap = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	assert.ok(roadmap.includes('| XY-01 | retired |'), `the spelling is untouched:\n${roadmap}`);
+	assert.ok(!roadmap.includes('XY-001'), 'and it was not padded to the canonical spelling');
+	assert.ok(fs.existsSync(path.join(dir, 'docs', 'project', 'slices', 'XY-01_tombstone.md')), 'nor was its document renamed');
+	// The next id comes from the NUMBER, so an odd spelling neither advances nor holds back the series.
+	const mint = cli(['slice', 'new', 'XY', 'a new thing'], dir);
+	assert.strictEqual(mint.code, 0, mint.out);
+	assert.ok(mint.out.includes('XY-112'), mint.out);
+	assert.strictEqual(cli(['values', '--check'], dir).code, 0, 'values does not re-spell a row id');
+});
+
+test('[index-gate] DOCS-081: two spellings of ONE number are refused, naming both documents', () => {
+	// The number is the identity; the spelling is a display detail. A model where a number identifies a slice EXCEPT
+	// when the spelling differs cannot answer "is this number taken?", which is all a register is for.
+	const dir = narrowIdRepo({ live: true });
+	const check = cli(['index', '--check'], dir);
+	assert.strictEqual(check.code, 2, check.out);
+	assert.ok(check.out.includes('XY-01_tombstone.md') && check.out.includes('XY-001_live.md'), check.out);
+	const migrate = cli(['migrate-project'], dir);
+	assert.strictEqual(migrate.code, 1, migrate.out);
+	assert.ok(/more than one row/.test(migrate.out), migrate.out);
+	assert.ok(migrate.out.includes('(XY-01)') && migrate.out.includes('(XY-001)'), `both spellings, both lines:\n${migrate.out}`);
+	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), 'and nothing was staged');
+});
+
+test('[index-gate] DOCS-081: a FENCED or COMMENTED example row is not a row - it neither collides, nor sets a width, nor is rewritten', () => {
+	// Codex P1, PR #28: the new collision check read rows from raw text, so a roadmap documenting its own row syntax
+	// refused itself. index's own duplicate check and renderIndex had the same hole - and renderIndex REWRITES the
+	// rows it finds, so an example inside the section could have been rewritten. This repository's own rule.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fenced-'));
+	const example = '| XY-1 | planned | an EXAMPLE of the same id | x |';
+	const commented = '<!-- | XY-1 | planned | a commented-out row | x | -->';
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '',
+		'## Number Series', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| XY | global | this-repo | XY-1 | slices |', '',
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| XY-001 | planned | a | x |', '', 'A row looks like this:', '', '```markdown', example, '```', '',
+		commented, ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'XY-001_a.md'), GATE_DOC('XY-001', 'planned', 'a', 'x'));
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+
+	assert.strictEqual(cli(['index', '--check'], dir).code, 0, 'the example is not a duplicate of the row it documents');
+	const migrate = cli(['migrate-project'], dir);
+	assert.ok(!/more than one row/.test(migrate.out), `and migration does not refuse over it:\n${migrate.out}`);
+	assert.strictEqual(cli(['index', '--write'], dir).code, 0);
+	const after = fs.readFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), 'utf8');
+	assert.ok(after.includes(example) && after.includes(commented), `neither example was rewritten:\n${after}`);
+	// The narrow example id must not drag the series' detected width down either.
+	const { detectWidths } = require('../lib/deliveryindex');
+	assert.strictEqual(detectWidths(after).XY, 3, 'the width comes from the real row, not the example');
+});
+
+test('[index-gate] DOCS-081: two ROWS at one number are refused by migrate - the row that arrives second is not lost', () => {
+	// Measured on shipped code: with no documents yet, migrate exited 0, staged ONE document for the two rows under the
+	// canonical spelling with the OTHER row's title, and reported "2 documents from 3 rows". The second row's state,
+	// title and prose went nowhere, and the count was the only tell.
+	const dir = narrowIdRepo({ live: true });
+	fs.rmSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true, force: true });
+	git(dir, 'add', '-A');
+	git(dir, 'commit', '-qm', 'rows only');
+	const r = cli(['migrate-project', '--write'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/REFUSED: 1 number\(s\) carried by more than one row/.test(r.out), r.out);
+	assert.ok(/XY-1: .*:\d+ \(XY-01\).*:\d+ \(XY-001\)/.test(r.out), `each row named with its spelling:\n${r.out}`);
+	assert.ok(!fs.existsSync(path.join(dir, 'docs', 'project_v2')), 'nothing was staged');
+});
+
 const gateRoadmap = (dir) => path.join(dir, 'docs', 'project', 'R_Roadmap.md');
 const gateDoc = (dir, id) => path.join(dir, 'docs', 'project', 'slices',
 	fs.readdirSync(path.join(dir, 'docs', 'project', 'slices')).find((n) => n.startsWith(`${id}_`)));
