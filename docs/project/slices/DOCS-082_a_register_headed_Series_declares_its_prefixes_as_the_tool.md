@@ -40,24 +40,36 @@ It also matters for anything derived across repositories: a register that declar
 look wrong, it looks **empty**, so an ownership table generated from these registers would have
 under-reported silently rather than failed.
 
-## What a wider match let in, and the two rules that keep it honest
+## What a wider match let in, and the rules that keep it honest
 
-Accepting creates candidates that did not exist before, and the first one is this toolkit's own
-output. preserves the superseded register inside a block — *kept verbatim, nothing here was thrown
-away* — so a migrated roadmap contains a second, historical register a few lines below its live one.
+Accepting `Series` creates candidates that did not exist before, and the first is this toolkit's own
+output: `migrate-project` preserves the superseded register inside a `<details>` block — *kept
+verbatim, nothing here was thrown away* — so a migrated roadmap carries a second, historical
+register a few lines below its live one.
 
 Measured before this shipped, with the archival table **above** the live one:
 
-| | declared |
+| order | declared |
 | --- | --- |
-| live register first |  — correct |
-| archival register first |  — **a superseded prefix owned by someone else**, and the live register missed entirely |
+| live register first | `HDC` — correct |
+| archival register first | `OLD` — **a superseded prefix owned by someone else**, and the live register missed entirely |
 
-So position decided which register was authoritative. Two rules fix that:
+So position decided which register was authoritative. Three rules fix that:
 
-1. **An archive does not declare.** Nothing inside a block declares a prefix.
-2. **The canonical spelling wins.** Where both headers exist, is the live shape and is what a
-   register carried before migration, so order never decides.
+1. **An archive does not declare.** Nothing inside a `<details>` block declares a prefix.
+2. **The canonical spelling wins.** Where both headers exist, `Prefix` is the live shape and
+   `Series` is what a register carried before migration, so order never decides.
+3. **A `Series` header alone is not a register.** `Series` is an ordinary English word, so a
+   glossary headed `| Series | Meaning |` claimed every prefix in its first column — and, sitting
+   first, hid the real register beneath it. A register carries a scope, an owner or a counter; a
+   glossary carries none. `Prefix` needs no such test: it is this toolkit's own word.
+
+And one rule that is not about reading at all. **Accepting a shape means accepting its counter.**
+The counter column was recognised only as `Last Used`, while the newly accepted shape spells it
+`Last Num` — so a register whose counter said `AIR-28`, with `AIR-27` as its highest retained row,
+minted **`AIR-28`**: a number its own counter had already recorded. A loud refusal had become a
+silent collision. The counter is read under either name now, and `Next` is deliberately not read,
+because it holds the id that has **not** been used.
 
 **Ids in use are still read from the whole document**, archive included: a number that was used is
 used, and hiding one would let the next mint reuse it. Measured — an id that appears *only* inside
