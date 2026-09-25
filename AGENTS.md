@@ -114,6 +114,10 @@ Deliberately out:
 - **A count whose source is unnamed is not a check.** "Documents emitted equals rows" is two
   different checks: over the printed line it false-alarms on any repository with kept documents,
   over the staged tree it holds. Name where the number comes from, or it is not a gate.
+- **When you measure, print the value — not a rendering of it.** `JSON.stringify` shows a RegExp, a
+  `Set` and a `Map` all as `{}`, and this library returns Sets and Maps everywhere (`declared`,
+  `scopes`, `used`). A downstream probe was one sentence from reporting an exported matcher as
+  empty. Spread it, `String()` it, or assert what it *does*.
 - **A second implementation is not independent if both authors read the same artifact.** A
   downstream census written to check this toolkit matched the register header the same wrong way the
   toolkit did, so the two agreed and both were wrong. Independence comes from checking against the

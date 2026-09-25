@@ -64,3 +64,20 @@ folded into a count of contests.
 - both declaring it `repo-local`: not reported, which is the `FIX` case and correct;
 - both declaring it global: reported as a contest, as now;
 - a 2-wide and a 3-wide register writing the same number: their ids compare equal.
+
+## And a denominator the generated table must not blur
+
+A coverage number invites the wrong reading unless it separates two very different absences.
+Measured downstream, across one estate's repositories:
+
+- **no repository that has a register fails to declare.** Every planning surface that exists
+  declares its prefixes;
+- the repositories counted as "not declaring" have **no planning surface at all** — no
+  `docs/project`, nothing to declare with.
+
+Those are different facts and only one of them is the registry's business. "Declares nothing" must
+therefore never be one bucket: a register that exists and declares nothing is a **defect**, and a
+repository with no register is **out of scope** until someone gives it one. Reporting them together
+produces a coverage percentage that understates the discipline and points at the wrong repositories.
+
+The same rule as everywhere else here: **absent is not zero**, and a generated table says which.
