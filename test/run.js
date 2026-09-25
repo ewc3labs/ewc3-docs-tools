@@ -949,6 +949,38 @@ test('[mint] DOCS-082: a counter headed `Last Num` is read, so an accepted shape
 	assert.ok(!r.out.includes('AIR-28'), 'AIR-28 is already recorded');
 });
 
+test('[series] DOCS-082: ACCEPTING A SHAPE MEANS READING ITS COUNTER - the invariant, not another instance', () => {
+	// Four review rounds found the same shape of defect: widening the header match accepted a table whose counter
+	// this toolkit does not read, so a loud refusal became a silent re-issue. `Next` was the last of them - it says
+	// which id is NOT yet used, `lastUsedCell` ignores it by design, and a table qualified only by `Next` was still
+	// accepted. Rather than a fifth instance test, assert the contract: a table may qualify as a register ONLY on a
+	// column that carries ownership (scope, owner) or a counter this toolkit reads (last used, last num).
+	const { ownershipHeader } = require('../lib/series');
+	const table = (header) => `# R\n\n## ID Register\n\n${header}\n| --- | --- | --- |\n| AIR | x | AIR-29 |\n`;
+	for (const qualifier of ['Scope', 'Owner', 'Last Used', 'Last Num']) {
+		assert.ok(ownershipHeader(table(`| Series | Meaning | ${qualifier} |`)), `${qualifier} qualifies a register`);
+		assert.ok(ownershipHeader(table(`| Prefix | Meaning | ${qualifier} |`)), `${qualifier} qualifies under Prefix too`);
+	}
+	for (const notQualifier of ['Meaning', 'Next', 'Notes']) {
+		assert.strictEqual(ownershipHeader(table(`| Series | Meaning | ${notQualifier} |`)), null,
+			`${notQualifier} alone does not make a register: it carries neither ownership nor a counter this toolkit reads`);
+	}
+	// And the consequence that made it matter: a `Next`-only table declares nothing, so minting REFUSES loudly
+	// rather than falling back to the rows and re-issuing the number the register implies is spent.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nextonly-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '',
+		'| Series | Meaning | Next |', '| --- | --- | --- |', '| AIR | runtime | AIR-29 |', '',
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/not declared by any register/.test(r.out), `refused loudly, not minted as AIR-28:\n${r.out}`);
+});
+
 test('[series] DOCS-082: a `Prefix` glossary is not a register either - the exemption was reasoned, not measured', () => {
 	// Codex P1, PR #30: the register-column test was applied to `Series` and NOT to `Prefix`, on the reasoning that
 	// `Prefix` is this toolkit's own word. Measured, that exemption costs: a `| Prefix | Meaning |` glossary wins

@@ -69,6 +69,12 @@ So position decided which register was authoritative. Three rules fix that:
    cell, and carried no counter — so minting fell back to the rows and re-issued a recorded id. The
    test is symmetric now. An exemption argued from what a word *means* is not a measurement.
 
+A table qualifies on a column carrying **ownership** (scope, owner) or **a counter this toolkit
+reads** (last used, last num) — and on nothing else. `Next` is not a qualifier: it names the id *not
+yet* used, the counter reader ignores it by design, and a table qualified only by `Next` was
+accepted while yielding no counter, so minting fell back to the rows and re-issued the number the
+register implies is spent.
+
 And one rule that is not about reading at all. **Accepting a shape means accepting its counter.**
 The counter column was recognised only as `Last Used`, while the newly accepted shape spells it
 `Last Num` — so a register whose counter said `AIR-28`, with `AIR-27` as its highest retained row,
@@ -106,10 +112,23 @@ as it should.
   not hide the real register — checked through the reader *and* through `slice new`;
 - a counter spelled `Last Num` is read, so an accepted shape cannot re-issue a recorded id;
 - minting and the declaration reader choose the same register: an archived counter above a live one
-  never picks the next id.
+  never picks the next id;
+- **the invariant rather than a sixth instance**: every column that qualifies a table as a register
+  is asserted, and every one that does not — so the next widening has to argue with a test.
 
 ## The lesson, which is already in AGENTS.md
 
 *A design note states intent; only the code knows what it does.* This one had the intent written
 directly above the line that contradicted it, for four slices, and every reader since — including
 me, twice this week — took the comment for the behaviour.
+
+And a second, earned the hard way across four review rounds on this one change. **Every widening of
+a parser let something new in**, and each time the failure had the same shape: a table was accepted
+whose counter this toolkit could not read, so a **loud refusal became a silent re-issue** — an
+archival register, a glossary under each header word, a counter spelled another way, a column naming
+the id *not yet* used. The instances were all different; the class never changed.
+
+That is `docs/design/one-template-beats-three-parsers.md` charging rent. The answer was not a fifth
+instance test but the **contract**: qualify on ownership or on a counter we actually read, and
+assert both halves of that list. A widening is a claim about every document that will ever be read —
+and a claim needs a test, not an argument.
