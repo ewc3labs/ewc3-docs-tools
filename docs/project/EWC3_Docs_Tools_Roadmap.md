@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-080<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-081<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
@@ -102,6 +102,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-078 | 🟦 tested | a set-aside is a prompt for the owner, not a verdict: neutral wording, and the backfill shape named | S | [DOCS-078][docs-078] |  |
 | DOCS-079 | ⬜ planned | migrate-project: evidence under an id's former name, bounded, and dated against the id it was written under | M | [DOCS-079][docs-079] |  |
 | DOCS-080 | 🟦 tested | fold: an italicised state bullet is refused, not silently dropped from the legend | S | [DOCS-080][docs-080] |  |
+| DOCS-081 | ⬜ planned | a non-canonical id spelling round-trips, but two slices cannot share one number | M | [DOCS-081][docs-081] |  |
 
 ## Done
 
@@ -203,6 +204,7 @@ caught.
 [docs-078]: slices/DOCS-078_a_set_aside_is_a_prompt_for_the_owner_not_a_verdict_neutra.md
 [docs-079]: slices/DOCS-079_migrate_project_evidence_under_an_id_s_former_name_bounded.md
 [docs-080]: slices/DOCS-080_fold_an_italicised_state_bullet_is_refused_not_silently_dr.md
+[docs-081]: slices/DOCS-081_a_non_canonical_id_spelling_round_trips_but_two_slices_can.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
