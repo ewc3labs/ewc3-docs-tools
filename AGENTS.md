@@ -114,6 +114,15 @@ Deliberately out:
 - **A count whose source is unnamed is not a check.** "Documents emitted equals rows" is two
   different checks: over the printed line it false-alarms on any repository with kept documents,
   over the staged tree it holds. Name where the number comes from, or it is not a gate.
+- **A second implementation is not independent if both authors read the same artifact.** A
+  downstream census written to check this toolkit matched the register header the same wrong way the
+  toolkit did, so the two agreed and both were wrong. Independence comes from checking against the
+  *contract* — or against the artifact's own declared shape — not from writing the code twice.
+- **Widening a matcher is a claim about every document that will ever be read.** Each widening here
+  admitted something whose counter some reader could not interpret, turning a loud refusal into a
+  silent re-issue: an archival table, a glossary, a counter spelled another way, a column naming an
+  id not yet used. Assert the whole contract — what qualifies *and* what must not — or the next
+  widening finds the next hole.
 - **CI** — tests on Node 18, 20, 22 and 24, plus "Check our own docs", which runs this tool against
   this repository. If the toolkit cannot keep its own documentation honest, it is not ready to be
   pointed at anyone else's.
