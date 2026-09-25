@@ -897,6 +897,36 @@ test('[series] a prefix named in a neighbouring cell is a mention, not a mint', 
 	assert.deepStrictEqual([...read.declared].sort(), ['TS'],
 		'only the first cell declares; prefixes named beside it do not');
 });
+test('[series] DOCS-082: a register headed `Series` declares, exactly as one headed `Prefix` does', () => {
+	// The comment above this reader has said since DOCS-058 that both spellings are accepted, "rather than asking
+	// eight roadmaps to rename a column" - and the regex only ever matched `Prefix`. So a register keeping the
+	// template's own header read as declaring NOTHING: `series` called its prefixes undeclared, and `slice new`
+	// refused to mint into it. Measured downstream: 2 of the 4 register shapes in the estate are headed `Series`.
+	const shapes = {
+		'| Prefix | Scope | Owner | Last Used | Series |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | AIR-28 | runtime |\n',
+		'| Prefix | Scope | Owner | Meaning | Last Used |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | runtime | AIR-28 |\n',
+		'| Series | Scope | Owner | Last Used | Series description |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | AIR-28 | runtime |\n',
+		'| Series | Scope | Meaning | Last Num | Next |': '| --- | --- | --- | --- | --- |\n| AIR | global | runtime | AIR-28 | AIR-29 |\n',
+	};
+	for (const [header, body] of Object.entries(shapes)) {
+		const dir = roadmapRepo(`${header}\n${body}\n| ID | Slice |\n| --- | --- |\n| AIR-28 | a slice |\n`);
+		const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+		assert.deepStrictEqual([...read.declared], ['AIR'], `${header} must declare AIR`);
+		assert.strictEqual(read.scopes.get('AIR').local, false, `${header} scope`);
+	}
+});
+
+test('[series] DOCS-082: a legacy register whose first cell is a NAME still declares nothing', () => {
+	// The guard that makes accepting `Series` safe: `| Series | Last used | Next |` keyed by a human name is the
+	// shape `migrate-project` exists to reshape. Its prefix appears only inside `DT-110`, and a first cell reading
+	// `DevTools` is not a prefix - so this must keep declaring nothing rather than claim a series called DevTools.
+	const dir = roadmapRepo('| Series | Last used | Next |\n| --- | --- | --- |\n| DevTools | DT-110 | DT-111 |\n'
+		+ '\n| ID | Slice |\n| --- | --- |\n| DT-110 | a slice |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared], [], 'a human name in the first cell declares no prefix');
+	assert.strictEqual(read.used.get('DT'), 110, 'though the id in use is still seen');
+});
+
 function backlogRepo(roadmapBody, backlogBody) {
 	const dir = tmpdir();
 	fs.mkdirSync(path.join(dir, 'docs', 'project', 'backlog'), { recursive: true });
