@@ -901,7 +901,7 @@ test('[series] DOCS-082: a register headed `Series` declares, exactly as one hea
 	// The comment above this reader has said since DOCS-058 that both spellings are accepted, "rather than asking
 	// eight roadmaps to rename a column" - and the regex only ever matched `Prefix`. So a register keeping the
 	// template's own header read as declaring NOTHING: `series` called its prefixes undeclared, and `slice new`
-	// refused to mint into it. Measured downstream: 2 of the 4 register shapes in the estate are headed `Series`.
+	// refused to mint into it. Registers headed `Series` are in live use downstream, in more than one shape.
 	const shapes = {
 		'| Prefix | Scope | Owner | Last Used | Series |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | AIR-28 | runtime |\n',
 		'| Prefix | Scope | Owner | Meaning | Last Used |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | runtime | AIR-28 |\n',
@@ -916,15 +916,67 @@ test('[series] DOCS-082: a register headed `Series` declares, exactly as one hea
 	}
 });
 
+test('[series] DOCS-082: a `Series` table that is not a register declares nothing', () => {
+	// Codex and Copilot, PR #30: accepting the header word alone would let ANY table whose first column is headed
+	// `Series` claim ownership - including a glossary sitting above the real register, which would then never be
+	// scanned. A register carries a scope, an owner or a counter; a glossary carries none.
+	const glossary = '| Series | Meaning |\n| --- | --- |\n| AIR | the runtime, described in prose |\n';
+	const register = '| Series | Scope | Owner | Last Used | Series description |\n| --- | --- | --- | --- | --- |\n'
+		+ '| HDC | global | hdc | HDC-12 | the real register |\n';
+	const index = '\n| ID | Slice |\n| --- | --- |\n| HDC-12 | a |\n';
+	const read = readSeries(path.join(roadmapRepo(`${glossary}\n${register}${index}`), 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared], ['HDC'], 'the glossary claims nothing and does not hide the register');
+	const alone = readSeries(path.join(roadmapRepo(glossary + index), 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...alone.declared], [], 'a glossary alone declares nothing');
+});
+
+test('[mint] DOCS-082: a counter headed `Last Num` is read, so an accepted shape cannot mint a recorded id', () => {
+	// Codex P1, PR #30: the counter column was recognised only as `Last Used`. Accepting a register that spells it
+	// `Last Num` therefore turned a LOUD refusal ("prefix not declared") into a SILENT collision - the counter said
+	// AIR-28 while the highest retained row was AIR-27, and `slice new` handed back AIR-28.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lastnum-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '',
+		'| Series | Scope | Meaning | Last Num | Next |', '| --- | --- | --- | --- | --- |',
+		'| AIR | global | runtime | AIR-28 | AIR-29 |', '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |', '| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('AIR-29'), `the counter is one past the rows, and it is believed:\n${r.out}`);
+	assert.ok(!r.out.includes('AIR-28'), 'AIR-28 is already recorded');
+});
+
+test('[series] DOCS-082: an ARCHIVAL register inside <details> never declares, whichever order it sits in', () => {
+	// `migrate-project` preserves the superseded register in a <details> block, "kept verbatim - nothing here was
+	// thrown away". Once `Series` is accepted, that preserved table is a second candidate: with it ABOVE the live
+	// one, the reader declared OLD - a superseded prefix owned by someone else - and missed the live register
+	// entirely. Measured downstream on a register mid-conversion, before this shipped.
+	const live = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| HDC | global | hdc | HDC-12 | live |\n';
+	const archival = '<details>\n<summary>The register as it stood before migration (kept verbatim - nothing here was'
+		+ ' thrown away)</summary>\n\n| Series | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| OLD | global | someone-else | OLD-99 | superseded |\n\n</details>\n';
+	const index = '\n| ID | Slice |\n| --- | --- |\n| HDC-12 | a |\n';
+	for (const [order, body] of [['live first', `${live}\n${archival}`], ['archival first', `${archival}\n${live}`]]) {
+		const read = readSeries(path.join(roadmapRepo(body + index), 'docs', 'project', 'X_Development_Roadmap.md'));
+		assert.deepStrictEqual([...read.declared], ['HDC'], `${order}: the live register declares, the archive does not`);
+	}
+	// And with ONLY the archive, nothing is declared: absent, which is visible, rather than a superseded claim.
+	const alone = readSeries(path.join(roadmapRepo(archival + index), 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...alone.declared], [], 'an archive alone declares nothing');
+});
+
 test('[series] DOCS-082: a legacy register whose first cell is a NAME still declares nothing', () => {
 	// The guard that makes accepting `Series` safe: `| Series | Last used | Next |` keyed by a human name is the
-	// shape `migrate-project` exists to reshape. Its prefix appears only inside `DT-110`, and a first cell reading
-	// `DevTools` is not a prefix - so this must keep declaring nothing rather than claim a series called DevTools.
-	const dir = roadmapRepo('| Series | Last used | Next |\n| --- | --- | --- |\n| DevTools | DT-110 | DT-111 |\n'
-		+ '\n| ID | Slice |\n| --- | --- |\n| DT-110 | a slice |\n');
+	// shape `migrate-project` exists to reshape. Its prefix appears only inside `VS-390`, and a first cell reading
+	// `Vertical Slices` is not a prefix - so this must keep declaring nothing rather than claim a series by that name.
+	const dir = roadmapRepo('| Series | Last used | Next |\n| --- | --- | --- |\n| Vertical Slices | VS-390 | VS-391 |\n'
+		+ '\n| ID | Slice |\n| --- | --- |\n| VS-390 | a slice |\n');
 	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
 	assert.deepStrictEqual([...read.declared], [], 'a human name in the first cell declares no prefix');
-	assert.strictEqual(read.used.get('DT'), 110, 'though the id in use is still seen');
+	assert.strictEqual(read.used.get('VS'), 390, 'though the id in use is still seen');
 });
 
 function backlogRepo(roadmapBody, backlogBody) {

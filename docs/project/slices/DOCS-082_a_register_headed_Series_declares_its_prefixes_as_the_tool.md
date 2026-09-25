@@ -34,14 +34,34 @@ A repository whose register is headed `Series`, with `AIR` declared global and `
 | `slice new AIR` | **exit 1** — *"AIR is not declared by any register in this repository"* | `AIR-29` |
 
 So the repositories keeping the template's own header could not mint, and their own prefixes read as
-undeclared. A downstream sweep of 41 repositories found **two of the four register shapes in use are
-headed `Series`**.
+undeclared. Registers headed `Series` are in live use downstream, in more than one shape.
 
 It also matters for anything derived across repositories: a register that declares nothing does not
 look wrong, it looks **empty**, so an ownership table generated from these registers would have
 under-reported silently rather than failed.
 
-## The fix, and the guard that makes it safe
+## What a wider match let in, and the two rules that keep it honest
+
+Accepting creates candidates that did not exist before, and the first one is this toolkit's own
+output. preserves the superseded register inside a block — *kept verbatim, nothing here was thrown
+away* — so a migrated roadmap contains a second, historical register a few lines below its live one.
+
+Measured before this shipped, with the archival table **above** the live one:
+
+| | declared |
+| --- | --- |
+| live register first |  — correct |
+| archival register first |  — **a superseded prefix owned by someone else**, and the live register missed entirely |
+
+So position decided which register was authoritative. Two rules fix that:
+
+1. **An archive does not declare.** Nothing inside a block declares a prefix.
+2. **The canonical spelling wins.** Where both headers exist, is the live shape and is what a
+   register carried before migration, so order never decides.
+
+**Ids in use are still read from the whole document**, archive included: a number that was used is
+used, and hiding one would let the next mint reuse it. Measured — an id that appears *only* inside
+the collapsed block still sets the high-water mark, while the block declares nothing.
 
 The header match accepts `Prefix` or `Series`. Nothing else changes: the **first cell must still
 look like a prefix**, so the legacy shape keyed by a human name —
@@ -52,7 +72,7 @@ look like a prefix**, so the legacy shape keyed by a human name —
 ```
 
 — still declares nothing, because `Vertical Slices` is not a prefix. That register's series is
-visible only inside `DT-110`, which is a `migrate-project` problem, not an ownership claim.
+visible only inside `VS-390`, which is a `migrate-project` problem, not an ownership claim.
 
 `migrate-project`'s own canonical-shape test still keys on `Prefix` deliberately: it answers "is
 this register already in the canonical shape?", and a `Series`-headed table is not. It reshapes it,
