@@ -103,7 +103,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-079 | ⬜ planned | migrate-project: evidence under an id's former name, bounded, and dated against the id it was written under | M | [DOCS-079][docs-079] |  |
 | DOCS-080 | 🟦 tested | fold: an italicised state bullet is refused, not silently dropped from the legend | S | [DOCS-080][docs-080] |  |
 | DOCS-081 | 🟦 tested | a non-canonical id spelling round-trips, but two slices cannot share one number | M | [DOCS-081][docs-081] |  |
-| DOCS-082 | ⬜ planned | a register headed Series declares its prefixes, as the toolkit has always claimed | S | [DOCS-082][docs-082] |  |
+| DOCS-082 | 🟦 tested | a register headed Series declares its prefixes, as the toolkit has always claimed | S | [DOCS-082][docs-082] |  |
 
 ## Done
 

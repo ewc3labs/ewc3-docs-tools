@@ -1,10 +1,12 @@
 ---
 id: DOCS-082
-state: ⬜ planned
+state: 🟦 tested
 title: a register headed Series declares its prefixes, as the toolkit has always claimed
 est: S
 doc: "[DOCS-082](slices/DOCS-082_a_register_headed_Series_declares_its_prefixes_as_the_tool.md)"
 status: ""
+state_sha: 9a692d5be3d6
+state_source: trailer
 ---
 
 # DOCS-082 — a register headed Series declares its prefixes, as the toolkit has always claimed
