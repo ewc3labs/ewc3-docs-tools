@@ -104,6 +104,16 @@ Deliberately out:
   from a glyph was tested against glyphs that needed stripping and passed; the case that broke it
   was a keycap — `*️⃣` **is** an asterisk — which no register had yet used. Test the property that
   could break it, not the property that motivated it.
+- **A design note states intent; only the code knows what it does.** A module header here says one
+  document per narrative *group*; the extractor emits one per **row**. Reading the note and relaying
+  it as behaviour sent a downstream lane to withdraw a correct check. Before you state what this
+  tool does — especially to someone who will act on it — **run it against a fixture**.
+- **A check written from a failure enforces the failure, not the contract.** Derive a check from
+  what must be true, then confirm it passes on correct data. A downstream check written from the
+  shape of one defect would have gone red on every register that groups its narrative.
+- **A count whose source is unnamed is not a check.** "Documents emitted equals rows" is two
+  different checks: over the printed line it false-alarms on any repository with kept documents,
+  over the staged tree it holds. Name where the number comes from, or it is not a gate.
 - **CI** — tests on Node 18, 20, 22 and 24, plus "Check our own docs", which runs this tool against
   this repository. If the toolkit cannot keep its own documentation honest, it is not ready to be
   pointed at anyone else's.
