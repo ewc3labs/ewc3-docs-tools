@@ -155,6 +155,47 @@ Directories starting with `.` and `node_modules` are never walked.
 > documents and being told everything passed. A checker that quietly checks less than you think is
 > worse than no checker — which is why the glob has its own tests now.
 
+## What counts as a register
+
+Written down because three separate tools once agreed it was `| Prefix |` and all three were wrong:
+each had read one register that happened to say `Prefix` and encoded what it saw. One of them
+refused a valid roadmap outright; the others reported the best-kept registers as declaring nothing.
+**An example is not the contract. This is.**
+
+A table is this repository's **ownership register** when **both** hold:
+
+| | rule |
+| --- | --- |
+| **header** | the first column is headed `Prefix` **or** `Series` — the same table under two names |
+| **columns** | it also carries **ownership** (`Scope`, `Owner`) or **a counter** (`Last Used`, `Last Num`) |
+
+Both are required. A header alone is not enough: `Series` is an ordinary English word, and a
+glossary headed `| Series | Meaning |` or `| Prefix | Meaning |` declares nothing. `Next` is not a
+counter — it names the id **not yet** used — so it never qualifies a table on its own.
+
+Then, in order:
+
+1. **`Prefix` wins** wherever both headers appear, so position never decides which table is
+   authoritative.
+2. **Nothing inside a `<details>` block is eligible.** That is where `migrate-project` files a
+   superseded register, *kept verbatim*; an archive records history and does not declare.
+3. **The first cell of a row must look like a prefix.** A legacy register keyed by a human name
+   (`| Vertical Slices | VS-390 |`) declares nothing — its series lives only inside its ids, which
+   is a migration problem, not an ownership claim.
+4. **Ids in use are read from the whole document**, archive included: a number that was used is
+   used, and hiding one would let the next mint reuse it.
+
+Ids compare in **numeric space**, never as strings: `OPS-04` and `OPS-004` are one id. Padding is
+declared per register (`series.widths`), so two registers may legitimately write the same number at
+different widths — parse the number and compare that. A string comparison reports such a pair as
+distinct and clean, which is how a census once reported 113 ids across 112 positions with no gaps
+and no duplicates.
+
+**Tools that need this answer should call it, not re-derive it.** `lib/series.js` exports
+`ownershipHeader(text)` — which table this document's register is, with fences, comments and
+archives already excluded — and `COUNTER_COLUMN`, the one definition of the counter column under
+either name. Every reader here shares them: the register test, the freeze ceiling and minting.
+
 ## Markers
 
 ```md
