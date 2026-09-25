@@ -949,6 +949,28 @@ test('[mint] DOCS-082: a counter headed `Last Num` is read, so an accepted shape
 	assert.ok(!r.out.includes('AIR-28'), 'AIR-28 is already recorded');
 });
 
+test('[mint] DOCS-082: minting reads the SAME register the declaration does - an archived counter never picks the id', () => {
+	// Codex P1, PR #30, after the first counter fix: `lastUsedCell` had its own scan, which knew nothing about
+	// <details> or about `Prefix` winning. With an archival register above the live one, the declaration reader
+	// correctly ignored the archive while MINTING read its counter - the same table, two parsers, two answers.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twoparsers-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '',
+		'<details>', '<summary>The register as it stood before migration (kept verbatim)</summary>', '',
+		'| Series | Scope | Meaning | Last Num | Next |', '| --- | --- | --- | --- | --- |',
+		'| AIR | global | runtime | AIR-12 | AIR-13 |', '', '</details>', '',
+		'| Series | Scope | Meaning | Last Num | Next |', '| --- | --- | --- | --- | --- |',
+		'| AIR | global | runtime | AIR-28 | AIR-29 |', '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |', '| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('AIR-29'), `the LIVE counter decides:\n${r.out}`);
+	assert.ok(!r.out.includes('AIR-13'), 'not the archived one');
+});
+
 test('[series] DOCS-082: an ARCHIVAL register inside <details> never declares, whichever order it sits in', () => {
 	// `migrate-project` preserves the superseded register in a <details> block, "kept verbatim - nothing here was
 	// thrown away". Once `Series` is accepted, that preserved table is a second candidate: with it ABOVE the live

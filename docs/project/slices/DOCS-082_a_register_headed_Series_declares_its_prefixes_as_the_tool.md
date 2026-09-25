@@ -92,8 +92,8 @@ as it should.
 
 ## Tests
 
-- all four register shapes measured downstream — two headed `Prefix`, two headed `Series` — declare
-  their prefix, with scope read the same way;
+- every register shape the toolkit supports, under both headings, declares its prefix with scope
+  read the same way;
 - the legacy name-keyed shape declares nothing, while the id in use is still seen.
 
 ## The lesson, which is already in AGENTS.md
