@@ -949,6 +949,21 @@ test('[mint] DOCS-082: a counter headed `Last Num` is read, so an accepted shape
 	assert.ok(!r.out.includes('AIR-28'), 'AIR-28 is already recorded');
 });
 
+test('[series] DOCS-082: a FREEZE ceiling is read from the counter under either name, so the freeze still holds', () => {
+	// Codex, PR #30, the fifth of this class: the ceiling reader looked only for `Last Used`. In an accepted
+	// `Last Num` register a frozen prefix therefore had ceiling null, `frozenViolations` skipped it, and an id
+	// MINTED PAST THE FREEZE reported success - the freeze became decorative in exactly the shape just accepted.
+	const dir = roadmapRepo('| Series | Scope | Meaning | Last Num |\n| --- | --- | --- | --- |\n'
+		+ '| OPS | frozen | retired series | OPS-8 |\n'
+		+ '\n| ID | Slice |\n| --- | --- |\n| OPS-9 | minted PAST the freeze |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.strictEqual(read.scopes.get('OPS').frozen, true);
+	assert.strictEqual(read.scopes.get('OPS').ceiling, 8, 'the ceiling comes from the counter, whatever it is called');
+	const violations = frozenViolations(dir);
+	assert.strictEqual(violations.length, 1, `OPS-9 is past the freeze at OPS-8: ${JSON.stringify(violations)}`);
+	assert.strictEqual(violations[0].prefix, 'OPS');
+});
+
 test('[series] DOCS-082: ACCEPTING A SHAPE MEANS READING ITS COUNTER - the invariant, not another instance', () => {
 	// Four review rounds found the same shape of defect: widening the header match accepted a table whose counter
 	// this toolkit does not read, so a loud refusal became a silent re-issue. `Next` was the last of them - it says
