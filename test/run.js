@@ -897,6 +897,182 @@ test('[series] a prefix named in a neighbouring cell is a mention, not a mint', 
 	assert.deepStrictEqual([...read.declared].sort(), ['TS'],
 		'only the first cell declares; prefixes named beside it do not');
 });
+test('[series] DOCS-082: a register headed `Series` declares, exactly as one headed `Prefix` does', () => {
+	// The comment above this reader has said since DOCS-058 that both spellings are accepted, "rather than asking
+	// eight roadmaps to rename a column" - and the regex only ever matched `Prefix`. So a register keeping the
+	// template's own header read as declaring NOTHING: `series` called its prefixes undeclared, and `slice new`
+	// refused to mint into it. Registers headed `Series` are in live use downstream, in more than one shape.
+	const shapes = {
+		'| Prefix | Scope | Owner | Last Used | Series |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | AIR-28 | runtime |\n',
+		'| Prefix | Scope | Owner | Meaning | Last Used |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | runtime | AIR-28 |\n',
+		'| Series | Scope | Owner | Last Used | Series description |': '| --- | --- | --- | --- | --- |\n| AIR | global | air | AIR-28 | runtime |\n',
+		'| Series | Scope | Meaning | Last Num | Next |': '| --- | --- | --- | --- | --- |\n| AIR | global | runtime | AIR-28 | AIR-29 |\n',
+	};
+	for (const [header, body] of Object.entries(shapes)) {
+		const dir = roadmapRepo(`${header}\n${body}\n| ID | Slice |\n| --- | --- |\n| AIR-28 | a slice |\n`);
+		const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+		assert.deepStrictEqual([...read.declared], ['AIR'], `${header} must declare AIR`);
+		assert.strictEqual(read.scopes.get('AIR').local, false, `${header} scope`);
+	}
+});
+
+test('[series] DOCS-082: a `Series` table that is not a register declares nothing', () => {
+	// Codex and Copilot, PR #30: accepting the header word alone would let ANY table whose first column is headed
+	// `Series` claim ownership - including a glossary sitting above the real register, which would then never be
+	// scanned. A register carries a scope, an owner or a counter; a glossary carries none.
+	const glossary = '| Series | Meaning |\n| --- | --- |\n| AIR | the runtime, described in prose |\n';
+	const register = '| Series | Scope | Owner | Last Used | Series description |\n| --- | --- | --- | --- | --- |\n'
+		+ '| HDC | global | hdc | HDC-12 | the real register |\n';
+	const index = '\n| ID | Slice |\n| --- | --- |\n| HDC-12 | a |\n';
+	const read = readSeries(path.join(roadmapRepo(`${glossary}\n${register}${index}`), 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared], ['HDC'], 'the glossary claims nothing and does not hide the register');
+	const alone = readSeries(path.join(roadmapRepo(glossary + index), 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...alone.declared], [], 'a glossary alone declares nothing');
+});
+
+test('[mint] DOCS-082: a counter headed `Last Num` is read, so an accepted shape cannot mint a recorded id', () => {
+	// Codex P1, PR #30: the counter column was recognised only as `Last Used`. Accepting a register that spells it
+	// `Last Num` therefore turned a LOUD refusal ("prefix not declared") into a SILENT collision - the counter said
+	// AIR-28 while the highest retained row was AIR-27, and `slice new` handed back AIR-28.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lastnum-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '',
+		'| Series | Scope | Meaning | Last Num | Next |', '| --- | --- | --- | --- | --- |',
+		'| AIR | global | runtime | AIR-28 | AIR-29 |', '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |', '| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('AIR-29'), `the counter is one past the rows, and it is believed:\n${r.out}`);
+	assert.ok(!r.out.includes('AIR-28'), 'AIR-28 is already recorded');
+});
+
+test('[series] DOCS-082: a FREEZE ceiling is read from the counter under either name, so the freeze still holds', () => {
+	// Codex, PR #30, the fifth of this class: the ceiling reader looked only for `Last Used`. In an accepted
+	// `Last Num` register a frozen prefix therefore had ceiling null, `frozenViolations` skipped it, and an id
+	// MINTED PAST THE FREEZE reported success - the freeze became decorative in exactly the shape just accepted.
+	const dir = roadmapRepo('| Series | Scope | Meaning | Last Num |\n| --- | --- | --- | --- |\n'
+		+ '| OPS | frozen | retired series | OPS-8 |\n'
+		+ '\n| ID | Slice |\n| --- | --- |\n| OPS-9 | minted PAST the freeze |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.strictEqual(read.scopes.get('OPS').frozen, true);
+	assert.strictEqual(read.scopes.get('OPS').ceiling, 8, 'the ceiling comes from the counter, whatever it is called');
+	const violations = frozenViolations(dir);
+	assert.strictEqual(violations.length, 1, `OPS-9 is past the freeze at OPS-8: ${JSON.stringify(violations)}`);
+	assert.strictEqual(violations[0].prefix, 'OPS');
+});
+
+test('[series] DOCS-082: ACCEPTING A SHAPE MEANS READING ITS COUNTER - the invariant, not another instance', () => {
+	// Four review rounds found the same shape of defect: widening the header match accepted a table whose counter
+	// this toolkit does not read, so a loud refusal became a silent re-issue. `Next` was the last of them - it says
+	// which id is NOT yet used, `lastUsedCell` ignores it by design, and a table qualified only by `Next` was still
+	// accepted. Rather than a fifth instance test, assert the contract: a table may qualify as a register ONLY on a
+	// column that carries ownership (scope, owner) or a counter this toolkit reads (last used, last num).
+	const { ownershipHeader } = require('../lib/series');
+	const table = (header) => `# R\n\n## ID Register\n\n${header}\n| --- | --- | --- |\n| AIR | x | AIR-29 |\n`;
+	for (const qualifier of ['Scope', 'Owner', 'Last Used', 'Last Num']) {
+		assert.ok(ownershipHeader(table(`| Series | Meaning | ${qualifier} |`)), `${qualifier} qualifies a register`);
+		assert.ok(ownershipHeader(table(`| Prefix | Meaning | ${qualifier} |`)), `${qualifier} qualifies under Prefix too`);
+	}
+	for (const notQualifier of ['Meaning', 'Next', 'Notes']) {
+		assert.strictEqual(ownershipHeader(table(`| Series | Meaning | ${notQualifier} |`)), null,
+			`${notQualifier} alone does not make a register: it carries neither ownership nor a counter this toolkit reads`);
+	}
+	// And the consequence that made it matter: a `Next`-only table declares nothing, so minting REFUSES loudly
+	// rather than falling back to the rows and re-issuing the number the register implies is spent.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nextonly-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '',
+		'| Series | Meaning | Next |', '| --- | --- | --- |', '| AIR | runtime | AIR-29 |', '',
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/not declared by any register/.test(r.out), `refused loudly, not minted as AIR-28:\n${r.out}`);
+});
+
+test('[series] DOCS-082: a `Prefix` glossary is not a register either - the exemption was reasoned, not measured', () => {
+	// Codex P1, PR #30: the register-column test was applied to `Series` and NOT to `Prefix`, on the reasoning that
+	// `Prefix` is this toolkit's own word. Measured, that exemption costs: a `| Prefix | Meaning |` glossary wins
+	// precedence over a real `Series` register, still declares AIR from its first cell, and carries no counter - so
+	// minting fell back to the rows and returned AIR-28 with the register's own counter already at AIR-28.
+	const glossary = '| Prefix | Meaning |\n| --- | --- |\n| AIR | the runtime, described in prose |\n';
+	const register = '| Series | Scope | Meaning | Last Num | Next |\n| --- | --- | --- | --- | --- |\n'
+		+ '| AIR | global | runtime | AIR-28 | AIR-29 |\n';
+	const read = readSeries(path.join(roadmapRepo(`${glossary}\n${register}\n| ID | Slice |\n| --- | --- |\n| AIR-27 | a |\n`),
+		'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared], ['AIR'], 'the register declares, not the glossary');
+	assert.strictEqual(read.scopes.get('AIR').declared, 'global', 'and its scope comes from the register');
+
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pfxgloss-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '', glossary, register,
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |', '| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('AIR-29'), `the register's counter is read past the glossary:\n${r.out}`);
+});
+
+test('[mint] DOCS-082: minting reads the SAME register the declaration does - an archived counter never picks the id', () => {
+	// Codex P1, PR #30, after the first counter fix: `lastUsedCell` had its own scan, which knew nothing about
+	// <details> or about `Prefix` winning. With an archival register above the live one, the declaration reader
+	// correctly ignored the archive while MINTING read its counter - the same table, two parsers, two answers.
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twoparsers-'));
+	fs.mkdirSync(path.join(dir, 'docs', 'project', 'slices'), { recursive: true });
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'R_Roadmap.md'), ['# R', '', '## ID Register', '',
+		'<details>', '<summary>The register as it stood before migration (kept verbatim)</summary>', '',
+		'| Series | Scope | Meaning | Last Num | Next |', '| --- | --- | --- | --- | --- |',
+		'| AIR | global | runtime | AIR-12 | AIR-13 |', '', '</details>', '',
+		'| Series | Scope | Meaning | Last Num | Next |', '| --- | --- | --- | --- | --- |',
+		'| AIR | global | runtime | AIR-28 | AIR-29 |', '', '## Delivery Index', '',
+		'| ID | State | Slice | Status |', '| --- | --- | --- | --- |', '| AIR-27 | planned | a | x |', ''].join('\n'));
+	fs.writeFileSync(path.join(dir, 'docs', 'project', 'slices', 'AIR-27_a.md'),
+		'---\nid: AIR-27\nstate: planned\ntitle: a\nstatus: x\n---\n\n# AIR-27\n');
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	const r = cli(['slice', 'new', 'AIR', 'the next thing'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('AIR-29'), `the LIVE counter decides:\n${r.out}`);
+	assert.ok(!r.out.includes('AIR-13'), 'not the archived one');
+});
+
+test('[series] DOCS-082: an ARCHIVAL register inside <details> never declares, whichever order it sits in', () => {
+	// `migrate-project` preserves the superseded register in a <details> block, "kept verbatim - nothing here was
+	// thrown away". Once `Series` is accepted, that preserved table is a second candidate: with it ABOVE the live
+	// one, the reader declared OLD - a superseded prefix owned by someone else - and missed the live register
+	// entirely. Measured downstream on a register mid-conversion, before this shipped.
+	const live = '| Prefix | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n| HDC | global | hdc | HDC-12 | live |\n';
+	const archival = '<details>\n<summary>The register as it stood before migration (kept verbatim - nothing here was'
+		+ ' thrown away)</summary>\n\n| Series | Scope | Owner | Last Used | Series |\n| --- | --- | --- | --- | --- |\n'
+		+ '| OLD | global | someone-else | OLD-99 | superseded |\n\n</details>\n';
+	const index = '\n| ID | Slice |\n| --- | --- |\n| HDC-12 | a |\n';
+	for (const [order, body] of [['live first', `${live}\n${archival}`], ['archival first', `${archival}\n${live}`]]) {
+		const read = readSeries(path.join(roadmapRepo(body + index), 'docs', 'project', 'X_Development_Roadmap.md'));
+		assert.deepStrictEqual([...read.declared], ['HDC'], `${order}: the live register declares, the archive does not`);
+	}
+	// And with ONLY the archive, nothing is declared: absent, which is visible, rather than a superseded claim.
+	const alone = readSeries(path.join(roadmapRepo(archival + index), 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...alone.declared], [], 'an archive alone declares nothing');
+});
+
+test('[series] DOCS-082: a legacy register whose first cell is a NAME still declares nothing', () => {
+	// The guard that makes accepting `Series` safe: `| Series | Last used | Next |` keyed by a human name is the
+	// shape `migrate-project` exists to reshape. Its prefix appears only inside `VS-390`, and a first cell reading
+	// `Vertical Slices` is not a prefix - so this must keep declaring nothing rather than claim a series by that name.
+	const dir = roadmapRepo('| Series | Last used | Next |\n| --- | --- | --- |\n| Vertical Slices | VS-390 | VS-391 |\n'
+		+ '\n| ID | Slice |\n| --- | --- |\n| VS-390 | a slice |\n');
+	const read = readSeries(path.join(dir, 'docs', 'project', 'X_Development_Roadmap.md'));
+	assert.deepStrictEqual([...read.declared], [], 'a human name in the first cell declares no prefix');
+	assert.strictEqual(read.used.get('VS'), 390, 'though the id in use is still seen');
+});
+
 function backlogRepo(roadmapBody, backlogBody) {
 	const dir = tmpdir();
 	fs.mkdirSync(path.join(dir, 'docs', 'project', 'backlog'), { recursive: true });
