@@ -80,6 +80,30 @@ invocations.
   typo inside an **owned** prefix is still refused;
 - `--staged` reads the committing repository's index even when `--register` points elsewhere;
 - `--staged` with `--register` ≠ `--repo` never counts the register tree's staged documents;
-- no register at all still exits 0 saying trailers are evidence only — and says which register it
-  looked for, so B stops being a silent pass;
+- **an explicitly named register that has none exits 2**, and an implicit absence still exits 0 —
+  both saying which location was looked at;
 - `--register` defaulting to `--repo` leaves every current invocation unchanged.
+
+## 3. An explicit pointer that resolves to nothing is an error
+
+Case B exits 0 — *"no register: trailers here are evidence only"* — and for `fold` that is right: a
+repository keeping its register as rows, or none at all, has nothing to fold, and `DOCS-073` chose 0
+on purpose so a hook installed across an estate cannot be blocked by repositories that do not use
+slice documents.
+
+It is **wrong** for the cross-repo case, and the downstream lane put it better than I did: *"treat
+'no register' as could-not-check, never a pass."* When a wrapper deliberately points at a hub's
+register and that path is mistyped, un-cloned, or moved, the check validates **nothing** and reports
+success — a silent pass arriving exactly when the configuration is broken.
+
+The distinction is whether the register was **named**:
+
+| invocation | no register found | exit |
+| --- | --- | --- |
+| no register root given — the local repository simply has none | not applicable | **0**, with the reason |
+| `--register` (or `--repo`) given explicitly | the pointer is wrong | **2**, naming the path it looked at |
+
+That keeps `DOCS-073`'s estate-wide hook working — it names no register, so it still exits 0 where
+slice documents are not used — while a wrapper that *asked* for a specific register gets "did not
+run" when that register is not there. Which is the exit contract already: 2 is for a check that
+could not be performed, and a check with nothing to check against is one of those.
