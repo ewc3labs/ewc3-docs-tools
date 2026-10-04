@@ -23,6 +23,7 @@ not a summary of them.
 | --- | --- | --- | --- | --- |
 | DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-085<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
+| W | repo-local | ewc3-docs-tools | <!--ewc3:lastW-->W-5<!--/ewc3:lastW--> | decisions owed to the owner, never reused — [Decisions](Decisions.md) |
 
 **Last Used is derived** from the tables below by `ewc3-docs values`, and CI fails if it is stale.
 **Max, not a count** — counting rows agrees with the highest ID only while a series is contiguous.

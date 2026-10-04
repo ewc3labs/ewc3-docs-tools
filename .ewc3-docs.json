@@ -27,6 +27,19 @@
       "template": {
         "text": "FIX-${lastFIXNum}"
       }
+    },
+    "lastWNum": {
+      "lastId": {
+        "prefix": "W",
+        "files": [
+          "docs/project/Decisions.md"
+        ]
+      }
+    },
+    "lastW": {
+      "template": {
+        "text": "W-${lastWNum}"
+      }
     }
   },
   "series": {
