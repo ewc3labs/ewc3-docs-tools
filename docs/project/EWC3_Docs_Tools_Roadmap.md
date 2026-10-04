@@ -59,7 +59,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-034 | ⬜ planned | `migrate-project` ACCEPTS the shapes `series` refuses | M | [DOCS-034][docs-034] · [One template beats three parsers][one-template-beats] |  |
 | DOCS-033 | ⬜ planned | Configurable template roots, with the builtin as the fallback | M | [DOCS-033][docs-033] · [One template beats three parsers][one-template-beats] |  |
 | DOCS-039 | ⬜ planned | A derived `Last Used` must refuse to reconcile DOWNWARD | S | [DOCS-039][docs-039] · [One template beats three parsers][one-template-beats] |  |
-| DOCS-040 | ⬜ planned | registry:ID qualified references resolve, against a register that names itself | M | [DOCS-040][docs-040] · [One template beats three parsers][one-template-beats] |  |
+| DOCS-040 | 🟦 tested | registry:ID qualified references resolve, against a register that names itself | M | [DOCS-040][docs-040] · [One template beats three parsers][one-template-beats] |  |
 | DOCS-041 | 🟦 tested | `slice new <PREFIX> "<title>"` — mint by creating the document | M | [DOCS-041][docs-041] · [Frontmatter is the declaration][frontmatter-is-the] | built: slice new mints past rows, documents, archived documents and Last Used, into the table holding the prefix; unit-tested end to end, awaiting a downstream mint |
 | DOCS-042 | 🟦 tested | Read the Delivery Index columns by HEADER NAME, not by position | S | [DOCS-042][docs-042] | unit-tested; not re-run against HDCTranslators, where the positional defect was found |
 | DOCS-043 | 🟦 tested | A heading declares only its LEADING RUN of IDs | S | [DOCS-043][docs-043] | unit-tested; not re-run against HDCTranslators, where the cross-repo mint was found |

@@ -1,11 +1,13 @@
 ---
 id: DOCS-040
-state: ⬜ planned
+state: 🟦 tested
 title: "registry:ID qualified references resolve, against a register that names itself"
 est: M
 doc: '[DOCS-040](slices/DOCS-040_epo_slice_qualified_references_and_a_Registry_column.md) · [One template beats three parsers][one-template-beats]'
 status: ""
 source: EWC3_Docs_Tools_Roadmap.md
+state_sha: 688cee8e15d9
+state_source: trailer
 ---
 
 # DOCS-040 — registry:ID qualified references resolve, against a register that names itself
