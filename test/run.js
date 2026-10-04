@@ -4064,6 +4064,13 @@ test('[qualified] DOCS-040: a register\'s name compares without case, and every 
 		'one name in two casings is one name, and the first spelling is kept');
 	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['FIX', 'repo-local', '']])]), null,
 		'an owned row with no Owner has not agreed, so the register has not named itself');
+	// Codex, PR #39: `migrate-project` writes `**?** _unclaimed_` for a prefix nobody has adjudicated, and its own
+	// reader already knows that means NO owner. Read as a name, a register whose rows are all unclaimed called itself
+	// `**?** _unclaimed_`, every qualified trailer read as foreign, and fold skipped them silently.
+	assert.strictEqual(registryName([text([['VS', 'global', '**?** _unclaimed_'], ['FIX', 'repo-local', '**?** _unclaimed_']])]), null,
+		'the generated placeholder is a question, not a name');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['FIX', 'repo-local', '**?** _unclaimed_']])]), null,
+		'one unclaimed owned row means the register has not fully named itself');
 
 	const dir = registryRepo({ owners: [['VS', 'global', 'hub'], ['FIX', 'repo-local', 'HUB']] });
 	trailerCommit(dir, 'own', ['Slice: hub:VS-1', 'State: coded']);
