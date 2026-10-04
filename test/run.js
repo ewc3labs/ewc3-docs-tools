@@ -3965,6 +3965,103 @@ test('[fold-message] DOCS-073: ONE grammar - the pairs a message passes with are
 	assert.ok(r.out.includes('VS-1: ⬜ planned -> 💨 smoked') && r.out.includes('VS-2: ⬜ planned -> 🟩 go'), r.out);
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-040. A QUALIFIED reference - `<registry>:<ID>` - names a slice in a particular register. A qualified id already
+// declared nothing (design doc, verified); this is the half that RESOLVES one. The qualifier names a REGISTRY, not the
+// repository a commit lands in, because one register can plan for several repositories.
+
+/** A register that names itself through its Owner column (`owner`), or through config `registry`. */
+function registryRepo({ owner = 'hub', registry = null, owners = null } = {}) {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qual-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+	const rows = owners || [['VS', 'global', owner], ['FIX', 'repo-local', owner]];
+	w('docs/project/R_Roadmap.md', ['# R', '', ...FOLD_LEGEND,
+		'## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		...rows.map(([p, s, o]) => `| ${p} | ${s} | ${o} | ${p}-2 | x |`),
+		'| DT | reference-only | elsewhere | - | cited, never minted here |', '',
+		'## Delivery Index', '', '| ID | State | Slice | Status |', '| --- | --- | --- | --- |',
+		'| VS-1 | ⬜ planned | first | x |', '| VS-2 | ⬜ planned | second | y |', ''].join('\n'));
+	w('docs/project/slices/VS-1_first.md', GATE_DOC('VS-1', '⬜ planned', 'first', 'x'));
+	w('docs/project/slices/VS-2_second.md', GATE_DOC('VS-2', '⬜ planned', 'second', 'y'));
+	if (registry) { w('.ewc3-docs.json', `${JSON.stringify({ registry })}\n`); }
+	git(dir, 'init', '-q'); git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'adopted');
+	return dir;
+}
+
+test('[qualified] DOCS-040: a qualifier naming THIS register resolves like a bare id; another register is foreign', () => {
+	const { sliceRef } = require('../lib/fold');
+	assert.deepStrictEqual(sliceRef('VS-1', 'hub'), { kind: 'local', id: 'VS-1', written: 'VS-1' });
+	assert.deepStrictEqual(sliceRef('hub:VS-001', 'hub'), { kind: 'local', id: 'VS-1', written: 'hub:VS-001' }, 'padding-insensitive too');
+	assert.strictEqual(sliceRef('HUB:VS-1', 'hub').kind, 'local', 'registry names compare without case, as repository names do');
+	assert.deepStrictEqual(sliceRef('other-repo:DT-141', 'hub'), { kind: 'foreign', registry: 'other-repo', id: 'DT-141', written: 'other-repo:DT-141' });
+	assert.strictEqual(sliceRef('ewc3-docs-tools:DOCS-12', 'hub').kind, 'foreign', 'a repository name with dashes is a qualifier');
+	assert.strictEqual(sliceRef('hub:not-an-id', 'hub').id, null, 'a qualifier around something that is not an id is still not an id');
+	assert.strictEqual(sliceRef('x:VS-1', null).kind, 'foreign', 'a register that cannot name itself cannot claim a qualified id');
+});
+
+test('[qualified] DOCS-040: a register names itself - config `registry` first, else the one Owner its owned rows agree on', () => {
+	const { registryName } = require('../lib/fold');
+	const text = (rows) => ['## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		...rows.map(([p, s, o]) => `| ${p} | ${s} | ${o} | ${p}-1 | x |`), ''].join('\n');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['FIX', 'repo-local', 'hub']])]), 'hub');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['DT', 'reference-only', 'elsewhere']])]), 'hub',
+		'a reference-only row names ANOTHER register, so its Owner is not this one\'s name');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['FIX', 'repo-local', 'other']])]), null,
+		'owned rows that disagree cannot name the register, so it is not guessed');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub']])], 'declared-name'), 'declared-name', 'config wins');
+	assert.strictEqual(registryName(['# no register here\n']), null);
+});
+
+test('[qualified] DOCS-040: --check-message - own qualifier passes, another register is reported and never refused', () => {
+	const dir = registryRepo();
+	const own = checkMessage(dir, msg('Slice: hub:VS-1', 'State: coded'));
+	assert.strictEqual(own.code, 0, own.out);
+
+	// A commit may name slices in two registers. The foreign one is not this register's to check - including its State
+	// word, which belongs to a legend this register cannot see.
+	const mixed = checkMessage(dir, msg('Slice: VS-1', 'State: coded', 'Slice: other-repo:DT-141', 'State: shipped-somewhere'));
+	assert.strictEqual(mixed.code, 0, mixed.out);
+	assert.ok(/other-repo:DT-141/.test(mixed.out) && /another register/.test(mixed.out), `named, not hidden:\n${mixed.out}`);
+
+	// Inside an OWN qualifier the id must still exist, exactly as a bare one must.
+	const missing = checkMessage(dir, msg('Slice: hub:VS-9', 'State: coded'));
+	assert.strictEqual(missing.code, 1, missing.out);
+	assert.ok(/hub:VS-9 names no slice document/.test(missing.out), missing.out);
+});
+
+test('[qualified] DOCS-040: a register that cannot name itself says how to fix it, and refuses nothing', () => {
+	// Owned rows that disagree about their Owner: the register has no name, so a qualified trailer cannot be told apart
+	// from a slice of its own. That is reported with the remedy - it is not a refusal of a well-formed commit.
+	const dir = registryRepo({ owners: [['VS', 'global', 'hub'], ['FIX', 'repo-local', 'other']] });
+	const r = checkMessage(dir, msg('Slice: hub:VS-1', 'State: coded'));
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/does not name itself/.test(r.out) && /registry/.test(r.out), r.out);
+
+	const named = registryRepo({ owners: [['VS', 'global', 'hub'], ['FIX', 'repo-local', 'other']], registry: 'hub' });
+	assert.strictEqual(checkMessage(named, msg('Slice: hub:VS-9', 'State: coded')).code, 1,
+		'with `registry` declared, an own qualified id is resolved - and VS-9 does not exist');
+});
+
+test('[qualified] DOCS-040: fold folds an own-qualified trailer, and reports a foreign one without writing it', () => {
+	const dir = registryRepo();
+	trailerCommit(dir, 'own', ['Slice: hub:VS-1', 'State: coded']);
+	trailerCommit(dir, 'foreign', ['Slice: other-repo:DT-141', 'State: go']);
+	const r = cli(['fold', '--write'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded', 'the own-qualified trailer is folded');
+	assert.ok(/other-repo:DT-141/.test(r.out) && /another register/.test(r.out), `the foreign one is named:\n${r.out}`);
+	assert.ok(!/names no slice document/.test(r.out), 'and it is not an issue');
+});
+
+test('[qualified] DOCS-040: --staged counts an own-qualified trailer as naming the staged document', () => {
+	const dir = registryRepo();
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, `${fs.readFileSync(doc, 'utf8')}\nMore.\n`);
+	git(dir, 'add', '-A');
+	const r = checkMessage(dir, msg('Slice: hub:VS-1'), ['--staged']);
+	assert.strictEqual(r.code, 0, r.out);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
