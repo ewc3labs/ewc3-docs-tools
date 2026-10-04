@@ -4053,6 +4053,38 @@ test('[qualified] DOCS-040: fold folds an own-qualified trailer, and reports a f
 	assert.ok(!/names no slice document/.test(r.out), 'and it is not an issue');
 });
 
+test('[qualified] DOCS-040: a register\'s name compares without case, and every owned row must give one', () => {
+	// Codex and Copilot, PR #39. Owners spelled `hub` and `HUB` derived NO name - so fold treated the register's own
+	// qualified trailers as foreign, skipped them, and exited 0. And a blank Owner on one owned row was ignored, so
+	// the others "agreed" and a name was claimed that the register had not fully declared.
+	const { registryName } = require('../lib/fold');
+	const text = (rows) => ['## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		...rows.map(([p, s, o]) => `| ${p} | ${s} | ${o} | ${p}-1 | x |`), ''].join('\n');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['FIX', 'repo-local', 'HUB']])]), 'hub',
+		'one name in two casings is one name, and the first spelling is kept');
+	assert.strictEqual(registryName([text([['VS', 'global', 'hub'], ['FIX', 'repo-local', '']])]), null,
+		'an owned row with no Owner has not agreed, so the register has not named itself');
+
+	const dir = registryRepo({ owners: [['VS', 'global', 'hub'], ['FIX', 'repo-local', 'HUB']] });
+	trailerCommit(dir, 'own', ['Slice: hub:VS-1', 'State: coded']);
+	assert.strictEqual(cli(['fold', '--write'], dir).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded', 'the own trailer is folded, not skipped as foreign');
+});
+
+test('[qualified] DOCS-040: a qualifier around something that is not an id is refused, never waved through as foreign', () => {
+	// Codex and Copilot, PR #39: `Slice: other:not-an-id` and the typo `Slice: VS:1` were classified as another
+	// register's slice and passed.
+	const { sliceRef } = require('../lib/fold');
+	assert.deepStrictEqual(sliceRef('other:not-an-id', 'hub'), { kind: 'local', id: null, written: 'other:not-an-id' });
+	assert.strictEqual(sliceRef('VS:1', 'hub').id, null);
+	const dir = registryRepo();
+	for (const bad of ['other:not-an-id', 'VS:1']) {
+		const r = checkMessage(dir, msg(`Slice: ${bad}`, 'State: coded'));
+		assert.strictEqual(r.code, 1, `${bad}:\n${r.out}`);
+		assert.ok(r.out.includes(`Slice: ${bad} names no slice document`), r.out);
+	}
+});
+
 test('[qualified] DOCS-040: --staged counts an own-qualified trailer as naming the staged document', () => {
 	const dir = registryRepo();
 	const doc = gateDoc(dir, 'VS-1');
