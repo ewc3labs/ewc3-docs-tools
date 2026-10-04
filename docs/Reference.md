@@ -121,6 +121,7 @@ Declaring a default back to the tool reads, later, as deliberate divergence.
 | `series.roadmaps` | `["docs/project/*Roadmap.md", "docs/project/*ROADMAP.md", "docs/project/roadmap/*Roadmap.md", "docs/project/roadmap/*ROADMAP.md", "docs/project/backlog/*Backlog.md", "docs/project/*Backlog.md"]` | the planning surfaces allowed to mint an ID |
 | `series.widths` | `{}` | the **declared** minimum digit width per prefix, e.g. `{ "DOCS": 3 }`; see below |
 | `planning` | read off the layout | `"slice-documents"` or `"roadmap-rows"`: how this repository keeps its register. `fold` folds only slice documents; a rows register, or no register, is a no-op. A declaration the documents contradict is refused, so deleting it never turns a check green. |
+| `registry` | the one Owner the register's owned rows agree on | The name this register goes by, which is what an **own** qualified reference must say (`<registry>:<ID>`). Needed only where the owned rows' Owner cells disagree, or the register has no Owner column; otherwise it is derived. See [qualified references](#qualified-references). |
 | `values` | `{}` | see [Resolvers](#resolvers) |
 
 Default `skipDirs`: `node_modules`, `.git`, `dist`, `out`, `.vscode-test`, `archive`, `scratch`,
@@ -195,6 +196,31 @@ and no duplicates.
 `ownershipHeader(text)` — which table this document's register is, with fences, comments and
 archives already excluded — and `COUNTER_COLUMN`, the one definition of the counter column under
 either name. Every reader here shares them: the register test, the freeze ceiling and minting.
+
+## Qualified references
+
+`<registry>:<ID>` names a slice in a particular register — `ewc3-docs-tools:DOCS-12`, `hub:FIX-137`.
+The qualifier names a **register**, not the repository a commit lands in, because one register can
+plan for several repositories.
+
+**Qualify when the reference leaves its own register.** Inside it, a bare id is resolved by the
+register and qualifying is noise. A commit landing in a repository that a hub plans for has *not*
+left the hub's register, so its trailers stay bare.
+
+A qualified id **never declares** — every declaring position needs `-` straight after the prefix,
+where a qualifier puts `:`. In a `Slice:` trailer it **resolves** like this:
+
+| qualifier | read as |
+| --- | --- |
+| none | this register's slice, checked as always |
+| this register's own name | the same: the id must exist here, exactly as a bare one must |
+| another register's name | **reported and never refused or folded** — it is not this register's slice, and its `State:` word belongs to a legend this one cannot see |
+
+A register's own name is config `registry` if set, otherwise the one Owner its owned rows agree on;
+reference-only rows are skipped, since their Owner names another register. Registry names compare
+without case. A register that cannot name itself treats every qualified trailer as foreign and
+**says how to fix it** rather than guessing — a wrong name would claim another register's slices or
+disown its own.
 
 ## Markers
 

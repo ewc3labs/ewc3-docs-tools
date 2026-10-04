@@ -20,6 +20,7 @@ never from memory.
 | W-3 | Open | After DOCS-040, which comes next: DOCS-085 or DOCS-084? | DOCS-085 | 2026-10-03 | |
 | W-4 | Open | Who writes the Windows installer for rtk in the token-optimizer fork? | LabsHQ | 2026-10-03 | |
 | W-5 | Decided | Which slice is built next, after DOCS-082? | DOCS-040 | 2026-10-03 | DOCS-040 — 2026-10-03 |
+| W-6 | Decided | Merge DOCS-040 now, or hold it until after DOCS-084 and DOCS-085? | Merge now | 2026-10-04 | Merge now — 2026-10-04 |
 
 ## W-1 — where the prefix registry runs
 
@@ -71,5 +72,12 @@ review. **Blocks:** nothing in this repository.
 ## W-5 — the slice after DOCS-082 *(decided)*
 
 Answered 2026-10-03: **DOCS-040**, qualified references across registers.
+
+## W-6 — DOCS-040 before or after DOCS-084/085 *(decided)*
+
+A relayed answer placed DOCS-040 after DOCS-084 and DOCS-085, while the owner had asked directly for
+it to be started, and it was built. Put to the owner rather than resolved by either lane. Answered
+2026-10-04: **merge it now.** Both later slices read trailers through the resolver it adds, so
+building them first would have meant retrofitting qualified references into each.
 
 [roadmap-s-id]: EWC3_Docs_Tools_Roadmap.md#id-prefixes

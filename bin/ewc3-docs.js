@@ -1197,7 +1197,7 @@ function cmdFold(root, config, argv) {
 	};
 
 	if (message !== null) {
-		const r = checkMessage({ repo, sliceDir, roadmaps, message, staged });
+		const r = checkMessage({ repo, sliceDir, roadmaps, message, staged, registry: config.registry });
 		if (r.unreadable) { return legendUnreadable(r.unreadable); }
 		if (r.failed) { console.error(`fold: did not run: ${r.failed}`); return 2; }
 		r.notes.forEach((n) => console.log(`fold --check-message: ${n}`));
@@ -1217,12 +1217,17 @@ function cmdFold(root, config, argv) {
 		if (!sinceShas) { console.error(`fold: did not run: --since ${since} is not a commit`); return 2; }
 	}
 
-	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas });
+	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry });
 	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
 	const errors = plan.issues.filter((i) => i.inScope);
 	const warnings = plan.issues.filter((i) => !i.inScope);
 
 	console.log(`fold: states spelled from the ${plan.legendSource}`);
+	// Slices in ANOTHER register, named by a qualified trailer: reported, never folded here (DOCS-040).
+	for (const f of plan.foreign) { console.log(`  cites ${f.written} - a slice in another register, not folded here   (${f.sha})`); }
+	if (plan.foreign.length && !plan.ownName) {
+		console.log('  this register does not name itself - set `registry` in config, or give its owned rows one Owner - so a qualified trailer could not be told apart from one of its own slices');
+	}
 	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
 	// A dry run says everything --write will do, provenance included; --check never fails on provenance, so it
 	// does not list it (DOCS-070).
