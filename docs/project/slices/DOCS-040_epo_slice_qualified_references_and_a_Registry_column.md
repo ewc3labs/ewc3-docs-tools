@@ -19,4 +19,58 @@ DT-1..DT-39 mean different slices in ewc3-docs-tools and MedAR DevTools — 39 o
 two estates; a qualifier cannot be mistaken for a mint because every declaring pattern needs - where
 a qualifier puts :
 
+## The qualifier names a REGISTRY, not the repository the commit lands in
+
+Asked by a downstream lane building a commit wrapper, and the answer has consequences, so it is
+written down before the slice is built.
+
+**One register can serve several repositories.** A hub owns the planning for its satellites, so work
+on a hub slice is committed in a repository that has no register of its own. If the qualifier were
+the repository where the code lands, that work would be written `satellite-repo:FIX-137` — naming a
+repository that owns no series and resolves nothing. The unit is the **planning surface**, which is
+the conclusion the estate reached independently about the prefix registry.
+
+So:
+
+- the **registry declares its own name** — the `Registry` column this slice already carries in its
+  title, or a config key where a register has no column for it;
+- **that name is the qualifier**, and it is the same string the register's `Owner` column already
+  uses wherever a repository owns its own planning, which is most of them. It differs exactly in the
+  hub case, which is the case that motivated the question.
+
+### When to qualify, restated for a register that spans repositories
+
+The design rule is *qualify whenever the reference leaves its own registry* — and a commit landing
+in a satellite repository has **not** left the registry, because the registry is the planning
+surface both repositories share. So:
+
+| the trailer names | form |
+| --- | --- |
+| a slice in the register this repository plans against | **bare** — `Slice: FIX-137` |
+| a slice in a *different* register | **qualified** — `Slice: OtherRegistry:DT-141` |
+
+A central manifest mapping prefixes to repositories is not needed for this and should not be built:
+each repository declaring **which register it plans against** — one value, where the repository can
+see it — resolves a bare id with no second source of truth to disagree with the register. That is
+the same reason `DOCS-084` dropped its prefix map.
+
+### Measured, so nobody builds on the wrong assumption
+
+A qualified reference **declares nothing** today, which is the half this design doc verified — that
+part holds. But **nothing resolves one either**:
+
+```text
+normalizeId('FIX-137')                 -> FIX-137
+normalizeId('some-hub:FIX-137')        -> null
+normalizeId('ewc3-docs-tools:DOCS-12') -> null
+
+fold --check-message, bare       Slice: FIX-137      -> exit 0
+fold --check-message, qualified  Slice: hub:FIX-137  -> exit 1  "names no slice document"
+```
+
+So a qualified trailer is **refused** at the current main, and a wrapper emitting one would have
+every cross-repo commit rejected. Resolving the qualified form — in the trailer path, in
+`--commits-from` (`DOCS-084`) and in `--check-message` (`DOCS-085`) — is this slice's work, and none
+of it exists yet.
+
 [one-template-beats]: ../../design/one-template-beats-three-parsers.md
