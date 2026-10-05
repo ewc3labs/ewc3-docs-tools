@@ -87,9 +87,9 @@ ewc3-docs fold --check-message <file> [--staged] [--register <dir>] [--repo <dir
 - `--register <dir>` is **the register the trailers are validated against**, defaulting to `--repo`;
 - `--staged` always reads `--repo`, never `--register`.
 
-Until that exists, the honest instruction is: validate cross-repo trailers with
-`--repo <owning register>` and **do not pass `--staged`**. A wrapper wanting both must run two
-invocations.
+Built: a wrapper runs one invocation from the committing repository,
+`fold --check-message <file> --staged --register <owning register>`. Pointing `--repo` at the
+hub is no longer the way to reach another register, and with `--staged` it is the unsafe form above.
 
 ## Tests
 

@@ -1139,7 +1139,9 @@ function cmdFold(root, config, argv) {
 	const register = registerFlag ? path.resolve(registerFlag) : repo;
 	// The register's own config governs the register side - its `registry` name, `planning` and roadmap globs - or a
 	// hub that names itself in config looks nameless from a satellite.
-	const registerConfig = registerFlag ? loadConfig(register, null) : config;
+	// --register naming the committing repository itself is no second register: keep the config already selected,
+	// or an explicit --config would be dropped and its `registry` name with it (an own-qualified typo then reads as foreign).
+	const registerConfig = registerFlag && path.relative(repo, register) !== '' ? loadConfig(register, null) : config;
 
 	// --check-message <file> [--staged]: a message checked before its commit exists (DOCS-073).
 	const messageFile = flag('--check-message');

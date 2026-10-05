@@ -4173,6 +4173,18 @@ test('[register] DOCS-085: --register is for --check-message only, and a committ
 	void hub; void satellite;
 });
 
+test('[register] DOCS-085: --register naming the committing repository keeps an explicit --config', () => {
+	// The hub's rows name no Owner, so only the custom config names the register. Reloading the default config
+	// for --register dropped it, and `hub:VS-999` - an own-qualified typo - read as foreign and passed.
+	const { hub } = hubAndSatellite();
+	const roadmap = path.join(hub, 'docs', 'project', 'R_Roadmap.md');
+	fs.writeFileSync(roadmap, fs.readFileSync(roadmap, 'utf8').replace('| VS | global | hub |', '| VS | global |  |'));
+	fs.writeFileSync(path.join(hub, 'custom.json'), JSON.stringify({ registry: 'hub' }));
+	const r = checkFrom(hub, msg('Slice: hub:VS-999'), ['--repo', hub, '--register', hub, '--config', 'custom.json']);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/VS-999/.test(r.out), r.out);
+});
+
 test('[register] DOCS-085: a bare id whose PREFIX this register does not own is refused with the remedy, not waved through', () => {
 	// The slice first said "report, do not refuse". Measured, that would have let a TYPO pass: `DCOS-40` for `DOCS-40`
 	// has a prefix this register does not own, exactly like a foreign one. Since DOCS-040 a foreign slice has an
