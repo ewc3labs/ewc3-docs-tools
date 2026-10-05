@@ -1,10 +1,12 @@
 ---
 id: DOCS-085
-state: ⬜ planned
+state: 🟦 tested
 title: "check-message across registers: name the register separately, and an id owned elsewhere is not a refusal"
 est: M
 doc: "[DOCS-085](slices/DOCS-085_check_message_across_registers_name_the_register_separatel.md)"
 status: ""
+state_sha: c96fb05ca148
+state_source: trailer
 ---
 
 # DOCS-085 — check-message across registers: name the register separately, and an id owned elsewhere is not a refusal
