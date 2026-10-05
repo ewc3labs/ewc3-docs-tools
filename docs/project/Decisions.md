@@ -15,14 +15,16 @@ never from memory.
 
 | ID | Status | Decision | Recommendation | Asked | Answer |
 | --- | --- | --- | --- | --- | --- |
-| W-1 | Open | Where does the cross-repository prefix registry run: a workstation, or HQ CI? | Workstation first | 2026-09-25 | |
-| W-2 | Open | Should a converted register's Last Used cell be emitted by the tool rather than declared? | Yes, from slice documents plus the archive | 2026-09-25 | |
-| W-3 | Open | After DOCS-040, which comes next: DOCS-085 or DOCS-084? | DOCS-085 | 2026-10-03 | |
-| W-4 | Open | Who writes the Windows installer for rtk in the token-optimizer fork? | LabsHQ | 2026-10-03 | |
+| W-1 | Decided | Where does the cross-repository prefix registry run: a workstation, or HQ CI? | Workstation first | 2026-09-25 | Workstation first — 2026-10-05; built as DOCS-086 |
+| W-2 | Decided | Should a converted register's Last Used cell be emitted by the tool rather than declared? | Yes, from slice documents plus the archive | 2026-09-25 | Yes, as recommended — 2026-10-05; built as DOCS-087 |
+| W-3 | Decided | After DOCS-040, which comes next: DOCS-085 or DOCS-084? | DOCS-085 | 2026-10-03 | DOCS-085 — 2026-10-05 |
+| W-4 | Decided | Who writes the Windows installer for rtk in the token-optimizer fork? | LabsHQ | 2026-10-03 | Neither — rtk and its code-graph companion are dropped for a different token optimizer; moot — 2026-10-05 |
 | W-5 | Decided | Which slice is built next, after DOCS-082? | DOCS-040 | 2026-10-03 | DOCS-040 — 2026-10-03 |
 | W-6 | Decided | Merge DOCS-040 now, or hold it until after DOCS-084 and DOCS-085? | Merge now | 2026-10-04 | Merge now — 2026-10-04 |
 
 ## W-1 — where the prefix registry runs
+
+*Decided 2026-10-05: workstation first, as recommended. Tracked as DOCS-086.*
 
 The registry is a generated table of which repository owns which ID prefix, built by reading every
 repository's own register. Nothing about it needs CI to be correct; the question is only where it
@@ -38,6 +40,8 @@ file away, added when the cost is worth it. **Blocks:** building the registry.
 
 ## W-2 — a tool-emitted Last Used cell
 
+*Decided 2026-10-05: yes, as recommended. Tracked as DOCS-087.*
+
 This repository already does it: its own Last Used cells are `<!--ewc3:lastDOCS-->` markers that
 `values` derives and CI checks. The question is whether converted registers should do the same and
 stop declaring the number by hand.
@@ -50,6 +54,8 @@ nothing urgent; it decides the final shape conversions aim for.
 
 ## W-3 — the queue after DOCS-040
 
+*Decided 2026-10-05: DOCS-085 next, as recommended.*
+
 - **DOCS-085** (est M): `fold --check-message` validates against a named register, and an id owned
   by another register is reported rather than refused. A commit wrapper uses `--check-message`
   today, and DOCS-085 closes a measured trap where `--staged` against a foreign register passed work
@@ -60,6 +66,10 @@ nothing urgent; it decides the final shape conversions aim for.
 **Recommendation: DOCS-085 first**: smaller, and it fixes a false green in a tool already in use.
 
 ## W-4 — the rtk Windows installer
+
+*Decided 2026-10-05: moot. The owner is dropping rtk and its code-graph companion to evaluate a
+different token optimizer, so no installer is needed. The analysis below is kept, as every entry
+is.*
 
 The four Windows defects in the token-optimizer extension are fixed in a pull request from the
 LabsHQ fork. The fifth — a real Windows installer for rtk — is unclaimed. Its design is settled: the

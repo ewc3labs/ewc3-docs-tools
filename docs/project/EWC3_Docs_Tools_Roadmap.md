@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-085<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-087<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 | W | repo-local | ewc3-docs-tools | <!--ewc3:lastW-->W-6<!--/ewc3:lastW--> | decisions owed to the owner, never reused — [Decisions](Decisions.md) |
 
@@ -108,6 +108,8 @@ is never referenced from outside the repository it fixes.
 | DOCS-083 | ⬜ planned | two registers that disagree about a prefix's SCOPE is its own finding, not a contest | M | [DOCS-083][docs-083] |  |
 | DOCS-084 | ⬜ planned | fold --commits-from: trailers from other repositories reach the register that owns the slice | L | [DOCS-084][docs-084] |  |
 | DOCS-085 | ⬜ planned | check-message across registers: name the register separately, and an id owned elsewhere is not a refusal | M | [DOCS-085][docs-085] |  |
+| DOCS-086 | ⬜ planned | a cross-repository prefix registry, generated from each register, run from a workstation first | L | [DOCS-086][docs-086] |  |
+| DOCS-087 | ⬜ planned | a converted register's Last Used is emitted by the tool, from slice documents and the archive | M | [DOCS-087][docs-087] |  |
 
 ## Done
 
@@ -214,6 +216,8 @@ caught.
 [docs-083]: slices/DOCS-083_two_registers_that_disagree_about_a_prefix_s_SCOPE_is_its.md
 [docs-084]: slices/DOCS-084_fold_commits_from_trailers_from_other_repositories_reach_t.md
 [docs-085]: slices/DOCS-085_check_message_across_registers_name_the_register_separatel.md
+[docs-086]: slices/DOCS-086_a_cross_repository_prefix_registry_generated_from_each_reg.md
+[docs-087]: slices/DOCS-087_a_converted_register_s_Last_Used_is_emitted_by_the_tool_fr.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
