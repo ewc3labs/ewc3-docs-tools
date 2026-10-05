@@ -107,7 +107,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-082 | 🟦 tested | a register headed Series declares its prefixes, as the toolkit has always claimed | S | [DOCS-082][docs-082] |  |
 | DOCS-083 | ⬜ planned | two registers that disagree about a prefix's SCOPE is its own finding, not a contest | M | [DOCS-083][docs-083] |  |
 | DOCS-084 | ⬜ planned | fold --commits-from: trailers from other repositories reach the register that owns the slice | L | [DOCS-084][docs-084] |  |
-| DOCS-085 | ⬜ planned | check-message across registers: name the register separately, and an id owned elsewhere is not a refusal | M | [DOCS-085][docs-085] |  |
+| DOCS-085 | 🟦 tested | check-message across registers: name the register separately, and an id owned elsewhere is not a refusal | M | [DOCS-085][docs-085] |  |
 | DOCS-086 | ⬜ planned | a cross-repository prefix registry, generated from each register, run from a workstation first | L | [DOCS-086][docs-086] |  |
 | DOCS-087 | ⬜ planned | a converted register's Last Used is emitted by the tool, from slice documents and the archive | M | [DOCS-087][docs-087] |  |
 
