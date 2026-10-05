@@ -88,8 +88,8 @@ ewc3-docs fold --check-message <file> [--staged] [--register <dir>] [--repo <dir
 - `--staged` always reads `--repo`, never `--register`.
 
 Built: a wrapper runs one invocation from the committing repository,
-`fold --check-message <file> --staged --register <owning register>`. Pointing `--repo` at the
-hub is no longer the way to reach another register, and with `--staged` it is the unsafe form above.
+`fold --check-message <file> --staged --register <owning register>`. Pointing `--repo` at the hub is
+no longer the way to reach another register, and with `--staged` it is the unsafe form above.
 
 ## Tests
 
