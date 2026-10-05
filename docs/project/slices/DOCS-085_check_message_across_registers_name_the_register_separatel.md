@@ -41,6 +41,22 @@ The fix is the one `DOCS-084` already specifies for the commit-list path, and it
 reported by name and count, never refused. A typo inside an owned prefix is still caught, because
 `VS` is owned and `VS-5291` names nothing.
 
+**Changed while building — refused with the remedy, not reported.** Measured against a register,
+"report, never refuse" lets a **typo of the prefix** through: `DCOS-40` for `DOCS-40` has a prefix
+the register does not declare, exactly like a foreign id, and would have exited 0. Since `DOCS-040`
+a foreign slice has an explicit form, `<registry>:<ID>`, so refusing a bare unowned prefix costs a
+real citation nothing. The refusal now says which case it is:
+
+```text
+Slice: XY-141 - XY is not a prefix this register owns. If it is another register's slice,
+qualify it as <registry>:XY-141; otherwise check the prefix for a typo
+```
+
+The hint fires only when the register declares prefixes and no document or archived id here uses
+that prefix; otherwise the plain "names no slice document" stands. `DOCS-084`'s history path keeps
+**reporting** unowned prefixes — history cannot be re-written to qualify, a message being composed
+can.
+
 ### 2. `--staged` and the register root are the same flag, and must not be
 
 `--staged` reads `git diff --cached` in whatever `--repo` points at. Point `--repo` at the hub to
@@ -76,8 +92,8 @@ invocations.
 ## Tests
 
 - a message in one repository validated against another's register: the owned id passes;
-- a trailer for a prefix the register does not declare is reported `unowned`, not refused, and a
-  typo inside an **owned** prefix is still refused;
+- a bare trailer for a prefix the register does not declare is refused with the qualify-or-typo
+  hint, and a missing number inside an **owned** prefix gets the plain message;
 - `--staged` reads the committing repository's index even when `--register` points elsewhere;
 - `--staged` with `--register` ≠ `--repo` never counts the register tree's staged documents;
 - **an explicitly named register that has none exits 2**, and an implicit absence still exits 0 —
@@ -101,9 +117,13 @@ The distinction is whether the register was **named**:
 | invocation | no register found | exit |
 | --- | --- | --- |
 | no register root given — the local repository simply has none | not applicable | **0**, with the reason |
-| `--register` (or `--repo`) given explicitly | the pointer is wrong | **2**, naming the path it looked at |
+| `--register` given explicitly | the pointer is wrong | **2**, naming the path it looked at |
 
 That keeps `DOCS-073`'s estate-wide hook working — it names no register, so it still exits 0 where
 slice documents are not used — while a wrapper that *asked* for a specific register gets "did not
 run" when that register is not there. Which is the exit contract already: 2 is for a check that
 could not be performed, and a check with nothing to check against is one of those.
+
+`--repo` needed nothing new: a mistyped `--repo` is not a repository and already exits 2. Also
+refused (2): `--register` without `--check-message`, and `--staged` with a different `--register`
+when the committing repository keeps slice documents of its own — they answer to it.

@@ -4101,6 +4101,93 @@ test('[qualified] DOCS-040: --staged counts an own-qualified trailer as naming t
 	assert.strictEqual(r.code, 0, r.out);
 });
 
+// ---------------------------------------------------------------------------
+// DOCS-085. `--check-message` across registers: the register trailers are validated against is named separately from
+// the repository being committed to. `--repo` is what `--staged` reads; `--register` is what trailers answer to.
+
+/** A hub that owns VS (VS-529 has a document) and a satellite repository with no register of its own. */
+function hubAndSatellite() {
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), 'estate-'));
+	const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+	w('hub/docs/project/R_Roadmap.md', ['# Hub', '', ...FOLD_LEGEND,
+		'## ID Register', '', '| Prefix | Scope | Owner | Last Used | Series |', '| --- | --- | --- | --- | --- |',
+		'| VS | global | hub | VS-529 | ours |', '', '## Delivery Index', '', '| ID | State | Slice | Status |',
+		'| --- | --- | --- | --- |', '| VS-529 | ⬜ planned | a | x |', ''].join('\n'));
+	w('hub/docs/project/slices/VS-529_a.md', GATE_DOC('VS-529', '⬜ planned', 'a', 'x'));
+	w('satellite/src/app.js', '// satellite\n');
+	for (const r of ['hub', 'satellite']) { git(path.join(root, r), 'init', '-q'); git(path.join(root, r), 'add', '-A'); git(path.join(root, r), 'commit', '-qm', 'x'); }
+	return { hub: path.join(root, 'hub'), satellite: path.join(root, 'satellite') };
+}
+/** Run --check-message from inside `cwd`, with the message written there. */
+function checkFrom(cwd, message, args) {
+	const file = path.join(cwd, 'MSG.txt');
+	fs.writeFileSync(file, message);
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'fold', '--check-message', file, ...args], { encoding: 'utf8', cwd });
+	return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+test('[register] DOCS-085: --register validates trailers against another register while --repo stays the committing repository', () => {
+	const { hub, satellite } = hubAndSatellite();
+	const r = checkFrom(satellite, msg('Slice: VS-529', 'State: coded'), ['--repo', satellite, '--register', hub]);
+	assert.strictEqual(r.code, 0, r.out);
+	const bad = checkFrom(satellite, msg('Slice: VS-530', 'State: coded'), ['--repo', satellite, '--register', hub]);
+	assert.strictEqual(bad.code, 1, `an owned id with no document is still refused:\n${bad.out}`);
+});
+
+test('[register] DOCS-085: --staged reads the COMMITTING repository, never the register - the misleading green is gone', () => {
+	// Measured before this slice: pointing --repo at the hub to validate a trailer made --staged read the HUB's index,
+	// and PASS, counting a hub-side staged edit the message never mentioned as "1 staged slice document(s) checked".
+	const { hub, satellite } = hubAndSatellite();
+	fs.appendFileSync(path.join(satellite, 'src/app.js'), '// change\n');
+	git(satellite, 'add', '-A');
+	fs.appendFileSync(path.join(hub, 'docs/project/slices/VS-529_a.md'), '\nA hub-side edit nobody mentioned.\n');
+	git(hub, 'add', '-A');
+	const r = checkFrom(satellite, msg('Slice: VS-529', 'State: coded'), ['--repo', satellite, '--register', hub, '--staged']);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/0 staged slice document\(s\) checked/.test(r.out), `the hub's staged edit is not this commit's:\n${r.out}`);
+});
+
+test('[register] DOCS-085: an EXPLICIT --register that holds no slice-document register did not run (exit 2), naming it', () => {
+	// A wrapper that asked for a specific register and got a real-but-wrong repository validated nothing and passed.
+	// Implicit absence keeps DOCS-073's exit 0, so an estate-wide hook naming no register is unaffected.
+	const { hub, satellite } = hubAndSatellite();
+	const wrong = checkFrom(satellite, msg('Slice: VS-529'), ['--repo', satellite, '--register', satellite]);
+	assert.strictEqual(wrong.code, 2, wrong.out);
+	assert.ok(wrong.out.includes(satellite.split(path.sep).pop()) && /register/.test(wrong.out), `names the path it looked at:\n${wrong.out}`);
+	const implicit = checkFrom(satellite, msg('Slice: VS-529'), []);
+	assert.strictEqual(implicit.code, 0, `implicit absence is still "not applicable":\n${implicit.out}`);
+	void hub;
+});
+
+test('[register] DOCS-085: --register is for --check-message only, and a committing repo with its own register refuses it under --staged', () => {
+	const { hub, satellite } = hubAndSatellite();
+	assert.strictEqual(cli(['fold', '--register', hub], satellite).code, 2, '--register without --check-message did not run');
+	// The committing repository keeps slice documents of its own: under --staged its staged documents belong to IT,
+	// so validating them against a different register would be a guess. Refused rather than guessed.
+	// Two REAL registers, so the refusal is for the own-slices reason and not because --register holds nothing.
+	const own = hubAndSatellite(), other = hubAndSatellite();
+	const r = checkFrom(own.hub, msg('Slice: VS-529'), ['--repo', own.hub, '--register', other.hub, '--staged']);
+	assert.strictEqual(r.code, 2, r.out);
+	assert.ok(!/holds no slice-document register/.test(r.out), `refused for the wrong reason: ${r.out}`);
+	void hub; void satellite;
+});
+
+test('[register] DOCS-085: a bare id whose PREFIX this register does not own is refused with the remedy, not waved through', () => {
+	// The slice first said "report, do not refuse". Measured, that would have let a TYPO pass: `DCOS-40` for `DOCS-40`
+	// has a prefix this register does not own, exactly like a foreign one. Since DOCS-040 a foreign slice has an
+	// explicit form, so refusing costs a real citation nothing - and the message now says which case it is.
+	const dir = registryRepo();
+	const foreignOrTypo = checkMessage(dir, msg('Slice: XY-141', 'State: coded'));
+	assert.strictEqual(foreignOrTypo.code, 1, foreignOrTypo.out);
+	assert.ok(/XY is not a prefix this register owns/.test(foreignOrTypo.out), foreignOrTypo.out);
+	assert.ok(/hub:XY-141|<registry>:XY-141/.test(foreignOrTypo.out) || /qualify/.test(foreignOrTypo.out), `the remedy is named:\n${foreignOrTypo.out}`);
+	const ownMissing = checkMessage(dir, msg('Slice: VS-9', 'State: coded'));
+	assert.strictEqual(ownMissing.code, 1, ownMissing.out);
+	assert.ok(/VS-9 names no slice document/.test(ownMissing.out) && !/not a prefix/.test(ownMissing.out),
+		`an owned prefix with a missing number is the plain message:\n${ownMissing.out}`);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');

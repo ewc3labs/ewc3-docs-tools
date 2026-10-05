@@ -1120,8 +1120,8 @@ function cmdIndex(root, config, argv) {
  * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
  */
 function cmdFold(root, config, argv) {
-	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged']);
-	const VALUED = new Set(['--since', '--repo', '--config', '--check-message']);
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register']);
+	const VALUED = new Set(['--since', '--repo', '--config', '--check-message', '--register']);
 	for (const [i, a] of argv.entries()) {
 		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
 		if (VALUED.has(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) { console.error(`fold: ${a} needs a value`); return 2; }
@@ -1132,6 +1132,14 @@ function cmdFold(root, config, argv) {
 	if (write && check) { console.error('fold: --write and --check are exclusive.'); return 2; }
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
 	const repo = path.resolve(flag('--repo') || root);
+	// --register <dir>: the register a message's trailers answer to, when it is not the repository being committed to
+	// (DOCS-085). --repo stays the COMMITTING repository: what --staged reads, and where MERGE_HEAD is checked. They
+	// were one flag, so pointing --repo at a hub to validate a trailer made --staged read the HUB's index.
+	const registerFlag = flag('--register');
+	const register = registerFlag ? path.resolve(registerFlag) : repo;
+	// The register's own config governs the register side - its `registry` name, `planning` and roadmap globs - or a
+	// hub that names itself in config looks nameless from a satellite.
+	const registerConfig = registerFlag ? loadConfig(register, null) : config;
 
 	// --check-message <file> [--staged]: a message checked before its commit exists (DOCS-073).
 	const messageFile = flag('--check-message');
@@ -1141,6 +1149,7 @@ function cmdFold(root, config, argv) {
 		return 2;
 	}
 	if (staged && messageFile === undefined) { console.error('fold: --staged needs --check-message <file>.'); return 2; }
+	if (registerFlag && messageFile === undefined) { console.error('fold: --register needs --check-message <file>: it names the register a message is checked against.'); return 2; }
 	let message = null;
 	if (messageFile !== undefined) {
 		try { message = fs.readFileSync(path.resolve(messageFile), 'utf8'); } catch (err) {
@@ -1155,9 +1164,9 @@ function cmdFold(root, config, argv) {
 	if (!repoState.git) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
 	if (write ? !repoState.ok : repoState.conflicts) { console.error(`fold: did not run: ${repoState.reason}`); return 2; }
 
-	const project = path.join(repo, 'docs', 'project');
+	const project = path.join(register, 'docs', 'project');
 	const sliceDir = path.join(project, 'slices');
-	const roadmaps = roadmapFiles(repo, (config.series || {}).roadmaps).filter((file) => {
+	const roadmaps = roadmapFiles(register, (registerConfig.series || {}).roadmaps).filter((file) => {
 		const rel = path.relative(project, file);
 		return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 	});
@@ -1170,7 +1179,7 @@ function cmdFold(root, config, argv) {
 	const hasIndex = roadmaps.some((f) => /^##\s+Delivery Index/im.test(fs.readFileSync(f, 'utf8')));
 	const idDocs = fs.existsSync(sliceDir) && inventorySlices(fs.readdirSync(sliceDir).filter((n) => /\.md$/i.test(n))
 		.map((name) => ({ name, text: fs.readFileSync(path.join(sliceDir, name), 'utf8') }))).some((e) => e.frontmatter === 'ok');
-	const declared = config.planning;
+	const declared = registerConfig.planning;
 	if (declared !== undefined && declared !== 'slice-documents' && declared !== 'roadmap-rows') {
 		console.error(`fold: did not run: planning is ${JSON.stringify(declared)}; it must be "slice-documents" or "roadmap-rows"`);
 		return 2;
@@ -1184,10 +1193,23 @@ function cmdFold(root, config, argv) {
 		return 2;
 	}
 	const mode = declared || (fs.existsSync(sliceDir) ? 'slice-documents' : hasIndex ? 'roadmap-rows' : null);
+	// AN EXPLICIT POINTER THAT RESOLVES TO NOTHING DID NOT RUN (DOCS-085). Implicit absence stays "not applicable" (0),
+	// so an estate-wide hook naming no register is unaffected. But a check that ASKED for a register and got a real
+	// repository without one validated nothing - a silent pass exactly when its configuration is wrong.
+	if (registerFlag && mode !== 'slice-documents') {
+		console.error(`fold: did not run: --register ${registerFlag} holds no slice-document register (${mode === 'roadmap-rows' ? 'it keeps its register as rows' : 'no Delivery Index and no slice documents'}), so nothing could be checked against it`);
+		return 2;
+	}
+	// The committing repository keeps slice documents of its own: under --staged they answer to IT, so checking them
+	// against a different register would be a guess. Refused rather than guessed.
+	if (staged && registerFlag && register !== repo && fs.existsSync(path.join(repo, 'docs', 'project', 'slices'))) {
+		console.error(`fold: did not run: the committing repository keeps its own slice documents, so its staged documents answer to it, not to --register ${registerFlag}`);
+		return 2;
+	}
 	if (mode === 'roadmap-rows') { console.log('fold: rows register: nothing to fold - the Delivery Index is kept as rows, not slice documents'); return 0; }
 	if (!mode) { console.log('fold: no register: nothing to fold - no Delivery Index and no slice documents; Slice: trailers here are evidence only'); return 0; }
 
-	const rel = (p) => path.relative(repo, p).split(path.sep).join('/');
+	const rel = (p) => path.relative(register, p).split(path.sep).join('/');
 	// A legend fold cannot fully read is a register defect, not a stale document: did not run, never exit 1 (DOCS-074).
 	const legendUnreadable = (u) => {
 		console.error(`fold: did not run: the State Legend at ${rel(u.file)}:${u.line} could not be read:`);
@@ -1197,7 +1219,7 @@ function cmdFold(root, config, argv) {
 	};
 
 	if (message !== null) {
-		const r = checkMessage({ repo, sliceDir, roadmaps, message, staged, registry: config.registry });
+		const r = checkMessage({ repo, registerRoot: register, sliceDir, roadmaps, message, staged, registry: registerConfig.registry });
 		if (r.unreadable) { return legendUnreadable(r.unreadable); }
 		if (r.failed) { console.error(`fold: did not run: ${r.failed}`); return 2; }
 		r.notes.forEach((n) => console.log(`fold --check-message: ${n}`));
