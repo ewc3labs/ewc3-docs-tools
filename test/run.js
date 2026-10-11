@@ -4209,6 +4209,7 @@ test('[fold-message] DOCS-088: a trailer block cut off by a blank line is refuse
 	const r = checkMessage(dir, hidden);
 	assert.strictEqual(r.code, 1, r.out);
 	assert.ok(/Slice: VS-1 is not in the trailer block/.test(r.out) && /State: coded is not in the trailer block/.test(r.out), r.out);
+	assert.ok(/Move it into the final trailer block/.test(r.out), r.out);
 	// The same trailers, joined into the last paragraph: read, and accepted.
 	const joined = checkMessage(dir, hidden.replace('coded\n\nCo-Authored', 'coded\nCo-Authored'));
 	assert.strictEqual(joined.code, 0, joined.out);
@@ -4224,7 +4225,7 @@ test('[fold-message] DOCS-088: lookalikes are not stranded - prose, indented, co
 	const dir = foldRepo();
 	const message = ['[VS-1] work', '', 'The fold writes state into frontmatter.',
 		'State: trailers are read from the last paragraph, wrapped prose that starts this way.', 'More prose.', '',
-		'    Slice: VS-9', '    State: coded', '', '# Slice: VS-9', '', 'Slice: VS-1', 'Co-Authored-By: t <t@t>',
+		'    Slice: VS-9', '    State: coded', '', '    quoted text', 'Slice: VS-9', '', '# Slice: VS-9', '', 'Slice: VS-1', 'Co-Authored-By: t <t@t>',
 		'# ------------------------ >8 ------------------------', 'Slice: VS-9', 'State: coded', ''].join('\n');
 	const r = checkMessage(dir, message);
 	assert.strictEqual(r.code, 0, r.out);

@@ -41,7 +41,9 @@ a warning on an exit-0 run is the green this toolkit exists to prevent.
 - Not stranded, each tested as a legal lookalike: a wrapped prose line that begins `State: ...` in a
   prose paragraph; an indented line (a git continuation, a quote, a diff); a comment line; text
   below a scissors line; the subject.
-- `--check-message` refuses each stranded line by name, with the remedy: remove the blank line.
+- `--check-message` refuses each stranded line by name, with the remedy: move it into the final
+  trailer block. (Not "remove the blank line" - when prose follows, that merges the line into prose
+  and still reads nothing.)
 - `fold --check` reports it per commit by the rule every trailer issue follows: an **error** for
   commits after `--since`, a **warning** in full history, which cannot be rewritten.
 - `Slice: A, B` (comma, semicolon or space) is refused as "names more than one slice in one trailer
