@@ -3848,8 +3848,11 @@ test('[fold-message] DOCS-073: the message is read as git will store it - commen
 	assert.strictEqual(checkMessage(dir, `${msg('Slice: VS-1', 'State: coded')}# Slice: VS-9\n`).code, 0, 'a comment line is stripped');
 	assert.strictEqual(checkMessage(dir, `${msg('Slice: VS-1')}# ------------------------ >8 ------------------------\ndiff\nSlice: VS-9\n`).code, 0,
 		'everything below the scissors is stripped');
-	assert.strictEqual(checkMessage(dir, '[VS-1] subject\n\nSlice: VS-9\n\nA closing paragraph that is prose.\n').code, 0,
-		'trailer-looking text outside the last paragraph is not a trailer');
+	// Trailer-looking text outside the last paragraph is not READ as a trailer - VS-9 is never looked up - but since
+	// DOCS-088 it is refused as stranded: this assertion used to be exit 0, which was the silent pass.
+	const outside = checkMessage(dir, '[VS-1] subject\n\nSlice: VS-9\n\nA closing paragraph that is prose.\n');
+	assert.strictEqual(outside.code, 1, outside.out);
+	assert.ok(/Slice: VS-9 is not in the trailer block/.test(outside.out) && !/names no slice document/.test(outside.out), outside.out);
 });
 
 test('[fold-message] DOCS-073: --staged - every staged slice document is named, and a changed state carries its State:', () => {
@@ -4198,6 +4201,68 @@ test('[register] DOCS-085: a bare id whose PREFIX this register does not own is 
 	assert.strictEqual(ownMissing.code, 1, ownMissing.out);
 	assert.ok(/VS-9 names no slice document/.test(ownMissing.out) && !/not a prefix/.test(ownMissing.out),
 		`an owned prefix with a missing number is the plain message:\n${ownMissing.out}`);
+});
+
+test('[fold-message] DOCS-088: a trailer block cut off by a blank line is refused, naming each line - it used to pass as "0 trailers"', () => {
+	const dir = foldRepo();
+	const hidden = '[VS-1] work\n\nWhy.\n\nSlice: VS-1\nState: coded\n\nCo-Authored-By: t <t@t>\n';
+	const r = checkMessage(dir, hidden);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(/Slice: VS-1 is not in the trailer block/.test(r.out) && /State: coded is not in the trailer block/.test(r.out), r.out);
+	assert.ok(/Move it into the final trailer block/.test(r.out), r.out);
+	// The same trailers, joined into the last paragraph: read, and accepted.
+	const joined = checkMessage(dir, hidden.replace('coded\n\nCo-Authored', 'coded\nCo-Authored'));
+	assert.strictEqual(joined.code, 0, joined.out);
+	assert.ok(/1 Slice: trailer/.test(joined.out), joined.out);
+	// No-Slice: is a trailer too: hidden, it would excuse nothing and say so silently.
+	const excuse = checkMessage(dir, '[VS-1] work\n\nNo-Slice: tooling only\n\nCo-Authored-By: t <t@t>\n');
+	assert.strictEqual(excuse.code, 1, excuse.out);
+	assert.ok(/No-Slice: tooling only is not in the trailer block/.test(excuse.out), excuse.out);
+});
+
+test('[fold-message] DOCS-088: lookalikes are not stranded - prose, indented, commented and below-scissors lines', () => {
+	// Legal lookalikes, each a line a reader of the raw message would match on "Slice:" or "State:".
+	const dir = foldRepo();
+	const message = ['[VS-1] work', '', 'The fold writes state into frontmatter.',
+		'State: trailers are read from the last paragraph, wrapped prose that starts this way.', 'More prose.', '',
+		'    Slice: VS-9', '    State: coded', '', '    quoted text', 'Slice: VS-9', '', '# Slice: VS-9', '', 'Slice: VS-1', 'Co-Authored-By: t <t@t>',
+		'# ------------------------ >8 ------------------------', 'Slice: VS-9', 'State: coded', ''].join('\n');
+	const r = checkMessage(dir, message);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(!/not in the trailer block/.test(r.out), r.out);
+});
+
+test('[fold-message] DOCS-088: a comma list in one Slice: is refused with the one-per-line rule, not "names no slice document"', () => {
+	const dir = foldRepo();
+	for (const list of ['VS-1, VS-2', 'VS-1 VS-2', 'VS-1;VS-2']) {
+		const r = checkMessage(dir, msg(`Slice: ${list}`, 'State: coded'));
+		assert.strictEqual(r.code, 1, r.out);
+		assert.ok(r.out.includes(`Slice: ${list} names more than one slice in one trailer - write one Slice: per line`), r.out);
+	}
+	// A single unknown id keeps the plain message.
+	assert.ok(/Slice: VS-9 names no slice document/.test(checkMessage(dir, msg('Slice: VS-9')).out));
+});
+
+test('[fold] DOCS-088: a stranded trailer in history is an ERROR after --since and a warning in full history, naming the commit', () => {
+	const dir = foldRepo();
+	const base = git(dir, 'rev-parse', 'HEAD');
+	git(dir, 'commit', '--allow-empty', '-qm', 'work', '-m', 'Slice: VS-1\nState: coded', '-m', 'Co-Authored-By: t <t@t>');
+	const sha = git(dir, 'rev-parse', 'HEAD').slice(0, 12);
+	const pr = cli(['fold', '--check', '--since', base], dir);
+	assert.strictEqual(pr.code, 1, pr.out);
+	assert.ok(pr.out.includes(sha) && /Slice: VS-1 is not in the trailer block/.test(pr.out), pr.out);
+	const full = cli(['fold', '--check'], dir);
+	assert.strictEqual(full.code, 0, full.out);
+	assert.ok(/warning/i.test(full.out) && full.out.includes(sha), full.out);
+	// And it folded nothing: the trailer was never read.
+	assert.strictEqual(foldData(dir, 'VS-1').state, '⬜ planned');
+});
+
+test('[fold] DOCS-088: strandedTrailers cancels one parsed line per stranded copy - a repeat in the body is still stranded', () => {
+	const { strandedTrailers } = require('../lib/fold');
+	const message = 'subject\n\nSlice: VS-1\n\nslice:   VS-1\nCo-Authored-By: t <t@t>\n';
+	assert.deepStrictEqual(strandedTrailers(message, ['slice: VS-1', 'Co-Authored-By: t <t@t>']), ['Slice: VS-1']);
+	assert.deepStrictEqual(strandedTrailers('Slice: VS-1 in the subject\n\nbody\n', []), [], 'the subject never holds trailers');
 });
 
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
