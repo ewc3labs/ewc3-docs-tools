@@ -4265,6 +4265,140 @@ test('[fold] DOCS-088: strandedTrailers cancels one parsed line per stranded cop
 	assert.deepStrictEqual(strandedTrailers('Slice: VS-1 in the subject\n\nbody\n', []), [], 'the subject never holds trailers');
 });
 
+// --- DOCS-084: fold --commits-from - trailers from other repositories reach the register that owns the slice ---
+
+/** A commit-list entry: a message body above a trailer block. */
+const listed = (repo, sha, date, ...trailers) => ({ sha, repo, committer_date: date, message: `work in ${repo}\n\nWhy.\n\n${trailers.join('\n')}\n` });
+/** Write a commit list as NDJSON beside the repository, and return its path. */
+function commitList(dir, entries) {
+	const file = path.join(path.dirname(dir), `${path.basename(dir)}-commits.ndjson`);
+	fs.writeFileSync(file, entries.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join('\n') + '\n');
+	return file;
+}
+/** A hub register owning VS (live) and TS (frozen), citing DT. */
+const hubRegister = () => registryRepo({ owners: [['VS', 'global', 'hub'], ['TS', 'frozen at 2', 'hub']] });
+
+test('[commits-from] DOCS-084: a list from two repositories advances owned slices, with remote provenance; unowned prefixes are counted, applied to nothing', () => {
+	const dir = hubRegister();
+	const file = commitList(dir, [
+		listed('api', 'aaaaaaa1', '2026-10-01T10:00:00Z', 'Slice: VS-1', 'State: coded'),
+		listed('ui', 'bbbbbbb2', '2026-10-02T10:00:00+02:00', 'Slice: VS-2', 'State: smoked', 'Slice: XY-5', 'State: coded'),
+		listed('ui', 'bbbbbbb3', '2026-10-03T10:00:00Z', 'Slice: XY-6'),
+	]);
+	const dry = cli(['fold', '--commits-from', file], dir);
+	assert.strictEqual(dry.code, 0, dry.out);
+	assert.ok(dry.out.includes('VS-1: ⬜ planned -> 🟦 coded   (api@aaaaaaa1 2026-10-01T10:00:00Z,'), dry.out);
+	assert.ok(dry.out.includes('VS-2: ⬜ planned -> 💨 smoked   (ui@bbbbbbb2 2026-10-02T10:00:00+02:00,'), dry.out);
+	assert.ok(dry.out.includes('unowned: XY - 2 trailer(s), first ui@bbbbbbb3'), dry.out);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '⬜ planned', 'a dry run writes nothing');
+
+	const w = cli(['fold', '--commits-from', file, '--write'], dir);
+	assert.strictEqual(w.code, 0, w.out);
+	const vs1 = foldData(dir, 'VS-1');
+	assert.deepStrictEqual([vs1.state, vs1.state_sha, vs1.state_repo, vs1.state_source], ['🟦 coded', 'aaaaaaa1', 'api', 'trailer-remote']);
+	assert.ok(!fs.readdirSync(path.join(dir, 'docs', 'project', 'slices')).some((n) => n.startsWith('XY')), 'an unowned prefix creates nothing');
+	assert.strictEqual(cli(['fold', '--check', '--commits-from', file], dir).code, 0);
+});
+
+test('[commits-from] DOCS-084: a FROZEN prefix is refused by name, not skipped', () => {
+	const dir = hubRegister();
+	const r = cli(['fold', '--commits-from', commitList(dir, [listed('api', 'aaaaaaa1', '2026-10-01T10:00:00Z', 'Slice: TS-1', 'State: coded')])], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('api@aaaaaaa1  Slice: TS-1 - TS is frozen in this register; a retired series accepts no new state'), r.out);
+});
+
+test('[commits-from] DOCS-084: the list ADDS to local history - local and imported compete by date, tie-broken by repository then sha', () => {
+	const dir = hubRegister();
+	const env = { ...process.env, GIT_COMMITTER_DATE: '2026-10-05T12:00:00Z', GIT_AUTHOR_DATE: '2026-10-05T12:00:00Z' };
+	require('child_process').execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', 'local',
+		'-m', 'Slice: VS-1\nState: coded\nCo-Authored-By: t <t@t>'], { cwd: dir, env });
+	const localSha = git(dir, 'rev-parse', 'HEAD').slice(0, 12);
+
+	// Older imported: local wins, and keeps local provenance.
+	const older = cli(['fold', '--write', '--commits-from', commitList(dir, [listed('api', 'aaaaaaa1', '2026-10-04T12:00:00Z', 'Slice: VS-1', 'State: smoked')])], dir);
+	assert.strictEqual(older.code, 0, older.out);
+	const a = foldData(dir, 'VS-1');
+	assert.deepStrictEqual([a.state, a.state_sha, a.state_repo, a.state_source], ['🟦 coded', localSha, undefined, 'trailer']);
+
+	// Newer imported: it wins; and at one date in two repositories `api` beats `ui`, whatever the list order.
+	const tie = commitList(dir, [
+		listed('ui', 'ccccccc1', '2026-10-06T12:00:00Z', 'Slice: VS-1', 'State: go'),
+		listed('api', 'ddddddd1', '2026-10-06T12:00:00Z', 'Slice: VS-1', 'State: smoked'),
+	]);
+	const newer = cli(['fold', '--write', '--commits-from', tie], dir);
+	assert.strictEqual(newer.code, 0, newer.out);
+	const b = foldData(dir, 'VS-1');
+	assert.deepStrictEqual([b.state, b.state_sha, b.state_repo, b.state_source], ['💨 smoked', 'ddddddd1', 'api', 'trailer-remote']);
+
+	// Without the list, local history alone takes it back - local provenance, state_repo removed.
+	cli(['fold', '--write'], dir);
+	const c = foldData(dir, 'VS-1');
+	assert.deepStrictEqual([c.state, c.state_sha, c.state_repo, c.state_source], ['🟦 coded', localSha, undefined, 'trailer']);
+});
+
+test('[commits-from] DOCS-084: identical input twice changes nothing the second time', () => {
+	const dir = hubRegister();
+	const file = commitList(dir, [listed('api', 'aaaaaaa1', '2026-10-01T10:00:00Z', 'Slice: VS-1', 'State: coded')]);
+	assert.strictEqual(cli(['fold', '--write', '--commits-from', file], dir).code, 0);
+	const doc = gateDoc(dir, 'VS-1');
+	const before = fs.readFileSync(doc, 'utf8');
+	const again = cli(['fold', '--write', '--commits-from', file], dir);
+	assert.ok(again.out.includes('wrote 0 state change(s) and 0 provenance update(s)'), again.out);
+	assert.strictEqual(fs.readFileSync(doc, 'utf8'), before);
+});
+
+test('[commits-from] DOCS-084: a malformed line, a bad date and a missing repo each refuse the WHOLE list by line; a quiet commit is named', () => {
+	const dir = hubRegister();
+	const good = listed('api', 'aaaaaaa1', '2026-10-01T10:00:00Z', 'Slice: VS-1', 'State: coded');
+	for (const [bad, why] of [
+		['{"sha": "abc', /line 2: not JSON/],
+		[JSON.stringify({ ...good, sha: 'bbbbbbb1', committer_date: 'yesterday' }), /line 2: committer_date "yesterday" is not an ISO 8601 date/],
+		[JSON.stringify({ ...good, sha: 'bbbbbbb1', committer_date: '2026-10-01' }), /line 2: committer_date "2026-10-01" is not an ISO 8601 date/],
+		[JSON.stringify({ ...good, sha: 'not-a-sha' }), /line 2: sha "not-a-sha" is not a commit id/],
+		[JSON.stringify({ ...good, sha: 'bbbbbbb1', repo: undefined }), /line 2: no repo/],
+		[JSON.stringify({ ...good, message: 'different' }), /line 2: api@aaaaaaa1 appears twice with different messages/],
+	]) {
+		const r = cli(['fold', '--write', '--commits-from', commitList(dir, [good, bad])], dir);
+		assert.strictEqual(r.code, 2, r.out);
+		assert.ok(why.test(r.out) && /none of it was read/.test(r.out), r.out);
+		assert.strictEqual(foldData(dir, 'VS-1').state, '⬜ planned', 'nothing applied from a list with a bad line');
+	}
+	// --source-repo names the repository for lines that omit it.
+	const bare = commitList(dir, [{ sha: 'aaaaaaa1', committer_date: '2026-10-01T10:00:00Z', message: good.message }]);
+	const named = cli(['fold', '--commits-from', bare, '--source-repo', 'api'], dir);
+	assert.ok(named.out.includes('(api@aaaaaaa1 2026-10-01T10:00:00Z'), named.out);
+	// A commit with no trailers is named, not skipped silently.
+	const quiet = cli(['fold', '--commits-from', commitList(dir, [good, { sha: 'eeeeeee1', repo: 'api', committer_date: '2026-10-01T09:00:00Z', message: 'docs only\n' }])], dir);
+	assert.ok(quiet.out.includes('no trailers: 1 listed commit(s) - api@eeeeeee1'), quiet.out);
+	assert.strictEqual(cli(['fold', '--source-repo', 'api'], dir).code, 2, '--source-repo needs --commits-from');
+});
+
+test('[commits-from] DOCS-084: a message that passes --check-message yields the same pairs in a list; a stranded one is refused in both', () => {
+	const dir = hubRegister();
+	const message = '[VS-1] work\n\nWhy.\n\nSlice: VS-1\nState: coded\nSlice: other:DT-3\nCo-Authored-By: t <t@t>\n';
+	assert.strictEqual(checkMessage(dir, message).code, 0);
+	const r = cli(['fold', '--commits-from', commitList(dir, [{ sha: 'aaaaaaa1', repo: 'api', committer_date: '2026-10-01T10:00:00Z', message }])], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(r.out.includes('VS-1: ⬜ planned -> 🟦 coded') && r.out.includes('cites other:DT-3'), r.out);
+
+	const stranded = message.replace('coded\nSlice', 'coded\n\nSlice');
+	assert.strictEqual(checkMessage(dir, stranded).code, 1);
+	const s = cli(['fold', '--commits-from', commitList(dir, [{ sha: 'aaaaaaa1', repo: 'api', committer_date: '2026-10-01T10:00:00Z', message: stranded }])], dir);
+	assert.strictEqual(s.code, 1, s.out);
+	assert.ok(s.out.includes('api@aaaaaaa1  Slice: VS-1 is not in the trailer block'), s.out);
+});
+
+test('[commits-from] DOCS-084: a listed commit already in local history is read once; the list can come on stdin', () => {
+	const dir = hubRegister();
+	const sha = trailerCommit(dir, 'local', ['Slice: VS-1', 'State: coded']);
+	const entry = { sha, repo: 'hub', committer_date: '2026-10-09T10:00:00Z', message: 'whatever\n\nSlice: VS-1\nState: go\n' };
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'fold', '--commits-from', '-', '--repo', dir], { encoding: 'utf8', input: `${JSON.stringify(entry)}\n` });
+	const out = (r.stdout || '') + (r.stderr || '');
+	assert.strictEqual(r.status, 0, out);
+	assert.ok(out.includes('1 listed commit(s) are already in local history') && out.includes('VS-1: ⬜ planned -> 🟦 coded'), out);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
