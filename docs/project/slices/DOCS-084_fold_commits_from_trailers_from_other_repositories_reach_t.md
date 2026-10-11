@@ -1,10 +1,12 @@
 ---
 id: DOCS-084
-state: ⬜ planned
+state: 🟨 coded
 title: "fold --commits-from: trailers from other repositories reach the register that owns the slice"
 est: L
 doc: "[DOCS-084](slices/DOCS-084_fold_commits_from_trailers_from_other_repositories_reach_t.md)"
 status: ""
+state_sha: fb1168aa0fef
+state_source: trailer
 ---
 
 # DOCS-084 — fold --commits-from: trailers from other repositories reach the register that owns the slice
@@ -131,3 +133,29 @@ the caller. `fold` reads the list it is handed, and is idempotent given the same
 - `progression` declared: a backwards transition is refused, and accepted with `State-Override:`; a
   state outside the list is never backwards; with no `progression`, newest-wins is unchanged;
 - a message that passes `--check-message` yields the same pairs when it arrives in a commit list.
+
+## Built in two parts
+
+**Part 1 - the reader** (this PR): `--commits-from <file|->` and `--source-repo`, sections 1-3
+above, and every test listed except `progression`. Shipped first because the caller is being built
+against it.
+
+- Each message is read by `git interpret-trailers --parse` **without** commit-message cleanup: it
+  was cleaned when it was committed, and a stored line starting `#` is text. DOCS-088's stranded-
+  trailer rule applies to listed messages exactly as to local ones.
+- A bad line refuses the **whole** list, exit 2, naming each line. A list read in part and applied
+  is a partial truth that looks whole.
+- `committer_date` must be ISO 8601 with a time and a zone. `Date.parse` accepts `2026-10-01` and
+  reads it as UTC midnight, which would decide order on a time nobody wrote.
+- A listed commit whose sha is already in local history is read there, once.
+- Every issue from a listed commit is **in scope** (an error): the list is the caller's statement of
+  what is new.
+- With no declared ownership table, owned means "a prefix some slice document or archived id here
+  uses".
+
+Known limit: committing the frontmatter an import wrote needs `Slice:`/`State:` trailers or
+`No-Slice:` under `--check-message --staged`. The exemption for `fold --write` output verifies the
+trailer in the commit `state_sha` names, and an imported sha is not in this repository.
+
+**Part 2 - `progression` and `State-Override:`** (section 4): next, as its own PR. Without it,
+newest-wins stands and the dry run shows every transition, as section 4 already specifies.

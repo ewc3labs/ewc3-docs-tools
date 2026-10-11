@@ -26,7 +26,7 @@ const frontmatter = require('../lib/frontmatter');
 const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliveryindex');
 const gitbase = require('../lib/gitbase');
 const { planMint } = require('../lib/mint');
-const { planFold, applyFold, checkMessage } = require('../lib/fold');
+const { planFold, applyFold, checkMessage, readCommitList } = require('../lib/fold');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -1120,8 +1120,8 @@ function cmdIndex(root, config, argv) {
  * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
  */
 function cmdFold(root, config, argv) {
-	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register']);
-	const VALUED = new Set(['--since', '--repo', '--config', '--check-message', '--register']);
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register', '--commits-from', '--source-repo']);
+	const VALUED = new Set(['--since', '--repo', '--config', '--check-message', '--register', '--commits-from', '--source-repo']);
 	for (const [i, a] of argv.entries()) {
 		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
 		if (VALUED.has(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) { console.error(`fold: ${a} needs a value`); return 2; }
@@ -1152,6 +1152,27 @@ function cmdFold(root, config, argv) {
 	}
 	if (staged && messageFile === undefined) { console.error('fold: --staged needs --check-message <file>.'); return 2; }
 	if (registerFlag && messageFile === undefined) { console.error('fold: --register needs --check-message <file>: it names the register a message is checked against.'); return 2; }
+	// --commits-from <file|->: trailers from OTHER repositories, as NDJSON the caller assembled (DOCS-084).
+	const listFile = flag('--commits-from');
+	const sourceRepo = flag('--source-repo');
+	if (listFile !== undefined && messageFile !== undefined) { console.error('fold: --commits-from and --check-message are exclusive.'); return 2; }
+	if (sourceRepo !== undefined && listFile === undefined) { console.error('fold: --source-repo needs --commits-from: it names the repository a commit list came from.'); return 2; }
+	let imported = null;
+	if (listFile !== undefined) {
+		let text;
+		try { text = fs.readFileSync(listFile === '-' ? 0 : path.resolve(listFile), 'utf8'); } catch (err) {
+			console.error(`fold: did not run: cannot read the commit list ${listFile} (${err.code || err.message})`);
+			return 2;
+		}
+		const list = readCommitList(text, sourceRepo || null);
+		// ALL OR NOTHING: a list read in part, applied, is a partial truth that looks whole.
+		if (list.errors.length) {
+			console.error(`fold: did not run: the commit list has ${list.errors.length} bad line(s) - none of it was read:`);
+			list.errors.forEach((e) => console.error(`  ${e}`));
+			return 2;
+		}
+		imported = list.commits;
+	}
 	let message = null;
 	if (messageFile !== undefined) {
 		try { message = fs.readFileSync(path.resolve(messageFile), 'utf8'); } catch (err) {
@@ -1241,7 +1262,7 @@ function cmdFold(root, config, argv) {
 		if (!sinceShas) { console.error(`fold: did not run: --since ${since} is not a commit`); return 2; }
 	}
 
-	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry });
+	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry, imported, localName: config.registry || null });
 	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
 	const errors = plan.issues.filter((i) => i.inScope);
 	const warnings = plan.issues.filter((i) => !i.inScope);
@@ -1252,12 +1273,23 @@ function cmdFold(root, config, argv) {
 	if (plan.foreign.length && !plan.ownName) {
 		console.log('  this register does not name itself - set `registry` in config, or give its owned rows one Owner - so a qualified trailer could not be told apart from one of its own slices');
 	}
-	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${c.sha}, ${rel(c.file)})`); }
+	// Where a transition came from: a local sha, or `repo@sha date` for an imported one - the order across
+	// repositories is by committer date, so the date is shown wherever it decided (DOCS-084).
+	const from = (e) => (e.repo ? `${e.repo}@${e.sha} ${e.dateText}` : e.sha);
+	if (imported) {
+		console.log(`fold: ${imported.length} listed commit(s) read with local history; across repositories the newest is by committer date, then repository name, then sha`);
+		if (plan.local) { console.log(`  ${plan.local} listed commit(s) are already in local history - read there, not twice`); }
+		for (const [prefix, u] of plan.unowned) {
+			console.log(`  unowned: ${prefix} - ${u.count} trailer(s), first ${u.first}; not a prefix this register declares, so applied to nothing`);
+		}
+		if (plan.quiet.length) { console.log(`  no trailers: ${plan.quiet.length} listed commit(s) - ${plan.quiet.join(', ')}`); }
+	}
+	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${from(c)}, ${rel(c.file)})`); }
 	// A dry run says everything --write will do, provenance included; --check never fails on provenance, so it
 	// does not list it (DOCS-070).
 	if (!check) {
 		for (const p of plan.provenance) {
-			console.log(`  ${p.written}: ${p.to} unchanged - records state_sha ${p.sha}, state_source: trailer   (${rel(p.file)})`);
+			console.log(`  ${p.written}: ${p.to} unchanged - records state_sha ${p.sha}${p.repo ? `, state_repo ${p.repo}` : ''}, state_source: ${p.source}   (${rel(p.file)})`);
 		}
 	}
 	for (const c of plan.conflicts) {
