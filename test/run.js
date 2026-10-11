@@ -4391,12 +4391,22 @@ test('[commits-from] DOCS-084: a message that passes --check-message yields the 
 test('[commits-from] DOCS-084: a listed commit already in local history is read once; the list can come on stdin', () => {
 	const dir = hubRegister();
 	const sha = trailerCommit(dir, 'local', ['Slice: VS-1', 'State: coded']);
-	const entry = { sha, repo: 'hub', committer_date: '2026-10-09T10:00:00Z', message: 'whatever\n\nSlice: VS-1\nState: go\n' };
+	const entry = { sha, repo: 'hub', committer_date: '2026-10-09T10:00:00Z', message: git(dir, 'log', '-1', '--format=%B') };
 	const r = require('child_process').spawnSync(process.execPath,
 		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'fold', '--commits-from', '-', '--repo', dir], { encoding: 'utf8', input: `${JSON.stringify(entry)}\n` });
 	const out = (r.stdout || '') + (r.stderr || '');
 	assert.strictEqual(r.status, 0, out);
 	assert.ok(out.includes('1 listed commit(s) are already in local history') && out.includes('VS-1: ⬜ planned -> 🟦 coded'), out);
+});
+
+test('[commits-from] DOCS-084: a short sha from another repository that shares a local prefix is NOT taken as local - its transition folds', () => {
+	// Codex, PR #43: skipping on the prefix alone dropped the commit and reported it as already read.
+	const dir = hubRegister();
+	const local = trailerCommit(dir, 'local', ['Slice: VS-2', 'State: coded']);
+	const collide = listed('api', local.slice(0, 7), '2026-10-09T10:00:00Z', 'Slice: VS-1', 'State: smoked');
+	const r = cli(['fold', '--commits-from', commitList(dir, [collide])], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(!/already in local history/.test(r.out) && r.out.includes(`VS-1: ⬜ planned -> 💨 smoked   (api@${local.slice(0, 7)}`), r.out);
 });
 
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
