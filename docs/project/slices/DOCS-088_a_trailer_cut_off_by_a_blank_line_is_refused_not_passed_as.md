@@ -1,10 +1,12 @@
 ---
 id: DOCS-088
-state: ⬜ planned
+state: 🟦 tested
 title: a trailer cut off by a blank line is refused, not passed as zero trailers
 est: S
 doc: "[DOCS-088](slices/DOCS-088_a_trailer_cut_off_by_a_blank_line_is_refused_not_passed_as.md)"
 status: ""
+state_sha: 60a62760c582
+state_source: trailer
 ---
 
 # DOCS-088 — a trailer cut off by a blank line is refused, not passed as zero trailers
