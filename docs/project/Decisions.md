@@ -21,6 +21,7 @@ never from memory.
 | W-4 | Decided | Who writes the Windows installer for rtk in the token-optimizer fork? | LabsHQ | 2026-10-03 | Neither — rtk and its code-graph companion are dropped for a different token optimizer; moot — 2026-10-05 |
 | W-5 | Decided | Which slice is built next, after DOCS-082? | DOCS-040 | 2026-10-03 | DOCS-040 — 2026-10-03 |
 | W-6 | Decided | Merge DOCS-040 now, or hold it until after DOCS-084 and DOCS-085? | Merge now | 2026-10-04 | Merge now — 2026-10-04 |
+| W-7 | **Open** | Scrub a downstream estate's names from this public repository's current tree? | Scrub the tree, and guard it with a word list kept outside the repository | 2026-10-11 | |
 
 ## W-1 — where the prefix registry runs
 
@@ -89,5 +90,37 @@ A relayed answer placed DOCS-040 after DOCS-084 and DOCS-085, while the owner ha
 it to be started, and it was built. Put to the owner rather than resolved by either lane. Answered
 2026-10-04: **merge it now.** Both later slices read trailers through the resolver it adds, so
 building them first would have meant retrofitting qualified references into each.
+
+## W-7 — a downstream estate's names in a public repository
+
+*Open, asked 2026-10-11.*
+
+This repository is public, and its rule is "keep the lesson, drop the name". Measured on main at
+`236c1e3`: **284 lines in 31 files** still name a downstream estate's organisation, repositories and
+internal objects:
+
+- code comments in six `lib/` modules and `bin/`;
+- six design notes;
+- sixteen slice documents and the roadmap;
+- the test file.
+
+Almost all of it predates the rule. None of it is a secret, but each line is a fact about someone
+else's estate published under this one's name.
+
+Options:
+
+- **Scrub the current tree** (est M, one PR). Replace each name with its role — "a hub register", "a
+  satellite", "an estate of eight repositories" — keeping every measurement and lesson. Published
+  history keeps the old text: removing it from history means rewriting `main`, which this repository
+  does not do, and forks and caches would keep it anyway.
+- **Scrub, plus a guard.** As above, then make CI fail on a downstream name. The word list cannot be
+  committed here, because a list of the names is the thing being removed. Keep it in a repository
+  secret or an HQ file the job reads, and have the job fail **closed** when the list is missing.
+- **Leave it.** Apply the rule only to new work. Cheapest, but every slice that cites an old one
+  copies the names forward.
+
+**Recommendation: scrub plus a guard.** A scrub without the guard regresses the first time a
+measurement is pasted in from downstream, which is how most of these lines arrived. **Blocks:**
+nothing; DOCS-084 part 2 continues meanwhile.
 
 [roadmap-s-id]: EWC3_Docs_Tools_Roadmap.md#id-prefixes
