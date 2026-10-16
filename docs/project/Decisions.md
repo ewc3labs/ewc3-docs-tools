@@ -22,6 +22,7 @@ never from memory.
 | W-5 | Decided | Which slice is built next, after DOCS-082? | DOCS-040 | 2026-10-03 | DOCS-040 — 2026-10-03 |
 | W-6 | Decided | Merge DOCS-040 now, or hold it until after DOCS-084 and DOCS-085? | Merge now | 2026-10-04 | Merge now — 2026-10-04 |
 | W-7 | **Open** | Scrub a downstream estate's names from this public repository's current tree? | Scrub the tree, and guard it with a word list kept outside the repository | 2026-10-11 | |
+| W-8 | **Open** | Turn off rebase merging on this repository, as squash already is? | Yes | 2026-10-16 | |
 
 ## W-1 — where the prefix registry runs
 
@@ -122,5 +123,21 @@ Options:
 **Recommendation: scrub plus a guard.** A scrub without the guard regresses the first time a
 measurement is pasted in from downstream, which is how most of these lines arrived. **Blocks:**
 nothing; DOCS-084 part 2 continues meanwhile.
+
+## W-8 — rebase merging on this repository
+
+*Open, asked 2026-10-16.*
+
+Squash merging is off, and it should be: `fold` reads `Slice:`/`State:` trailers from the commits
+that reach `main`, and a squash rewrites them into one message. Measured on 2026-10-16
+(`gh api repos/<owner>/<repo> --jq '.allow_squash_merge, .allow_rebase_merge'`): **rebase merging is
+still on.** A rebase merge keeps the messages but gives every commit a new sha, so each `state_sha`
+recorded on the branch names a commit that never reaches `main`. It breaks provenance the same way,
+only more quietly.
+
+**Recommendation: turn it off**
+(`gh api -X PATCH repos/<owner>/<repo> -F allow_rebase_merge=false`). Every pull request here
+already merges with a merge commit, so nothing in the current workflow changes. **Blocks:** nothing;
+it closes a door nobody is using yet.
 
 [roadmap-s-id]: EWC3_Docs_Tools_Roadmap.md#id-prefixes

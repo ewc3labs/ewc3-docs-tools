@@ -27,6 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # fold reads Slice:/State: trailers from history; a shallow clone has none to read.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -38,3 +41,16 @@ jobs:
       # is caught here and nowhere else (DOCS-056).
       - name: Delivery Index matches its slice documents
         run: node bin/ewc3-docs.js index --check
+      # THE GATE, NOT THE WRAPPER. A commit that skipped every local hook still lands here: each slice's state must
+      # match its newest trailer, and on a pull request every trailer the PR adds must be well-formed - an error,
+      # not the warning full history gets, because these commits can still be fixed.
+      - name: Slice states match their trailers
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            node bin/ewc3-docs.js fold --check --since "$(git merge-base "$BASE_SHA" HEAD)"
+          else
+            node bin/ewc3-docs.js fold --check
+          fi
