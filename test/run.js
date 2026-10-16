@@ -4812,6 +4812,70 @@ test('[hook] DOCS-092: install is idempotent, never replaces a hook it did not w
 	assert.strictEqual(fs.readFileSync(file, 'utf8'), theirs);
 });
 
+test('[hook] DOCS-092: when the check CANNOT RUN the hook warns and lets the commit through - CI is the gate; --strict blocks', () => {
+	// Raised downstream: blocking here left only --no-verify, which agents may not use, and an unreadable legend
+	// blocked the very commit that fixes it. A FINDING still blocks (the test above).
+	const { installHook } = require('../lib/hook');
+	const missing = { script: path.join(os.tmpdir(), 'nowhere', 'ewc3-docs.js'), node: path.join(os.tmpdir(), 'nowhere', 'node') };
+	const onPath = require('child_process').spawnSync('sh', ['-c', 'command -v ewc3-docs'], { encoding: 'utf8' }).status === 0;
+
+	// 1. The tool is not on this machine.
+	if (!onPath) {
+		const dir = foldRepo();
+		assert.strictEqual(installHook(dir, missing).code, 0);
+		const head = git(dir, 'rev-parse', 'HEAD');
+		const r = commitThroughHook(dir, msg('Slice: VS-9'));
+		assert.strictEqual(r.code, 0, r.out);
+		assert.ok(r.out.includes('ewc3-docs not found') && r.out.includes('trailer check SKIPPED; CI enforces it'), r.out);
+		assert.notStrictEqual(git(dir, 'rev-parse', 'HEAD'), head, 'the commit landed');
+
+		const strict = foldRepo();
+		assert.strictEqual(installHook(strict, { ...missing, strict: true }).code, 0);
+		const blocked = commitThroughHook(strict, msg('Slice: VS-1'));
+		assert.notStrictEqual(blocked.code, 0, blocked.out);
+		assert.ok(blocked.out.includes('(strict): ewc3-docs not found'), blocked.out);
+	}
+
+	// 2. The tool is here but the check did not run (exit 2): an unreadable legend, whose fix must be committable.
+	for (const strict of [false, true]) {
+		const dir = foldRepo();
+		const roadmap = path.join(dir, 'docs', 'project', 'R_Roadmap.md');
+		fs.writeFileSync(roadmap, fs.readFileSync(roadmap, 'utf8').replace('- 💨 `smoked` — smoke-verified', '- 💨 `smoked` `go` — two at once'));
+		git(dir, 'commit', '-qam', 'broke the legend');
+		assert.strictEqual(cli(['hook', 'install', ...(strict ? ['--strict'] : [])], dir).code, 0);
+		const r = commitThroughHook(dir, msg('Slice: VS-1'));
+		if (strict) {
+			assert.notStrictEqual(r.code, 0, r.out);
+			assert.ok(r.out.includes('(strict): the check did not run'), r.out);
+		} else {
+			assert.strictEqual(r.code, 0, r.out);
+			assert.ok(r.out.includes('the check did not run (exit 2; reason above) - trailer check SKIPPED; CI enforces it'), r.out);
+		}
+	}
+});
+
+test('[hook] DOCS-092: a tool that cannot even START (126/127) is cannot-check, and the custom-hook line follows the same rules', () => {
+	// Codex, PR #51: only exit 2 was routed to "cannot check", so a node_modules/.bin/ewc3-docs whose interpreter is
+	// gone exited 126/127 and blocked; and the line printed for a custom hook (`|| exit $?`) was strict by accident.
+	const dir = foldRepo();
+	const bin = path.join(dir, 'node_modules', '.bin', 'ewc3-docs');
+	fs.mkdirSync(path.dirname(bin), { recursive: true });
+	fs.writeFileSync(bin, '#!/nonexistent/interpreter\n');
+	fs.chmodSync(bin, 0o755);
+	assert.strictEqual(cli(['hook', 'install'], dir).code, 0);
+	const r = commitThroughHook(dir, msg('Slice: VS-1'));
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/the check did not run \(exit 12[67]; reason above\) - trailer check SKIPPED/.test(r.out), r.out);
+
+	const { installHook } = require('../lib/hook');
+	const other = foldRepo();
+	fs.writeFileSync(path.join(other, '.git', 'hooks', 'commit-msg'), '#!/bin/sh\necho theirs\n');
+	const plain = installHook(other, { script: 'x', node: 'y' });
+	assert.ok(plain.message.includes('[ "$c" -eq 1 ] && exit 1') && plain.message.includes('SKIPPED'), plain.message);
+	assert.ok(!plain.message.includes('|| exit $?'), plain.message);
+	assert.ok(installHook(other, { script: 'x', node: 'y', strict: true }).message.includes('--staged || exit 1'));
+});
+
 test('[hook] DOCS-092: a generated hook the user EDITED is theirs now - install and uninstall refuse it, byte-identical', () => {
 	// Codex P1, PR #50: the marker survived the edit, so install replaced it and uninstall deleted it, exit 0.
 	const dir = foldRepo();

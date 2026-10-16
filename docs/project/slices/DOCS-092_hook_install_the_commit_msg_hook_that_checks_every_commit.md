@@ -46,3 +46,13 @@ hook keeps its marker comment, so a marker test let install replace their edit a
 it, exit 0. The hook now carries `# ewc3-docs-sha256: <hash of its own text>`; only a hook whose
 seal still matches is the tool's to update or remove. An edited one is refused like a foreign one,
 byte-identical, and a hook installed from another copy of the tool is still recognised.
+
+**Cannot check is a warning, not a block** (raised downstream before the fleet installed it). The
+first version blocked when the tool was missing, naming `--no-verify` as the bypass. But agents work
+under a standing rule never to use `--no-verify`, so on any machine without the tool every agent
+commit stuck with only a forbidden way out. Worse, an unreadable legend made the check exit 2 and
+blocked the very commit that would fix it. The hook now blocks **only for a finding** (exit 1). When
+it cannot check (tool missing, exit 2) it warns on stderr, "trailer check SKIPPED; CI enforces it",
+and lets the commit through. That is what "the hook is the convenience layer, CI is the gate" means
+in practice. `hook install --strict` blocks in those cases too, for a repository with no CI gate;
+the choice is made at install and sealed into the hook, not read from a config file.
