@@ -4756,6 +4756,76 @@ test('[commits-from] DOCS-091: --backfill makes a listed commit\'s issues WARNIN
 	assert.strictEqual(cli(['fold', '--backfill'], dir).code, 2, '--backfill needs --commits-from');
 });
 
+// --- DOCS-092: ewc3-docs hook install | uninstall ---
+
+/** A real `git commit` through the installed hook: { code, out }. */
+function commitThroughHook(dir, message) {
+	const r = require('child_process').spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false',
+		'commit', '-q', '--allow-empty', '-F', '-'], { cwd: dir, encoding: 'utf8', input: message });
+	return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+test('[hook] DOCS-092: the installed hook refuses a bad commit for real, and lets a good one through', () => {
+	const dir = foldRepo();
+	const r = cli(['hook', 'install'], dir);
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/installed: .*commit-msg/.test(r.out), r.out);
+
+	const bad = commitThroughHook(dir, msg('Slice: VS-9', 'State: coded'));
+	assert.notStrictEqual(bad.code, 0, 'git refused the commit');
+	assert.ok(bad.out.includes('Slice: VS-9 names no slice document'), bad.out);
+	const head = git(dir, 'rev-parse', 'HEAD');
+
+	// A staged slice document the message does not name is refused too: the hook runs --staged.
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, `${fs.readFileSync(doc, 'utf8')}\nMore.\n`);
+	git(dir, 'add', '-A');
+	const unnamed = commitThroughHook(dir, msg('Slice: VS-2'));
+	assert.notStrictEqual(unnamed.code, 0);
+	assert.ok(/not named by a Slice: trailer/.test(unnamed.out), unnamed.out);
+	assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), head, 'no commit was made');
+
+	const good = commitThroughHook(dir, msg('Slice: VS-1', 'State: coded'));
+	assert.strictEqual(good.code, 0, good.out);
+	assert.notStrictEqual(git(dir, 'rev-parse', 'HEAD'), head);
+});
+
+test('[hook] DOCS-092: install is idempotent, never replaces a hook it did not write, and uninstall removes only its own', () => {
+	const dir = foldRepo();
+	const file = path.join(dir, '.git', 'hooks', 'commit-msg');
+	assert.strictEqual(cli(['hook', 'install'], dir).code, 0);
+	const written = fs.readFileSync(file, 'utf8');
+	const again = cli(['hook', 'install'], dir);
+	assert.ok(/already installed/.test(again.out), again.out);
+	assert.strictEqual(fs.readFileSync(file, 'utf8'), written);
+
+	assert.strictEqual(cli(['hook', 'uninstall'], dir).code, 0);
+	assert.ok(!fs.existsSync(file));
+
+	// Somebody's own hook: refused by name, untouched, with the line to add instead - install AND uninstall.
+	const theirs = '#!/bin/sh\necho their checks\n';
+	fs.writeFileSync(file, theirs);
+	const refused = cli(['hook', 'install'], dir);
+	assert.strictEqual(refused.code, 2, refused.out);
+	assert.ok(/did not write/.test(refused.out) && refused.out.includes('ewc3-docs fold --check-message "$1" --staged'), refused.out);
+	assert.strictEqual(cli(['hook', 'uninstall'], dir).code, 2);
+	assert.strictEqual(fs.readFileSync(file, 'utf8'), theirs);
+});
+
+test('[hook] DOCS-092: the hook goes where git runs hooks from - core.hooksPath honoured; outside a work tree did not run', () => {
+	const dir = foldRepo();
+	git(dir, 'config', 'core.hooksPath', 'ci-hooks');
+	assert.strictEqual(cli(['hook', 'install'], dir).code, 0);
+	assert.ok(fs.existsSync(path.join(dir, 'ci-hooks', 'commit-msg')), 'installed under core.hooksPath');
+	assert.ok(!fs.existsSync(path.join(dir, '.git', 'hooks', 'commit-msg')), 'not where git would never run it');
+	const bad = commitThroughHook(dir, msg('Slice: VS-9'));
+	assert.notStrictEqual(bad.code, 0, bad.out);
+
+	const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-'));
+	assert.strictEqual(cli(['hook', 'install'], plain).code, 2);
+	assert.strictEqual(cli(['hook', 'frobnicate'], dir).code, 2);
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
