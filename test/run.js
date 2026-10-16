@@ -4812,6 +4812,25 @@ test('[hook] DOCS-092: install is idempotent, never replaces a hook it did not w
 	assert.strictEqual(fs.readFileSync(file, 'utf8'), theirs);
 });
 
+test('[hook] DOCS-092: a generated hook the user EDITED is theirs now - install and uninstall refuse it, byte-identical', () => {
+	// Codex P1, PR #50: the marker survived the edit, so install replaced it and uninstall deleted it, exit 0.
+	const dir = foldRepo();
+	const file = path.join(dir, '.git', 'hooks', 'commit-msg');
+	assert.strictEqual(cli(['hook', 'install'], dir).code, 0);
+	const edited = `${fs.readFileSync(file, 'utf8').replace('msg="$1"', 'msg="$1"\n./scripts/lint-message "$msg" || exit 1')}`;
+	fs.writeFileSync(file, edited);
+	for (const action of ['install', 'uninstall']) {
+		const r = cli(['hook', action], dir);
+		assert.strictEqual(r.code, 2, `${action}: ${r.out}`);
+		assert.ok(/written by this tool and EDITED since/.test(r.out), r.out);
+		assert.strictEqual(fs.readFileSync(file, 'utf8'), edited, `${action} left the edit alone`);
+	}
+	// An unedited hook installed from ANOTHER copy of the tool is still ours: its seal is its own.
+	const { hookText, isOurs } = require('../lib/hook');
+	assert.ok(isOurs(hookText('/elsewhere/bin/ewc3-docs.js', '/usr/bin/node')));
+	assert.ok(!isOurs(`${hookText('/elsewhere/bin/ewc3-docs.js', '/usr/bin/node')}# one more line\n`));
+});
+
 test('[hook] DOCS-092: the hook goes where git runs hooks from - core.hooksPath honoured; outside a work tree did not run', () => {
 	const dir = foldRepo();
 	git(dir, 'config', 'core.hooksPath', 'ci-hooks');

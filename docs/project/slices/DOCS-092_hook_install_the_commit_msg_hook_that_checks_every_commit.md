@@ -40,3 +40,9 @@ provenance rather than relying on memory.
 
 Tested through real `git commit`s: a bad trailer and an unnamed staged document are refused, and no
 commit is made; a good one lands. A hook that always passed fails those tests (measured).
+
+**Ownership is a seal, not a marker** (Codex P1, PR #50). A user who adds a check to a generated
+hook keeps its marker comment, so a marker test let install replace their edit and uninstall delete
+it, exit 0. The hook now carries `# ewc3-docs-sha256: <hash of its own text>`; only a hook whose
+seal still matches is the tool's to update or remove. An edited one is refused like a foreign one,
+byte-identical, and a hook installed from another copy of the tool is still recognised.
