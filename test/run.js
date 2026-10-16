@@ -4849,9 +4849,31 @@ test('[hook] DOCS-092: when the check CANNOT RUN the hook warns and lets the com
 			assert.ok(r.out.includes('(strict): the check did not run'), r.out);
 		} else {
 			assert.strictEqual(r.code, 0, r.out);
-			assert.ok(r.out.includes('the check did not run (reason above) - trailer check SKIPPED; CI enforces it'), r.out);
+			assert.ok(r.out.includes('the check did not run (exit 2; reason above) - trailer check SKIPPED; CI enforces it'), r.out);
 		}
 	}
+});
+
+test('[hook] DOCS-092: a tool that cannot even START (126/127) is cannot-check, and the custom-hook line follows the same rules', () => {
+	// Codex, PR #51: only exit 2 was routed to "cannot check", so a node_modules/.bin/ewc3-docs whose interpreter is
+	// gone exited 126/127 and blocked; and the line printed for a custom hook (`|| exit $?`) was strict by accident.
+	const dir = foldRepo();
+	const bin = path.join(dir, 'node_modules', '.bin', 'ewc3-docs');
+	fs.mkdirSync(path.dirname(bin), { recursive: true });
+	fs.writeFileSync(bin, '#!/nonexistent/interpreter\n');
+	fs.chmodSync(bin, 0o755);
+	assert.strictEqual(cli(['hook', 'install'], dir).code, 0);
+	const r = commitThroughHook(dir, msg('Slice: VS-1'));
+	assert.strictEqual(r.code, 0, r.out);
+	assert.ok(/the check did not run \(exit 12[67]; reason above\) - trailer check SKIPPED/.test(r.out), r.out);
+
+	const { installHook } = require('../lib/hook');
+	const other = foldRepo();
+	fs.writeFileSync(path.join(other, '.git', 'hooks', 'commit-msg'), '#!/bin/sh\necho theirs\n');
+	const plain = installHook(other, { script: 'x', node: 'y' });
+	assert.ok(plain.message.includes('[ "$c" -eq 1 ] && exit 1') && plain.message.includes('SKIPPED'), plain.message);
+	assert.ok(!plain.message.includes('|| exit $?'), plain.message);
+	assert.ok(installHook(other, { script: 'x', node: 'y', strict: true }).message.includes('--staged || exit 1'));
 });
 
 test('[hook] DOCS-092: a generated hook the user EDITED is theirs now - install and uninstall refuse it, byte-identical', () => {
