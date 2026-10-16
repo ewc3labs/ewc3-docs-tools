@@ -1,10 +1,12 @@
 ---
 id: DOCS-092
-state: ⬜ planned
+state: 🟦 tested
 title: "hook install: the commit-msg hook that checks every commit, without replacing anyone's own"
 est: S
 doc: "[DOCS-092](slices/DOCS-092_hook_install_the_commit_msg_hook_that_checks_every_commit.md)"
 status: ""
+state_sha: 2000c10d12f0
+state_source: trailer
 ---
 
 # DOCS-092 — hook install: the commit-msg hook that checks every commit, without replacing anyone's own

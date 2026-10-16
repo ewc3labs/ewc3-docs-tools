@@ -114,7 +114,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-089 | 🟦 tested | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
 | DOCS-090 | 🟦 tested | fold --format json: a versioned, published schema so wrappers never parse English | M | [DOCS-090][docs-090] |  |
 | DOCS-091 | 🟦 tested | fold --commits-from --backfill: a repository's history is swept once, its old mistakes are warnings | S | [DOCS-091][docs-091] |  |
-| DOCS-092 | ⬜ planned | hook install: the commit-msg hook that checks every commit, without replacing anyone's own | S | [DOCS-092][docs-092] |  |
+| DOCS-092 | 🟦 tested | hook install: the commit-msg hook that checks every commit, without replacing anyone's own | S | [DOCS-092][docs-092] |  |
 
 ## Done
 
