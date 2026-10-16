@@ -61,6 +61,8 @@ EWC3 Labs documentation tools
     [--source-repo <name>]                NDJSON, one {sha, repo, committer_date, message} per
                                           line. Unowned prefixes are counted, not applied; across
                                           repositories the newest is by committer date.
+    [--backfill]                          The list is history swept once: its issues are
+                                          warnings, and valid trailers still fold.
                                           Config `progression` (an ordered list of states)
                                           refuses a backwards move unless the commit carries
                                           State-Override: <reason>.
