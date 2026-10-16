@@ -112,7 +112,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-087 | ⬜ planned | a converted register's Last Used is emitted by the tool, from slice documents and the archive | M | [DOCS-087][docs-087] |  |
 | DOCS-088 | 🟦 tested | a trailer cut off by a blank line is refused, not passed as zero trailers | S | [DOCS-088][docs-088] |  |
 | DOCS-089 | 🟦 tested | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
-| DOCS-090 | ⬜ planned | fold --format json: a versioned, published schema so wrappers never parse English | M | [DOCS-090][docs-090] |  |
+| DOCS-090 | 🟦 tested | fold --format json: a versioned, published schema so wrappers never parse English | M | [DOCS-090][docs-090] |  |
 
 ## Done
 

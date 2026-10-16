@@ -1,10 +1,12 @@
 ---
 id: DOCS-090
-state: ⬜ planned
+state: 🟦 tested
 title: "fold --format json: a versioned, published schema so wrappers never parse English"
 est: M
 doc: "[DOCS-090](slices/DOCS-090_fold_format_json_a_versioned_published_schema_so_wrappers.md)"
 status: ""
+state_sha: 0a4f15fb1280
+state_source: trailer
 ---
 
 # DOCS-090 — fold --format json: a versioned, published schema so wrappers never parse English
