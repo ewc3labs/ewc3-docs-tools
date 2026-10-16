@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ewc3labs/ewc3-docs-tools/main/schema/fold.v1.schema.json",
+  "title": "ewc3-docs fold --format json, version 1",
+  "description": "One document on stdout per run of `ewc3-docs fold --format json`, identified by `schema: \"ewc3-docs/fold@1\"`. The exit code is unchanged by the format: 0 consistent, 1 diverged, 2 did not run. VERSIONING: within version 1, changes are ADDITIVE only - a new optional field, a new issue code. Renaming or removing a field or a code is version 2, published as fold.v2.schema.json beside this file, which stays. CONSUMERS must ignore fields they do not know and treat an unknown code by its severity. This schema is CLOSED (additionalProperties: false) so the producer cannot emit a field it has not published; the toolkit's tests validate real output against it.",
+  "oneOf": [
+    { "$ref": "#/$defs/didNotRun" },
+    { "$ref": "#/$defs/notApplicable" },
+    { "$ref": "#/$defs/checkMessage" },
+    { "$ref": "#/$defs/fold" }
+  ],
+  "$defs": {
+    "schemaId": { "const": "ewc3-docs/fold@1" },
+    "mode": { "enum": ["dry-run", "write", "check", "check-message"] },
+    "code": {
+      "description": "A stable machine name for a problem. Branch on this, never on `message`.",
+      "enum": [
+        "ambiguous-state",
+        "ambiguous-state-spelling",
+        "backwards",
+        "backwards-committed",
+        "frozen-prefix",
+        "multi-slice-trailer",
+        "no-slice-with-slice",
+        "no-slice-without-reason",
+        "override-without-reason",
+        "second-state",
+        "staged-backwards",
+        "staged-no-id",
+        "staged-state-mismatch",
+        "staged-unnamed",
+        "state-without-slice",
+        "stranded-trailer",
+        "unknown-state",
+        "unnamed-slice",
+        "unowned-prefix",
+        "unparseable-message"
+      ]
+    },
+    "didNotRun": {
+      "description": "Exit 2: the check could not be performed - a bad flag, an unreadable config, legend or commit list, a crash. Emitted however early the tool stopped.",
+      "type": "object",
+      "required": ["schema", "mode", "ran", "ok", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaId" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "ran": { "const": false },
+        "ok": { "const": false },
+        "reason": { "type": "string" }
+      }
+    },
+    "notApplicable": {
+      "description": "Exit 0: this repository keeps its register as rows, or has none, so there is nothing to fold.",
+      "type": "object",
+      "required": ["schema", "mode", "ran", "ok", "applicable", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaId" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "ran": { "const": true },
+        "ok": { "const": true },
+        "applicable": { "const": false },
+        "reason": { "type": "string" }
+      }
+    },
+    "checkMessage": {
+      "description": "`fold --check-message <file> [--staged]`: a commit message checked before the commit exists. ok is true exactly when problems is empty, and matches exit 0/1.",
+      "type": "object",
+      "required": ["schema", "mode", "ran", "ok", "applicable", "trailers", "stagedDocs", "notes", "problems"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaId" },
+        "mode": { "const": "check-message" },
+        "ran": { "const": true },
+        "ok": { "type": "boolean" },
+        "applicable": { "const": true },
+        "trailers": { "type": "integer", "description": "Slice: trailers read from the message." },
+        "stagedDocs": { "type": ["integer", "null"], "description": "Staged slice documents checked; null without --staged." },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "message", "file"],
+            "additionalProperties": false,
+            "properties": {
+              "code": { "$ref": "#/$defs/code" },
+              "message": { "type": "string" },
+              "file": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "required": ["id", "from", "to", "sha", "repo", "date", "source", "override", "file"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "The slice id as its document writes it." },
+        "from": { "type": ["string", "null"], "description": "The state before; null for a slice's first state." },
+        "to": { "type": "string" },
+        "sha": { "type": "string", "description": "The commit whose trailer decided it." },
+        "repo": { "type": ["string", "null"], "description": "Where sha lives; null for this repository." },
+        "date": { "type": ["string", "null"], "description": "That commit's committer date, ISO 8601." },
+        "source": { "enum": ["trailer", "trailer-remote"] },
+        "override": { "type": ["string", "null"], "description": "The State-Override: reason, for a backwards move a declared progression allowed." },
+        "file": { "type": "string", "description": "The slice document, relative to the register." }
+      }
+    },
+    "fold": {
+      "description": "`fold` as a dry run, --write or --check, with or without --commits-from.",
+      "type": "object",
+      "required": ["schema", "mode", "ran", "ok", "applicable", "legendSource", "changes", "provenance", "conflicts", "issues", "foreign", "unowned", "quiet", "alreadyLocal", "written"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaId" },
+        "mode": { "enum": ["dry-run", "write", "check"] },
+        "ran": { "const": true },
+        "ok": { "type": "boolean", "description": "Exit code 0." },
+        "applicable": { "const": true },
+        "legendSource": { "enum": ["State Legend", "spellings the register already uses"] },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/transition" }, "description": "State changes: written under --write, pending otherwise." },
+        "provenance": { "type": "array", "items": { "$ref": "#/$defs/transition" }, "description": "State already right; state_sha/state_repo/state_source to record." },
+        "conflicts": {
+          "type": "array",
+          "description": "state_source: human, kept; the newest trailer disagrees.",
+          "items": {
+            "type": "object",
+            "required": ["id", "kept", "trailer", "sha", "file"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "kept": { "type": "string" },
+              "trailer": { "type": "string" },
+              "sha": { "type": "string" },
+              "file": { "type": "string" }
+            }
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "severity", "sha", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "code": { "$ref": "#/$defs/code" },
+              "severity": { "enum": ["error", "warning"], "description": "error: after --since, or a listed commit, or a refused transition. warning: older history." },
+              "sha": { "type": "string", "description": "A local sha, or repo@sha for a listed commit." },
+              "message": { "type": "string" }
+            }
+          }
+        },
+        "foreign": {
+          "type": "array",
+          "description": "Qualified trailers naming another register's slice: reported, never folded.",
+          "items": {
+            "type": "object",
+            "required": ["sha", "written"],
+            "additionalProperties": false,
+            "properties": { "sha": { "type": "string" }, "written": { "type": "string" } }
+          }
+        },
+        "unowned": {
+          "type": "array",
+          "description": "--commits-from: prefixes this register does not declare, counted and applied to nothing.",
+          "items": {
+            "type": "object",
+            "required": ["prefix", "count", "first"],
+            "additionalProperties": false,
+            "properties": { "prefix": { "type": "string" }, "count": { "type": "integer" }, "first": { "type": "string" } }
+          }
+        },
+        "quiet": { "type": "array", "items": { "type": "string" }, "description": "--commits-from: listed commits with no trailers, as repo@sha." },
+        "alreadyLocal": { "type": "integer", "description": "--commits-from: listed commits already in local history, read there once." },
+        "written": {
+          "type": ["object", "null"],
+          "description": "--write only: what was written; null otherwise.",
+          "required": ["changes", "provenance"],
+          "additionalProperties": false,
+          "properties": { "changes": { "type": "integer" }, "provenance": { "type": "integer" } }
+        }
+      }
+    }
+  }
+}

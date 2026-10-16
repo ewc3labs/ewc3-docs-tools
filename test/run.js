@@ -3467,7 +3467,7 @@ test('[fold] parseTrailers pairs each State with the nearest Slice above it', ()
 		{ pairs: [{ slice: 'VS-1', state: 'coded' }, { slice: 'VS-2', state: 'smoked' }], errors: [], override: null });
 	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'Slice: VS-2', 'State: go']).pairs,
 		[{ slice: 'VS-1', state: null }, { slice: 'VS-2', state: 'go' }], 'a Slice with no State is a timeline event');
-	assert.ok(/State: with no Slice:/.test(parseTrailers(['State: coded']).errors[0]), 'a State with no Slice is an error');
+	assert.ok(/State: with no Slice:/.test(parseTrailers(['State: coded']).errors[0].message), 'a State with no Slice is an error');
 });
 
 test('[fold] DOCS-089: one State: under several Slice: lines is refused, naming the Slices it does NOT move; unambiguous timelines stay legal', () => {
@@ -3475,9 +3475,9 @@ test('[fold] DOCS-089: one State: under several Slice: lines is refused, naming 
 	// Read as "all three are coded"; it means "only VS-3". The pairing itself is unchanged.
 	const three = parseTrailers(['Slice: VS-1', 'Slice: VS-2', 'Slice: VS-3', 'State: coded']);
 	assert.deepStrictEqual(three.pairs.map((p) => p.state), [null, null, 'coded']);
-	assert.deepStrictEqual(three.errors, ['State: coded applies only to Slice: VS-3 - Slice: VS-1, Slice: VS-2 above it get no state change. Give each Slice: its own State:, or move a timeline-only Slice: below the State:']);
+	assert.deepStrictEqual(three.errors, [{ code: 'ambiguous-state', message: 'State: coded applies only to Slice: VS-3 - Slice: VS-1, Slice: VS-2 above it get no state change. Give each Slice: its own State:, or move a timeline-only Slice: below the State:' }]);
 	// Only the state-less Slices since the last State: are ambiguous.
-	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'State: go', 'Slice: VS-2', 'Slice: VS-3', 'State: coded']).errors,
+	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'State: go', 'Slice: VS-2', 'Slice: VS-3', 'State: coded']).errors.map((e) => e.message),
 		['State: coded applies only to Slice: VS-3 - Slice: VS-2 above it gets no state change. Give each Slice: its own State:, or move a timeline-only Slice: below the State:']);
 	// Legal: a timeline Slice BELOW a paired one, a commit with no State at all, each Slice paired.
 	for (const lines of [['Slice: VS-1', 'State: coded', 'Slice: VS-2'], ['Slice: VS-1', 'Slice: VS-2'], ['Slice: VS-1', 'State: coded', 'Slice: VS-2', 'State: go']]) {
@@ -4562,6 +4562,174 @@ test('[progression] DOCS-084: an imported backwards move is refused too, named b
 	const r = cli(['fold', '--check', '--commits-from', list, ...progressionConfig(dir, LINE)], dir);
 	assert.strictEqual(r.code, 1, r.out);
 	assert.ok(r.out.includes('error:   api@aaaaaaa1  VS-1: smoked -> coded moves BACKWARDS'), r.out);
+});
+
+// --- DOCS-090: fold --format json, validated against the PUBLISHED schema ---
+
+const FOLD_SCHEMA_FILE = path.join(__dirname, '..', 'schema', 'fold.v1.schema.json');
+/** The JSON Schema keywords validateSchema implements. A schema using any other is refused by a test below:
+ * a validator that silently skips a keyword it does not know would pass output the schema forbids. */
+const SCHEMA_KEYWORDS = new Set(['$schema', '$id', 'title', 'description', '$defs', '$ref', 'oneOf', 'type', 'const', 'enum',
+	'required', 'properties', 'additionalProperties', 'items']);
+function validateSchema(schema, value, root = schema, at = '$') {
+	if (schema.$ref) { return validateSchema(root.$defs[schema.$ref.replace('#/$defs/', '')], value, root, at); }
+	const errors = [];
+	if (schema.oneOf) {
+		const passing = schema.oneOf.filter((s) => !validateSchema(s, value, root, at).length).length;
+		if (passing !== 1) { errors.push(`${at}: matches ${passing} of oneOf, not exactly 1`); }
+	}
+	if ('const' in schema && JSON.stringify(schema.const) !== JSON.stringify(value)) { errors.push(`${at}: is ${JSON.stringify(value)}, not ${JSON.stringify(schema.const)}`); }
+	if (schema.enum && !schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value))) { errors.push(`${at}: ${JSON.stringify(value)} is not one of the enum`); }
+	if (schema.type) {
+		const kind = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value === 'number' && Number.isInteger(value) ? 'integer' : typeof value;
+		const allowed = [].concat(schema.type);
+		if (!allowed.includes(kind) && !(kind === 'integer' && allowed.includes('number'))) { errors.push(`${at}: is ${kind}, not ${allowed.join('|')}`); }
+	}
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		for (const k of schema.required || []) { if (!(k in value)) { errors.push(`${at}: lacks ${k}`); } }
+		for (const [k, v] of Object.entries(value)) {
+			if (schema.properties && schema.properties[k]) { errors.push(...validateSchema(schema.properties[k], v, root, `${at}.${k}`)); }
+			else if (schema.additionalProperties === false) { errors.push(`${at}: ${k} is not in the schema`); }
+		}
+	}
+	if (Array.isArray(value) && schema.items) { value.forEach((v, i) => errors.push(...validateSchema(schema.items, v, root, `${at}[${i}]`))); }
+	return errors;
+}
+/** Run fold --format json; parse its ONE stdout document and validate it against the published schema. */
+function foldJson(args, dir, input) {
+	const r = require('child_process').spawnSync(process.execPath,
+		[path.join(__dirname, '..', 'bin', 'ewc3-docs.js'), 'fold', ...args, '--format', 'json', '--repo', dir], { encoding: 'utf8', input });
+	const lines = r.stdout.trim().split('\n');
+	assert.strictEqual(lines.length, 1, `exactly one JSON document on stdout, got:\n${r.stdout}`);
+	const doc = JSON.parse(lines[0]);
+	const errors = validateSchema(JSON.parse(fs.readFileSync(FOLD_SCHEMA_FILE, 'utf8')), doc);
+	assert.deepStrictEqual(errors, [], `${JSON.stringify(doc)}\nfails the schema`);
+	assert.strictEqual(doc.ok, r.status === 0, `ok must match exit 0 (exit ${r.status})`);
+	return { code: r.status, doc, stderr: r.stderr };
+}
+
+test('[json] DOCS-090: the schema uses only keywords the validator implements, and lists exactly the codes the code can emit', () => {
+	const schema = JSON.parse(fs.readFileSync(FOLD_SCHEMA_FILE, 'utf8'));
+	const used = new Set();
+	const walk = (node, inProperties) => {
+		if (!node || typeof node !== 'object') { return; }
+		if (Array.isArray(node)) { node.forEach((n) => walk(n, false)); return; }
+		for (const [k, v] of Object.entries(node)) {
+			if (!inProperties) { used.add(k); }
+			walk(v, (k === 'properties' || k === '$defs') && !inProperties);
+		}
+	};
+	walk(schema, false);
+	assert.deepStrictEqual([...used].filter((k) => !SCHEMA_KEYWORDS.has(k)), [], 'a keyword the validator would silently skip');
+	// The codes in the schema are the codes in the source - read from every problem(...) and code: '...' in lib/fold.js.
+	const source = fs.readFileSync(path.join(__dirname, '..', 'lib', 'fold.js'), 'utf8');
+	const emitted = [...new Set([...source.matchAll(/problem\('([a-z-]+)'/g), ...source.matchAll(/code: '([a-z-]+)'/g)].map((m) => m[1]))].sort();
+	assert.deepStrictEqual([...schema.$defs.code.enum].sort(), emitted);
+	assert.strictEqual(schema.$defs.schemaId.const, 'ewc3-docs/fold@1');
+	// Published with the package, or a consumer of the npm release cannot find it.
+	assert.ok(require('../package.json').files.includes('schema/'), 'schema/ is in package.json files');
+});
+
+test('[json] DOCS-090: dry run, --write and --check validate; a first state has from: null; ok follows the exit code', () => {
+	const dir = foldRepo();
+	// VS-2's document carries no state at all: its first state, so `from` is null.
+	const doc2 = gateDoc(dir, 'VS-2');
+	fs.writeFileSync(doc2, fs.readFileSync(doc2, 'utf8').replace(/state: .*\n/, ''));
+	git(dir, 'commit', '-qam', 'stateless');
+	const sha = trailerCommit(dir, 'work', ['Slice: VS-1', 'State: coded', 'Slice: VS-2', 'State: smoked']).slice(0, 12);
+
+	const dry = foldJson([], dir);
+	assert.strictEqual(dry.doc.mode, 'dry-run');
+	assert.deepStrictEqual(dry.doc.changes.map((c) => [c.id, c.from, c.to, c.sha, c.repo, c.source]),
+		[['VS-1', '⬜ planned', '🟦 coded', sha, null, 'trailer'], ['VS-2', null, '💨 smoked', sha, null, 'trailer']]);
+	assert.ok(/^\d{4}-\d{2}-\d{2}T/.test(dry.doc.changes[0].date), 'a local change carries its committer date');
+	assert.strictEqual(dry.doc.written, null);
+
+	const check = foldJson(['--check'], dir);
+	assert.strictEqual(check.code, 1);
+	assert.strictEqual(check.doc.changes.length, 2);
+
+	const w = foldJson(['--write'], dir);
+	assert.strictEqual(w.code, 0);
+	assert.deepStrictEqual(w.doc.written, { changes: 2, provenance: 0 });
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded', 'JSON mode writes exactly as text mode does');
+});
+
+test('[json] DOCS-090: issues carry a code and a severity - error after --since, warning in history', () => {
+	const dir = foldRepo();
+	trailerCommit(dir, 'old', ['Slice: VS-9', 'State: coded']);
+	const base = git(dir, 'rev-parse', 'HEAD');
+	trailerCommit(dir, 'new', ['Slice: VS-1', 'Slice: VS-2', 'State: coded']);
+	const r = foldJson(['--check', '--since', base], dir);
+	assert.strictEqual(r.code, 1);
+	assert.deepStrictEqual(r.doc.issues.map((i) => [i.code, i.severity]).sort(), [['ambiguous-state', 'error'], ['unnamed-slice', 'warning']]);
+});
+
+test('[json] DOCS-090: a human conflict and an imported list - unowned, quiet, foreign, remote provenance - validate', () => {
+	const dir = hubRegister();
+	const doc = gateDoc(dir, 'VS-2');
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace('status: y', 'status: y\nstate_source: human'));
+	git(dir, 'commit', '-qam', 'decided by hand');
+	const list = commitList(dir, [
+		listed('api', 'aaaaaaa1', '2026-10-01T10:00:00Z', 'Slice: VS-1', 'State: coded', 'Slice: XY-5', 'Slice: other:DT-3'),
+		listed('ui', 'bbbbbbb1', '2026-10-01T11:00:00Z', 'Slice: VS-2', 'State: go'),
+		{ sha: 'ccccccc1', repo: 'ui', committer_date: '2026-10-01T09:00:00Z', message: 'docs only\n' },
+	]);
+	const r = foldJson(['--commits-from', list], dir);
+	assert.strictEqual(r.code, 0, JSON.stringify(r.doc));
+	assert.deepStrictEqual(r.doc.changes.map((c) => [c.id, c.repo, c.source, c.date]), [['VS-1', 'api', 'trailer-remote', '2026-10-01T10:00:00Z']]);
+	assert.deepStrictEqual(r.doc.conflicts.map((c) => [c.id, c.kept, c.trailer]), [['VS-2', '⬜ planned', '🟩 go']]);
+	assert.deepStrictEqual(r.doc.unowned, [{ prefix: 'XY', count: 1, first: 'api@aaaaaaa1' }]);
+	assert.deepStrictEqual(r.doc.foreign, [{ sha: 'api@aaaaaaa1', written: 'other:DT-3' }]);
+	assert.deepStrictEqual(r.doc.quiet, ['ui@ccccccc1']);
+});
+
+test('[json] DOCS-090: --check-message, with and without --staged, validates; trailers counts what the text ok-line counts', () => {
+	const dir = foldRepo();
+	const file = path.join(dir, '.git', 'TEST_EDITMSG');
+	fs.writeFileSync(file, msg('Slice: VS-1', 'State: coded', 'Slice: VS-2', 'State: go'));
+	const ok = foldJson(['--check-message', file], dir);
+	assert.deepStrictEqual([ok.code, ok.doc.mode, ok.doc.trailers, ok.doc.stagedDocs, ok.doc.problems], [0, 'check-message', 2, null, []]);
+
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, `${fs.readFileSync(doc, 'utf8')}\nMore.\n`);
+	git(dir, 'add', '-A');
+	fs.writeFileSync(file, msg('Slice: VS-9', 'State: shipped'));
+	const bad = foldJson(['--check-message', file, '--staged'], dir);
+	assert.strictEqual(bad.code, 1);
+	assert.deepStrictEqual(bad.doc.problems.map((p) => [p.code, p.file]),
+		[['unnamed-slice', null], ['unknown-state', null], ['staged-unnamed', 'docs/project/slices/VS-1_first.md']]);
+	assert.strictEqual(bad.doc.stagedDocs, 1);
+});
+
+test('[json] DOCS-090: did-not-run is JSON however early the tool stops, and nothing else reaches stdout', () => {
+	const dir = foldRepo();
+	for (const [args, why] of [
+		[['--bogus'], /unknown option --bogus/],
+		[['--write', '--check'], /exclusive/],
+		[['--config', path.join(dir, 'missing.json')], /no config at/],
+		[['--commits-from', path.join(dir, 'missing.ndjson')], /cannot read the commit list/],
+	]) {
+		const r = foldJson(args, dir);
+		assert.strictEqual(r.code, 2, args.join(' '));
+		assert.deepStrictEqual([r.doc.ran, r.doc.ok], [false, false]);
+		assert.ok(why.test(r.doc.reason), r.doc.reason);
+	}
+	// A bad --format value is not JSON mode at all, and says so in text.
+	assert.strictEqual(cli(['fold', '--format', 'yaml'], dir).code, 2);
+});
+
+test('[json] DOCS-090: a rows register and no register are not-applicable, exit 0', () => {
+	const rows = fs.mkdtempSync(path.join(os.tmpdir(), 'rows-'));
+	fs.mkdirSync(path.join(rows, 'docs', 'project'), { recursive: true });
+	fs.writeFileSync(path.join(rows, 'docs', 'project', 'R_Roadmap.md'), '# R\n\n## Delivery Index\n\n| ID | State |\n| --- | --- |\n| VS-1 | planned |\n');
+	git(rows, 'init', '-q'); git(rows, 'add', '-A'); git(rows, 'commit', '-qm', 'rows');
+	const r = foldJson(['--check'], rows);
+	assert.deepStrictEqual([r.code, r.doc.applicable], [0, false]);
+	assert.ok(/rows register/.test(r.doc.reason), r.doc.reason);
+	const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'none-'));
+	git(empty, 'init', '-q'); git(empty, 'commit', '-q', '--allow-empty', '-m', 'x');
+	assert.ok(/no register/.test(foldJson([], empty).doc.reason));
 });
 
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
