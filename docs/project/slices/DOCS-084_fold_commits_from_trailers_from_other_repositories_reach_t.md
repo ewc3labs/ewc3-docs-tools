@@ -1,11 +1,11 @@
 ---
 id: DOCS-084
-state: 🟨 coded
+state: 🟦 tested
 title: "fold --commits-from: trailers from other repositories reach the register that owns the slice"
 est: L
 doc: "[DOCS-084](slices/DOCS-084_fold_commits_from_trailers_from_other_repositories_reach_t.md)"
 status: ""
-state_sha: fb1168aa0fef
+state_sha: b7c7055512ab
 state_source: trailer
 ---
 
