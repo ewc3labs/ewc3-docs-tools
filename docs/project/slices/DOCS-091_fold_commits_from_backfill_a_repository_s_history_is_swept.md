@@ -1,10 +1,12 @@
 ---
 id: DOCS-091
-state: ⬜ planned
+state: 🟦 tested
 title: "fold --commits-from --backfill: a repository's history is swept once, its old mistakes are warnings"
 est: S
 doc: "[DOCS-091](slices/DOCS-091_fold_commits_from_backfill_a_repository_s_history_is_swept.md)"
 status: ""
+state_sha: 28ff231f3ba4
+state_source: trailer
 ---
 
 # DOCS-091 — fold --commits-from --backfill: a repository's history is swept once, its old mistakes are warnings

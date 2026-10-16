@@ -113,7 +113,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-088 | 🟦 tested | a trailer cut off by a blank line is refused, not passed as zero trailers | S | [DOCS-088][docs-088] |  |
 | DOCS-089 | 🟦 tested | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
 | DOCS-090 | 🟦 tested | fold --format json: a versioned, published schema so wrappers never parse English | M | [DOCS-090][docs-090] |  |
-| DOCS-091 | ⬜ planned | fold --commits-from --backfill: a repository's history is swept once, its old mistakes are warnings | S | [DOCS-091][docs-091] |  |
+| DOCS-091 | 🟦 tested | fold --commits-from --backfill: a repository's history is swept once, its old mistakes are warnings | S | [DOCS-091][docs-091] |  |
 
 ## Done
 
