@@ -74,6 +74,13 @@ EWC3 Labs documentation tools
                                           is named, and a changed state carries its State:.
                                           No-Slice: <reason> exempts naming. For commit-msg hooks.
 
+  ewc3-docs hook install | uninstall      Install the commit-msg hook that runs fold
+                                          --check-message --staged on every commit, where git
+                                          runs hooks from (core.hooksPath honoured). Never
+                                          replaces a hook it did not write; uninstall removes
+                                          only its own. Blocks a commit when the tool cannot
+                                          be found, rather than passing it unchecked.
+
   ewc3-docs slice new <PREFIX> "<title>"   Mint a slice in an adopted repository: the next id (past
     [--state <state>]                     every row, slice document, archived document and Last
     [--set <column>=<value>]...           Used), its slice document, and its row in the table that

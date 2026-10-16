@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-091<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-092<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 | W | repo-local | ewc3-docs-tools | <!--ewc3:lastW-->W-8<!--/ewc3:lastW--> | decisions owed to the owner, never reused — [Decisions](Decisions.md) |
 
@@ -114,6 +114,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-089 | 🟦 tested | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
 | DOCS-090 | 🟦 tested | fold --format json: a versioned, published schema so wrappers never parse English | M | [DOCS-090][docs-090] |  |
 | DOCS-091 | 🟦 tested | fold --commits-from --backfill: a repository's history is swept once, its old mistakes are warnings | S | [DOCS-091][docs-091] |  |
+| DOCS-092 | 🟦 tested | hook install: the commit-msg hook that checks every commit, without replacing anyone's own | S | [DOCS-092][docs-092] |  |
 
 ## Done
 
@@ -226,6 +227,7 @@ caught.
 [docs-089]: slices/DOCS-089_one_State_under_several_Slice_lines_is_refused_it_reads_as.md
 [docs-090]: slices/DOCS-090_fold_format_json_a_versioned_published_schema_so_wrappers.md
 [docs-091]: slices/DOCS-091_fold_commits_from_backfill_a_repository_s_history_is_swept.md
+[docs-092]: slices/DOCS-092_hook_install_the_commit_msg_hook_that_checks_every_commit.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md

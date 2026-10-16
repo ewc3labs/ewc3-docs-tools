@@ -27,6 +27,7 @@ const { renderIndex, detectWidths, gfmCells, indexRows } = require('../lib/deliv
 const gitbase = require('../lib/gitbase');
 const { planMint } = require('../lib/mint');
 const { planFold, applyFold, checkMessage, readCommitList } = require('../lib/fold');
+const { installHook, uninstallHook } = require('../lib/hook');
 const {
 	roadmapFiles, readSeries, undeclaredPrefixes, declaredOwnership, isLocalPrefix, DEFAULT_ROADMAPS,
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
@@ -1410,6 +1411,21 @@ function foldAsJson(root, config, argv) {
 	return code;
 }
 
+/** `hook install | uninstall`: the commit-msg hook that runs fold --check-message --staged (DOCS-092). */
+function cmdHook(root, argv) {
+	const [action, ...rest] = argv;
+	const extra = rest.filter((a, i) => !(a === '--repo' || rest[i - 1] === '--repo' || a === '--config' || rest[i - 1] === '--config'));
+	if (!['install', 'uninstall'].includes(action) || extra.length) {
+		console.error('hook: usage: ewc3-docs hook install | uninstall [--repo <dir>]');
+		return 2;
+	}
+	const r = action === 'install'
+		? installHook(root, { script: path.join(__dirname, 'ewc3-docs.js'), node: process.execPath })
+		: uninstallHook(root);
+	(r.code ? console.error : console.log)(`hook: ${r.message}`);
+	return r.code;
+}
+
 function cmdSlice(root, config, argv) {
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
 	// `--state --write` must not store the state "--write" and then mint (Codex, PR #12).
@@ -1542,6 +1558,7 @@ switch (command) {
 	case 'tables': code = cmdTables(root, config, argv); break;
 	case 'index': code = cmdIndex(root, config, argv); break;
 	case 'slice': code = cmdSlice(root, config, argv); break;
+	case 'hook': code = cmdHook(root, argv); break;
 	case 'fold': code = JSON_MODE ? foldAsJson(root, config, argv) : cmdFold(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
