@@ -1,11 +1,11 @@
 ---
 id: DOCS-084
-state: 🟨 coded
+state: 🟦 tested
 title: "fold --commits-from: trailers from other repositories reach the register that owns the slice"
 est: L
 doc: "[DOCS-084](slices/DOCS-084_fold_commits_from_trailers_from_other_repositories_reach_t.md)"
 status: ""
-state_sha: fb1168aa0fef
+state_sha: b7c7055512ab
 state_source: trailer
 ---
 
@@ -157,5 +157,15 @@ Known limit: committing the frontmatter an import wrote needs `Slice:`/`State:` 
 `No-Slice:` under `--check-message --staged`. The exemption for `fold --write` output verifies the
 trailer in the commit `state_sha` names, and an imported sha is not in this repository.
 
-**Part 2 - `progression` and `State-Override:`** (section 4): next, as its own PR. Without it,
-newest-wins stands and the dry run shows every transition, as section 4 already specifies.
+**Part 2 - `progression` and `State-Override:`** (section 4), built as specified:
+
+- `progression` in config is an ordered array of state words. A move to an **earlier** word is
+  refused: not written, and an error naming both words and the order. Words outside the list are
+  never backwards.
+- `State-Override: <reason>` in the winning commit allows the move; the dry run marks it. An empty
+  reason is refused by every reader, `--check-message` included.
+- A progression naming a word the register does not spell, naming one twice, or not a list: **did
+  not run**, exit 2. A declared order that names a state nobody spells would refuse nothing for that
+  word, quietly.
+- Local history and `--commits-from` alike: an imported backwards move is named `repo@sha`.
+- No progression: newest-wins, unchanged, and tested as unchanged.

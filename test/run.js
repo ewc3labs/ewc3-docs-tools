@@ -3464,7 +3464,7 @@ const foldData = (dir, id) => frontmatter.read(fs.readFileSync(gateDoc(dir, id),
 test('[fold] parseTrailers pairs each State with the nearest Slice above it', () => {
 	const { parseTrailers } = require('../lib/fold');
 	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'State: coded', 'Slice: VS-2', 'State: smoked', 'Co-Authored-By: x']),
-		{ pairs: [{ slice: 'VS-1', state: 'coded' }, { slice: 'VS-2', state: 'smoked' }], errors: [] });
+		{ pairs: [{ slice: 'VS-1', state: 'coded' }, { slice: 'VS-2', state: 'smoked' }], errors: [], override: null });
 	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'Slice: VS-2', 'State: go']).pairs,
 		[{ slice: 'VS-1', state: null }, { slice: 'VS-2', state: 'go' }], 'a Slice with no State is a timeline event');
 	assert.ok(/State: with no Slice:/.test(parseTrailers(['State: coded']).errors[0]), 'a State with no Slice is an error');
@@ -4441,6 +4441,127 @@ test('[fold-message] DOCS-089: --check-message refuses two Slices under one Stat
 	// The grammar did not change: VS-2 folds, VS-1 does not.
 	cli(['fold', '--write'], dir);
 	assert.deepStrictEqual([foldData(dir, 'VS-1').state, foldData(dir, 'VS-2').state], ['⬜ planned', '🟦 coded']);
+});
+
+// --- DOCS-084 part 2: a DECLARED progression refuses a backwards move unless the commit says why ---
+
+/** Write a config declaring `progression` beside the repository; returns the --config argument pair. */
+function progressionConfig(dir, progression) {
+	const file = path.join(path.dirname(dir), `${path.basename(dir)}-progression.json`);
+	fs.writeFileSync(file, `${JSON.stringify({ progression })}\n`);
+	return ['--config', file];
+}
+const LINE = ['planned', 'coded', 'smoked', 'go'];
+/** fold --write, then commit what it wrote - as a register does, so the next run's index gate sees committed rows. */
+function foldCommitted(dir, args = []) {
+	const r = cli(['fold', '--write', ...args], dir);
+	if (git(dir, 'status', '--porcelain')) { git(dir, 'commit', '-qam', 'fold'); }
+	return r;
+}
+
+test('[progression] DOCS-084: a declared progression refuses a backwards move, naming both words; without it newest-wins is unchanged', () => {
+	const dir = foldRepo();
+	trailerCommit(dir, 'smoked', ['Slice: VS-1', 'State: smoked']);
+	const first = foldCommitted(dir);
+	assert.strictEqual(first.code, 0, first.out);
+	const sha = trailerCommit(dir, 'back to coded', ['Slice: VS-1', 'State: coded']).slice(0, 12);
+	const cfg = progressionConfig(dir, LINE);
+
+	const check = cli(['fold', '--check', ...cfg], dir);
+	assert.strictEqual(check.code, 1, check.out);
+	assert.ok(check.out.includes(`error:   ${sha}  VS-1: smoked -> coded moves BACKWARDS in progression (planned, coded, smoked, go) - refused, not written`), check.out);
+	const w = foldCommitted(dir, cfg);
+	assert.strictEqual(w.code, 1, w.out);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '💨 smoked', 'a refused move is not written');
+
+	// No progression: newest wins, as before.
+	const plain = foldCommitted(dir);
+	assert.strictEqual(plain.code, 0, plain.out);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded');
+});
+
+test('[progression] DOCS-084: State-Override: <reason> lets the commit move backwards, and the dry run says so; an empty reason is refused', () => {
+	const dir = foldRepo();
+	trailerCommit(dir, 'smoked', ['Slice: VS-1', 'State: smoked']);
+	foldCommitted(dir);
+	const cfg = progressionConfig(dir, LINE);
+	trailerCommit(dir, 'reverted', ['Slice: VS-1', 'State: coded', 'State-Override: smoke test was against the wrong build']);
+	const dry = cli(['fold', ...cfg], dir);
+	assert.strictEqual(dry.code, 0, dry.out);
+	assert.ok(dry.out.includes('backwards, State-Override: smoke test was against the wrong build'), dry.out);
+	assert.strictEqual(foldCommitted(dir, cfg).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded');
+
+	const r = checkMessage(dir, msg('Slice: VS-1', 'State: planned', 'State-Override:'));
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('State-Override: needs a reason'), r.out);
+});
+
+test('[progression] DOCS-084: a state outside the list is never backwards, either way', () => {
+	const dir = foldRepo();
+	const cfg = progressionConfig(dir, LINE);
+	trailerCommit(dir, 'smoked', ['Slice: VS-1', 'State: smoked']);
+	foldCommitted(dir, cfg);
+	trailerCommit(dir, 'parked', ['Slice: VS-1', 'State: deferred']);
+	assert.strictEqual(foldCommitted(dir, cfg).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '⏸️ deferred');
+	trailerCommit(dir, 'resumed', ['Slice: VS-1', 'State: coded']);
+	assert.strictEqual(foldCommitted(dir, cfg).code, 0);
+	assert.strictEqual(foldData(dir, 'VS-1').state, '🟦 coded');
+});
+
+test('[progression] DOCS-084: an unreadable progression did not run - unknown word, repeat, not a list', () => {
+	const dir = foldRepo();
+	for (const [progression, why] of [
+		[['planned', 'shipped'], /progression names shipped, which is not a state this register spells/],
+		[['planned', 'coded', 'Coded'], /progression names coded twice/],
+		['planned,coded', /progression must be a non-empty array of state words/],
+		[[], /progression must be a non-empty array of state words/],
+		// Falsy declarations are declarations: only an ABSENT key means none (Codex P2, PR #46).
+		['', /progression must be a non-empty array of state words/],
+		[false, /progression must be a non-empty array of state words/],
+		[null, /progression must be a non-empty array of state words/],
+		[0, /progression must be a non-empty array of state words/],
+	]) {
+		const r = cli(['fold', '--check', ...progressionConfig(dir, progression)], dir);
+		assert.strictEqual(r.code, 2, `${JSON.stringify(progression)}: ${r.out}`);
+		assert.ok(/did not run/.test(r.out) && why.test(r.out), r.out);
+	}
+});
+
+test('[progression] DOCS-084: a commit that edits the document back AND carries the matching State: is caught, before and after it lands', () => {
+	// Codex P1, PR #46: the document then equals the trailer, so comparing against it alone saw no move.
+	const dir = foldRepo();
+	const cfg = progressionConfig(dir, LINE);
+	trailerCommit(dir, 'smoked', ['Slice: VS-1', 'State: smoked']);
+	foldCommitted(dir, cfg);
+	const base = git(dir, 'rev-parse', 'HEAD');
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace('state: 💨 smoked', 'state: 🟦 coded'));
+	git(dir, 'add', '-A');
+
+	// Before: --check-message --staged refuses the staged backwards edit, and accepts it with a reason.
+	const staged = checkMessage(dir, msg('Slice: VS-1', 'State: coded'), ['--staged', ...cfg]);
+	assert.strictEqual(staged.code, 1, staged.out);
+	assert.ok(staged.out.includes('VS-1 moves BACKWARDS smoked -> coded in progression (planned, coded, smoked, go)'), staged.out);
+	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1', 'State: coded', 'State-Override: rework'), ['--staged', ...cfg]).code, 0);
+
+	// After: committed anyway - fold --check names it, an error after --since.
+	git(dir, 'commit', '-qm', 'back', '-m', 'Slice: VS-1\nState: coded\nCo-Authored-By: t <t@t>');
+	const sha = git(dir, 'rev-parse', 'HEAD').slice(0, 12);
+	const r = cli(['fold', '--check', '--since', base, ...cfg], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes(`error:   ${sha}  VS-1: smoked -> coded was committed BACKWARDS in progression (planned, coded, smoked, go) with no State-Override:`), r.out);
+});
+
+test('[progression] DOCS-084: an imported backwards move is refused too, named by repo@sha', () => {
+	const dir = hubRegister();
+	trailerCommit(dir, 'smoked', ['Slice: VS-1', 'State: smoked']);
+	foldCommitted(dir);
+	const list = commitList(dir, [listed('api', 'aaaaaaa1', '2099-01-01T00:00:00Z', 'Slice: VS-1', 'State: coded')]);
+	const r = cli(['fold', '--check', '--commits-from', list, ...progressionConfig(dir, LINE)], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('error:   api@aaaaaaa1  VS-1: smoked -> coded moves BACKWARDS'), r.out);
 });
 
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
