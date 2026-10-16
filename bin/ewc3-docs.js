@@ -1262,8 +1262,11 @@ function cmdFold(root, config, argv) {
 		if (!sinceShas) { console.error(`fold: did not run: --since ${since} is not a commit`); return 2; }
 	}
 
-	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry, imported, localName: config.registry || null });
+	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry, imported, localName: config.registry || null,
+		progression: config.progression === undefined ? null : config.progression });
 	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
+	// A progression that cannot be read would refuse nothing it was meant to: did not run (DOCS-084).
+	if (plan.configError) { console.error(`fold: did not run: ${plan.configError}`); return 2; }
 	const errors = plan.issues.filter((i) => i.inScope);
 	const warnings = plan.issues.filter((i) => !i.inScope);
 
@@ -1284,7 +1287,9 @@ function cmdFold(root, config, argv) {
 		}
 		if (plan.quiet.length) { console.log(`  no trailers: ${plan.quiet.length} listed commit(s) - ${plan.quiet.join(', ')}`); }
 	}
-	for (const c of plan.changes) { console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${from(c)}, ${rel(c.file)})`); }
+	for (const c of plan.changes) {
+		console.log(`  ${c.written}: ${c.from || '(none)'} -> ${c.to}   (${from(c)}, ${rel(c.file)})${c.override ? `   backwards, State-Override: ${c.override}` : ''}`);
+	}
 	// A dry run says everything --write will do, provenance included; --check never fails on provenance, so it
 	// does not list it (DOCS-070).
 	if (!check) {
