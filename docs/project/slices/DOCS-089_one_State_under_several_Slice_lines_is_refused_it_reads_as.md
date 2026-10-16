@@ -13,9 +13,9 @@ state_source: trailer
 
 ## Measured downstream
 
-One commit closing seven slices carried seven `Slice:` lines and one `State:` under them. `fold`
-moved **one** of the seven. The second attempt, one slice per commit, moved all seven. Nothing had
-said anything: the commit passed `--check-message` and `fold --check`.
+A commit closing several slices carried several `Slice:` lines and one `State:` under them. `fold`
+moved **only the last**. A retry with one slice per commit moved them all. Nothing had said
+anything: the commit passed `--check-message` and `fold --check`.
 
 ## Not a parser bug: the grammar, read the wrong way
 
