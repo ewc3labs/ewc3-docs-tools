@@ -1136,7 +1136,7 @@ function cmdIndex(root, config, argv) {
  * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
  */
 function cmdFold(root, config, argv, report = {}) {
-	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register', '--commits-from', '--source-repo', '--format']);
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register', '--commits-from', '--source-repo', '--format', '--backfill']);
 	const VALUED = new Set(['--since', '--repo', '--config', '--check-message', '--register', '--commits-from', '--source-repo', '--format']);
 	for (const [i, a] of argv.entries()) {
 		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
@@ -1175,6 +1175,9 @@ function cmdFold(root, config, argv, report = {}) {
 	const sourceRepo = flag('--source-repo');
 	if (listFile !== undefined && messageFile !== undefined) { console.error('fold: --commits-from and --check-message are exclusive.'); return 2; }
 	if (sourceRepo !== undefined && listFile === undefined) { console.error('fold: --source-repo needs --commits-from: it names the repository a commit list came from.'); return 2; }
+	// --backfill: the list is HISTORY swept once, not new work - its issues are warnings, as old local history's are (DOCS-091).
+	const backfill = argv.includes('--backfill');
+	if (backfill && listFile === undefined) { console.error('fold: --backfill needs --commits-from: it says the listed commits are history, not new work.'); return 2; }
 	let imported = null;
 	if (listFile !== undefined) {
 		let text;
@@ -1291,7 +1294,7 @@ function cmdFold(root, config, argv, report = {}) {
 	}
 
 	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry, imported, localName: config.registry || null,
-		progression: config.progression });
+		progression: config.progression, backfill });
 	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
 	// A progression that cannot be read would refuse nothing it was meant to: did not run (DOCS-084).
 	if (plan.configError) { console.error(`fold: did not run: ${plan.configError}`); return 2; }
@@ -1311,6 +1314,7 @@ function cmdFold(root, config, argv, report = {}) {
 	const from = (e) => (e.repo ? `${e.repo}@${e.sha} ${e.dateText}` : e.sha);
 	if (imported) {
 		console.log(`fold: ${imported.length} listed commit(s) read with local history; across repositories the newest is by committer date, then repository name, then sha`);
+		if (backfill) { console.log('  backfill: the list is history - its trailer issues are warnings, and its valid trailers still fold'); }
 		if (plan.local) { console.log(`  ${plan.local} listed commit(s) are already in local history - read there, not twice`); }
 		for (const [prefix, u] of plan.unowned) {
 			console.log(`  unowned: ${prefix} - ${u.count} trailer(s), first ${u.first}; not a prefix this register declares, so applied to nothing`);

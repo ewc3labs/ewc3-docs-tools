@@ -4732,6 +4732,30 @@ test('[json] DOCS-090: a rows register and no register are not-applicable, exit 
 	assert.ok(/no register/.test(foldJson([], empty).doc.reason));
 });
 
+test('[commits-from] DOCS-091: --backfill makes a listed commit\'s issues WARNINGS, as old local history\'s are, and still folds its valid trailers', () => {
+	const dir = hubRegister();
+	// A repository's history: one pre-contract mistake, one frozen prefix, and one good trailer that must still fold.
+	const list = commitList(dir, [
+		listed('api', 'aaaaaaa1', '2026-01-01T10:00:00Z', 'Slice: VS-1', 'State: active'),
+		listed('api', 'aaaaaaa2', '2026-01-02T10:00:00Z', 'Slice: TS-1', 'State: coded'),
+		listed('api', 'aaaaaaa3', '2026-01-03T10:00:00Z', 'Slice: VS-2', 'State: coded'),
+	]);
+	const asNew = cli(['fold', '--check', '--commits-from', list], dir);
+	assert.strictEqual(asNew.code, 1, asNew.out);
+	assert.ok(asNew.out.includes('error:   api@aaaaaaa1  State: active is not in the legend'), asNew.out);
+
+	const swept = cli(['fold', '--write', '--commits-from', list, '--backfill'], dir);
+	assert.strictEqual(swept.code, 0, swept.out);
+	assert.ok(swept.out.includes('warning: api@aaaaaaa1  State: active is not in the legend'), swept.out);
+	assert.ok(swept.out.includes('warning: api@aaaaaaa2  Slice: TS-1 - TS is frozen in this register'), swept.out);
+	assert.ok(!/error:/.test(swept.out), swept.out);
+	assert.deepStrictEqual([foldData(dir, 'VS-1').state, foldData(dir, 'VS-2').state], ['⬜ planned', '🟦 coded']);
+
+	const json = foldJson(['--check', '--commits-from', list, '--backfill'], dir);
+	assert.deepStrictEqual(json.doc.issues.map((i) => [i.code, i.severity]), [['frozen-prefix', 'warning'], ['unknown-state', 'warning']], 'newest first');
+	assert.strictEqual(cli(['fold', '--backfill'], dir).code, 2, '--backfill needs --commits-from');
+});
+
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {
 	const { normalizeId } = require('../lib/slices');
 	assert.strictEqual(normalizeId('VS-4'), 'VS-4');
