@@ -3470,6 +3470,21 @@ test('[fold] parseTrailers pairs each State with the nearest Slice above it', ()
 	assert.ok(/State: with no Slice:/.test(parseTrailers(['State: coded']).errors[0]), 'a State with no Slice is an error');
 });
 
+test('[fold] DOCS-089: one State: under several Slice: lines is refused, naming the Slices it does NOT move; unambiguous timelines stay legal', () => {
+	const { parseTrailers } = require('../lib/fold');
+	// Read as "all three are coded"; it means "only VS-3". The pairing itself is unchanged.
+	const three = parseTrailers(['Slice: VS-1', 'Slice: VS-2', 'Slice: VS-3', 'State: coded']);
+	assert.deepStrictEqual(three.pairs.map((p) => p.state), [null, null, 'coded']);
+	assert.deepStrictEqual(three.errors, ['State: coded applies only to Slice: VS-3 - Slice: VS-1, Slice: VS-2 above it get no state change. Give each Slice: its own State:, or move a timeline-only Slice: below the State:']);
+	// Only the state-less Slices since the last State: are ambiguous.
+	assert.deepStrictEqual(parseTrailers(['Slice: VS-1', 'State: go', 'Slice: VS-2', 'Slice: VS-3', 'State: coded']).errors,
+		['State: coded applies only to Slice: VS-3 - Slice: VS-2 above it gets no state change. Give each Slice: its own State:, or move a timeline-only Slice: below the State:']);
+	// Legal: a timeline Slice BELOW a paired one, a commit with no State at all, each Slice paired.
+	for (const lines of [['Slice: VS-1', 'State: coded', 'Slice: VS-2'], ['Slice: VS-1', 'Slice: VS-2'], ['Slice: VS-1', 'State: coded', 'Slice: VS-2', 'State: go']]) {
+		assert.deepStrictEqual(parseTrailers(lines).errors, [], lines.join(' / '));
+	}
+});
+
 test('[fold] the legend is read from State Legend bullets, glyph and all, and a reserved bullet is not a state', () => {
 	const { legendOf } = require('../lib/fold');
 	const legend = legendOf(['# R', '', ...FOLD_LEGEND].join('\n'));
@@ -4407,6 +4422,25 @@ test('[commits-from] DOCS-084: a short sha from another repository that shares a
 	const r = cli(['fold', '--commits-from', commitList(dir, [collide])], dir);
 	assert.strictEqual(r.code, 0, r.out);
 	assert.ok(!/already in local history/.test(r.out) && r.out.includes(`VS-1: ⬜ planned -> 💨 smoked   (api@${local.slice(0, 7)}`), r.out);
+});
+
+test('[fold-message] DOCS-089: --check-message refuses two Slices under one State; fold --check errors after --since and warns in history', () => {
+	const dir = foldRepo();
+	const two = ['Slice: VS-1', 'Slice: VS-2', 'State: coded'];
+	const r = checkMessage(dir, msg(...two));
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes('State: coded applies only to Slice: VS-2 - Slice: VS-1 above it gets no state change'), r.out);
+
+	const base = git(dir, 'rev-parse', 'HEAD');
+	const sha = trailerCommit(dir, 'two at once', two).slice(0, 12);
+	const pr = cli(['fold', '--check', '--since', base], dir);
+	assert.strictEqual(pr.code, 1, pr.out);
+	assert.ok(pr.out.includes(`error:   ${sha}  State: coded applies only to Slice: VS-2`), pr.out);
+	const full = cli(['fold', '--check'], dir);
+	assert.ok(full.out.includes(`warning: ${sha}  State: coded applies only to Slice: VS-2`), full.out);
+	// The grammar did not change: VS-2 folds, VS-1 does not.
+	cli(['fold', '--write'], dir);
+	assert.deepStrictEqual([foldData(dir, 'VS-1').state, foldData(dir, 'VS-2').state], ['⬜ planned', '🟦 coded']);
 });
 
 test('[slices] normalizeId: zero-padding never makes two ids of one slice', () => {

@@ -50,9 +50,17 @@ EWC3 Labs documentation tools
     [--write | --check]                   Slice: <ID> and State: <word> in its last paragraph;
     [--since <rev>]                       the newest per slice becomes its frontmatter state, in
                                           the register's legend spelling, and the rows follow.
+                                          Each State: belongs to the ONE Slice: directly above
+                                          it - give every Slice: its own State:. One State: under
+                                          several Slice: lines is refused; a timeline-only Slice:
+                                          (no state change) goes below a paired one.
                                           state_source: human is never overwritten. --check fails
                                           when a state is behind its trailer; malformed trailers
                                           after --since are errors. Dry run without --write.
+    [--commits-from <file|->]             Also read trailers committed in OTHER repositories:
+    [--source-repo <name>]                NDJSON, one {sha, repo, committer_date, message} per
+                                          line. Unowned prefixes are counted, not applied; across
+                                          repositories the newest is by committer date.
     [--check-message <file> [--staged]]   Check a commit message BEFORE committing, by the same
                                           grammar: every Slice: names a document, every State:
                                           is a legend word. --staged: every staged slice document
