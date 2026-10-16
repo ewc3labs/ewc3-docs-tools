@@ -4517,11 +4517,41 @@ test('[progression] DOCS-084: an unreadable progression did not run - unknown wo
 		[['planned', 'coded', 'Coded'], /progression names coded twice/],
 		['planned,coded', /progression must be a non-empty array of state words/],
 		[[], /progression must be a non-empty array of state words/],
+		// Falsy declarations are declarations: only an ABSENT key means none (Codex P2, PR #46).
+		['', /progression must be a non-empty array of state words/],
+		[false, /progression must be a non-empty array of state words/],
+		[null, /progression must be a non-empty array of state words/],
+		[0, /progression must be a non-empty array of state words/],
 	]) {
 		const r = cli(['fold', '--check', ...progressionConfig(dir, progression)], dir);
 		assert.strictEqual(r.code, 2, `${JSON.stringify(progression)}: ${r.out}`);
 		assert.ok(/did not run/.test(r.out) && why.test(r.out), r.out);
 	}
+});
+
+test('[progression] DOCS-084: a commit that edits the document back AND carries the matching State: is caught, before and after it lands', () => {
+	// Codex P1, PR #46: the document then equals the trailer, so comparing against it alone saw no move.
+	const dir = foldRepo();
+	const cfg = progressionConfig(dir, LINE);
+	trailerCommit(dir, 'smoked', ['Slice: VS-1', 'State: smoked']);
+	foldCommitted(dir, cfg);
+	const base = git(dir, 'rev-parse', 'HEAD');
+	const doc = gateDoc(dir, 'VS-1');
+	fs.writeFileSync(doc, fs.readFileSync(doc, 'utf8').replace('state: 💨 smoked', 'state: 🟦 coded'));
+	git(dir, 'add', '-A');
+
+	// Before: --check-message --staged refuses the staged backwards edit, and accepts it with a reason.
+	const staged = checkMessage(dir, msg('Slice: VS-1', 'State: coded'), ['--staged', ...cfg]);
+	assert.strictEqual(staged.code, 1, staged.out);
+	assert.ok(staged.out.includes('VS-1 moves BACKWARDS smoked -> coded in progression (planned, coded, smoked, go)'), staged.out);
+	assert.strictEqual(checkMessage(dir, msg('Slice: VS-1', 'State: coded', 'State-Override: rework'), ['--staged', ...cfg]).code, 0);
+
+	// After: committed anyway - fold --check names it, an error after --since.
+	git(dir, 'commit', '-qm', 'back', '-m', 'Slice: VS-1\nState: coded\nCo-Authored-By: t <t@t>');
+	const sha = git(dir, 'rev-parse', 'HEAD').slice(0, 12);
+	const r = cli(['fold', '--check', '--since', base, ...cfg], dir);
+	assert.strictEqual(r.code, 1, r.out);
+	assert.ok(r.out.includes(`error:   ${sha}  VS-1: smoked -> coded was committed BACKWARDS in progression (planned, coded, smoked, go) with no State-Override:`), r.out);
 });
 
 test('[progression] DOCS-084: an imported backwards move is refused too, named by repo@sha', () => {

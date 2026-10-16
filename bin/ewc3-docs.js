@@ -1242,7 +1242,7 @@ function cmdFold(root, config, argv) {
 	};
 
 	if (message !== null) {
-		const r = checkMessage({ repo, registerRoot: register, sliceDir, roadmaps, message, staged, registry: registerConfig.registry });
+		const r = checkMessage({ repo, registerRoot: register, sliceDir, roadmaps, message, staged, registry: registerConfig.registry, progression: registerConfig.progression });
 		if (r.unreadable) { return legendUnreadable(r.unreadable); }
 		if (r.failed) { console.error(`fold: did not run: ${r.failed}`); return 2; }
 		r.notes.forEach((n) => console.log(`fold --check-message: ${n}`));
@@ -1263,7 +1263,7 @@ function cmdFold(root, config, argv) {
 	}
 
 	const plan = planFold({ repo, sliceDir, roadmaps, sinceShas, registry: config.registry, imported, localName: config.registry || null,
-		progression: config.progression === undefined ? null : config.progression });
+		progression: config.progression });
 	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
 	// A progression that cannot be read would refuse nothing it was meant to: did not run (DOCS-084).
 	if (plan.configError) { console.error(`fold: did not run: ${plan.configError}`); return 2; }
