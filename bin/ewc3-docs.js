@@ -1414,13 +1414,14 @@ function foldAsJson(root, config, argv) {
 /** `hook install | uninstall`: the commit-msg hook that runs fold --check-message --staged (DOCS-092). */
 function cmdHook(root, argv) {
 	const [action, ...rest] = argv;
-	const extra = rest.filter((a, i) => !(a === '--repo' || rest[i - 1] === '--repo' || a === '--config' || rest[i - 1] === '--config'));
+	const strict = rest.includes('--strict');
+	const extra = rest.filter((a, i) => a !== '--strict' && !(a === '--repo' || rest[i - 1] === '--repo' || a === '--config' || rest[i - 1] === '--config'));
 	if (!['install', 'uninstall'].includes(action) || extra.length) {
-		console.error('hook: usage: ewc3-docs hook install | uninstall [--repo <dir>]');
+		console.error('hook: usage: ewc3-docs hook install [--strict] | uninstall [--repo <dir>]');
 		return 2;
 	}
 	const r = action === 'install'
-		? installHook(root, { script: path.join(__dirname, 'ewc3-docs.js'), node: process.execPath })
+		? installHook(root, { script: path.join(__dirname, 'ewc3-docs.js'), node: process.execPath, strict })
 		: uninstallHook(root);
 	(r.code ? console.error : console.log)(`hook: ${r.message}`);
 	return r.code;
