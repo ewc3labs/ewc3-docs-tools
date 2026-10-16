@@ -64,6 +64,8 @@ EWC3 Labs documentation tools
                                           Config `progression` (an ordered list of states)
                                           refuses a backwards move unless the commit carries
                                           State-Override: <reason>.
+    [--format json]                       One JSON document on stdout, per the published
+                                          schema/fold.v1.schema.json; exit codes unchanged.
     [--check-message <file> [--staged]]   Check a commit message BEFORE committing, by the same
                                           grammar: every Slice: names a document, every State:
                                           is a legend word. --staged: every staged slice document

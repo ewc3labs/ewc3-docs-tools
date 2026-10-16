@@ -32,6 +32,21 @@ const {
 	frozenViolations: frozenSeriesViolations, contestedPrefixes
 } = require('../lib/series');
 
+// --format json (DOCS-090). A wrapper that parses this tool's English breaks the first time a message is reworded, so
+// fold can emit ONE JSON document on stdout instead, versioned and published: schema/fold.v1.schema.json, whose
+// `schema` field every document carries. Within v1 changes are additive only; a rename or removal is v2.
+const FOLD_SCHEMA = 'ewc3-docs/fold@1';
+const JSON_MODE = process.argv[2] === 'fold' && process.argv.some((a, i) => a === 'json' && process.argv[i - 1] === '--format');
+const jsonMode = () => {
+	const has = (f) => process.argv.includes(f);
+	return has('--check-message') ? 'check-message' : has('--check') ? 'check' : has('--write') ? 'write' : 'dry-run';
+};
+/** Did not run, as JSON: a caller never falls back to reading text, however early the tool died. */
+function jsonDidNotRun(reason) {
+	process.stdout.write(`${JSON.stringify({ schema: FOLD_SCHEMA, mode: jsonMode(), ran: false, ok: false, reason: String(reason).trim() })}\n`);
+	process.exit(2);
+}
+
 // Where the config may live. A repository that keeps whole-repo configuration in one folder should
 // not have to make an exception for this tool, so `config/` is a first-class location rather than a
 // fallback. Both are searched, and finding TWO is an error - a second config that is silently
@@ -80,6 +95,7 @@ function configLabel() {
 }
 
 function fail(message) {
+	if (JSON_MODE) { jsonDidNotRun(message); }
 	console.error(`ewc3-docs: ${message}`);
 	process.exit(2);
 }
@@ -1119,9 +1135,9 @@ function cmdIndex(root, config, argv) {
  * trailer is an ERROR for commits after `--since` (for pull-request CI) and a WARNING in full history, which
  * cannot be rewritten. Writes slice frontmatter only - never STATUS or anything cross-repository.
  */
-function cmdFold(root, config, argv) {
-	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register', '--commits-from', '--source-repo']);
-	const VALUED = new Set(['--since', '--repo', '--config', '--check-message', '--register', '--commits-from', '--source-repo']);
+function cmdFold(root, config, argv, report = {}) {
+	const KNOWN = new Set(['--write', '--check', '--since', '--repo', '--config', '--check-message', '--staged', '--register', '--commits-from', '--source-repo', '--format']);
+	const VALUED = new Set(['--since', '--repo', '--config', '--check-message', '--register', '--commits-from', '--source-repo', '--format']);
 	for (const [i, a] of argv.entries()) {
 		if (a.startsWith('--') && !KNOWN.has(a)) { console.error(`fold: unknown option ${a}`); return 2; }
 		if (VALUED.has(a) && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) { console.error(`fold: ${a} needs a value`); return 2; }
@@ -1130,6 +1146,8 @@ function cmdFold(root, config, argv) {
 	const write = argv.includes('--write');
 	const check = argv.includes('--check');
 	if (write && check) { console.error('fold: --write and --check are exclusive.'); return 2; }
+	const formatAt = argv.indexOf('--format');
+	if (formatAt > -1 && !['json', 'text'].includes(argv[formatAt + 1])) { console.error(`fold: --format is json or text, not ${argv[formatAt + 1]}`); return 2; }
 	const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
 	const repo = path.resolve(flag('--repo') || root);
 	// --register <dir>: the register a message's trailers answer to, when it is not the repository being committed to
@@ -1229,8 +1247,16 @@ function cmdFold(root, config, argv) {
 		console.error(`fold: did not run: the committing repository keeps its own slice documents, so its staged documents answer to it, not to --register ${registerFlag}`);
 		return 2;
 	}
-	if (mode === 'roadmap-rows') { console.log('fold: rows register: nothing to fold - the Delivery Index is kept as rows, not slice documents'); return 0; }
-	if (!mode) { console.log('fold: no register: nothing to fold - no Delivery Index and no slice documents; Slice: trailers here are evidence only'); return 0; }
+	if (mode === 'roadmap-rows') {
+		report.notApplicable = 'rows register: nothing to fold - the Delivery Index is kept as rows, not slice documents';
+		console.log(`fold: ${report.notApplicable}`);
+		return 0;
+	}
+	if (!mode) {
+		report.notApplicable = 'no register: nothing to fold - no Delivery Index and no slice documents; Slice: trailers here are evidence only';
+		console.log(`fold: ${report.notApplicable}`);
+		return 0;
+	}
 
 	const rel = (p) => path.relative(register, p).split(path.sep).join('/');
 	// A legend fold cannot fully read is a register defect, not a stale document: did not run, never exit 1 (DOCS-074).
@@ -1245,10 +1271,12 @@ function cmdFold(root, config, argv) {
 		const r = checkMessage({ repo, registerRoot: register, sliceDir, roadmaps, message, staged, registry: registerConfig.registry, progression: registerConfig.progression });
 		if (r.unreadable) { return legendUnreadable(r.unreadable); }
 		if (r.failed) { console.error(`fold: did not run: ${r.failed}`); return 2; }
+		report.message = { trailers: r.pairs, stagedDocs: staged ? r.stagedDocs : null, notes: r.notes,
+			problems: r.problems.map((p) => ({ code: p.code, message: p.message, file: p.file || null })) };
 		r.notes.forEach((n) => console.log(`fold --check-message: ${n}`));
 		if (r.problems.length) {
 			console.error(`fold --check-message: refused - ${r.problems.length} problem(s):`);
-			r.problems.forEach((p) => console.error(`  ${p}`));
+			r.problems.forEach((p) => console.error(`  ${p.message}`));
 			return 1;
 		}
 		console.log(`fold --check-message: ok - ${r.pairs} Slice: trailer(s)${staged ? `, ${r.stagedDocs} staged slice document(s) checked` : ''}`);
@@ -1267,6 +1295,8 @@ function cmdFold(root, config, argv) {
 	if (plan.unreadable) { return legendUnreadable(plan.unreadable); }
 	// A progression that cannot be read would refuse nothing it was meant to: did not run (DOCS-084).
 	if (plan.configError) { console.error(`fold: did not run: ${plan.configError}`); return 2; }
+	report.plan = plan;
+	report.rel = rel;
 	const errors = plan.issues.filter((i) => i.inScope);
 	const warnings = plan.issues.filter((i) => !i.inScope);
 
@@ -1327,8 +1357,53 @@ function cmdFold(root, config, argv) {
 		console.error('fold: rolled back - the index refused to render the rows, so no slice document was changed either');
 		return indexCode;
 	}
+	report.written = { changes: plan.changes.length, provenance: plan.provenance.length };
 	console.log(`fold: wrote ${plan.changes.length} state change(s) and ${plan.provenance.length} provenance update(s)`);
 	return Math.max(indexCode, errors.length ? 1 : 0);
+}
+
+/**
+ * `fold --format json`: run fold with its text captured, then write ONE document matching schema/fold.v1.schema.json.
+ * The exit code is the text mode's, unchanged: 0 consistent, 1 diverged, 2 did not run.
+ */
+function foldAsJson(root, config, argv) {
+	const said = { out: [], err: [] };
+	const { log, error } = console;
+	console.log = (...a) => said.out.push(a.join(' '));
+	console.error = (...a) => said.err.push(a.join(' '));
+	const report = {};
+	let code;
+	try { code = cmdFold(root, config, argv, report); } finally { console.log = log; console.error = error; }
+	const mode = jsonMode();
+	const base = { schema: FOLD_SCHEMA, mode };
+	if (code === 2) {
+		const reason = said.err.join('\n').replace(/^fold: (did not run: )?/, '') || 'fold did not run';
+		process.stdout.write(`${JSON.stringify({ ...base, ran: false, ok: false, reason })}\n`);
+		return 2;
+	}
+	let doc;
+	if (report.notApplicable) {
+		doc = { ...base, ran: true, ok: code === 0, applicable: false, reason: report.notApplicable };
+	} else if (mode === 'check-message') {
+		doc = { ...base, ran: true, ok: code === 0, applicable: true, ...report.message };
+	} else {
+		const { plan, rel } = report;
+		const shape = (e) => ({ id: e.written, from: e.from || null, to: e.to, sha: e.sha, repo: e.repo || null,
+			date: e.dateText || null, source: e.source, override: e.override || null, file: rel(e.file) });
+		doc = { ...base, ran: true, ok: code === 0, applicable: true,
+			legendSource: plan.legendSource,
+			changes: plan.changes.map(shape),
+			provenance: plan.provenance.map(shape),
+			conflicts: plan.conflicts.map((c) => ({ id: c.written, kept: c.human, trailer: c.to || c.trailer, sha: c.sha, file: rel(c.file) })),
+			issues: plan.issues.map((i) => ({ code: i.code, severity: i.inScope ? 'error' : 'warning', sha: i.sha, message: i.message })),
+			foreign: plan.foreign.map((f) => ({ sha: f.sha, written: f.written })),
+			unowned: plan.unowned ? [...plan.unowned].map(([prefix, u]) => ({ prefix, count: u.count, first: u.first })) : [],
+			quiet: plan.quiet || [],
+			alreadyLocal: plan.local || 0,
+			written: report.written || null };
+	}
+	process.stdout.write(`${JSON.stringify(doc)}\n`);
+	return code;
 }
 
 function cmdSlice(root, config, argv) {
@@ -1423,6 +1498,7 @@ function cmdTables(root, config, argv) {
 // it is handled where it is read, and exits 1 naming the file.
 const didNotRun = (err) => {
 	const reason = err && err.message ? err.message : String(err);
+	if (JSON_MODE) { jsonDidNotRun(reason); }
 	console.error(`ewc3-docs: did not run: ${reason}`);
 	if (process.env.EWC3_DOCS_DEBUG && err && err.stack) { console.error(err.stack); }
 	process.exit(2);
@@ -1462,7 +1538,7 @@ switch (command) {
 	case 'tables': code = cmdTables(root, config, argv); break;
 	case 'index': code = cmdIndex(root, config, argv); break;
 	case 'slice': code = cmdSlice(root, config, argv); break;
-	case 'fold': code = cmdFold(root, config, argv); break;
+	case 'fold': code = JSON_MODE ? foldAsJson(root, config, argv) : cmdFold(root, config, argv); break;
 	// The write-mode mirror of `check`. Values first, then format: substituting a number changes the
 	// line, and the wrap has to see the result. Links and series never write, so they are not here.
 	case 'fix':

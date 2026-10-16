@@ -35,6 +35,7 @@ the wrap has to see the result. Running `format` then `values` can leave a line 
 | `--check-message <file>` | `fold` only, and alone (not with `--write`, `--check` or `--since`). Checks a commit message **before** the commit exists, as git will store it: comment lines and everything below a scissors line are cut, and the trailer block is read by `git interpret-trailers --parse`, the parser behind the `%(trailers)` fold reads history with. Every `Slice:` must name a slice document (live or archived), every `State:` must resolve in the legend, and each `State:` needs a `Slice:` above it. `No-Slice: <reason>` says why a commit names no slice; the reason is required, and it cannot stand with a `Slice:`. One slice per `Slice:` line: a comma or space list is refused. A `Slice:`, `State:` or `No-Slice:` line in a `Key: value` paragraph that is not the last one is refused as **stranded** - git reads trailers only from the last paragraph, so a blank line above `Co-Authored-By:` would otherwise pass as zero trailers (DOCS-088); `fold --check` reports the same per commit. Exit 0 accepted, or nothing applies (a rows register, no register), with the reason; 1 refused, naming each trailer or file; 2 did not run (unreadable file, not a repository, an unreadable legend). Reads no history. For a commit command or a `commit-msg` hook. |
 | `--commits-from <file\|->` | `fold` (dry run, `--write` or `--check`), not with `--check-message`. Trailers from **other** repositories, as NDJSON the caller assembled, one `{ "sha", "repo", "committer_date", "message" }` per line (`-` reads stdin). `committer_date` is ISO 8601 with a time and zone, as `git log --format=%cI` writes it. Each message is read by git's own trailer parser, as `--check-message` reads one. The list **adds** to local history: local commits keep topological order among themselves, and across repositories the newest is by committer date, then repository name, then sha - a weaker order than topology, so the dry run prints `repo@sha date` for every transition. A prefix the register does not declare is reported `unowned` with a count and applied to nothing; a frozen prefix is refused by name; a commit already in local history is read once; a commit with no trailers is named. An imported transition records `state_sha`, `state_repo: <repo>` and `state_source: trailer-remote` - this repository could not verify it. Any bad line (not JSON, no sha, no repo, a date without a time or zone, one sha listed twice with different messages) refuses the whole list, exit 2, naming each line. Committing an import's frontmatter needs `Slice:`/`State:` trailers or `No-Slice:` under `--check-message --staged`, because the sha it records is not in this repository. (DOCS-084) |
 | `--source-repo <name>` | With `--commits-from` only. The repository for list lines that omit `repo`. |
+| `--format json` | `fold` in every mode. One JSON document on stdout instead of text, matching the published schema - see [Machine-readable output](#machine-readable-output). Exit codes are unchanged. `--format text` is the default. |
 | `--register <dir>` | With `--check-message` only. The register the trailers are validated against, when it is not the repository being committed to (a hub owning a series whose work lands elsewhere). Defaults to `--repo`; its own config supplies `registry`, `planning` and the roadmap globs. `--repo` stays the committing repository: `--staged` and `MERGE_HEAD` always read `--repo`, never `--register`. Strict: a `--register` holding no slice-document register exits 2 naming the path (an implicit absence still exits 0), and `--staged` with a different `--register` exits 2 when the committing repository keeps slice documents of its own, since those answer to it. |
 | `--staged` | With `--check-message` only. Every slice document added, modified or renamed in the index must be named by a `Slice:` (or the message carries `No-Slice:`), and one whose frontmatter `state` changed needs a `State:` for it that resolves to the new value. Exempt: a document where only `state`, `state_sha`, `state_repo` and `state_source` changed and the commit `state_sha` names has a trailer giving that state (`fold --write` recording history), and every document during a merge (`MERGE_HEAD`), which says so. Deleted documents are not checked. |
 | `--since <rev>` | `fold --check` only. Malformed trailers in commits after `<rev>` are errors; older ones, which history cannot remove, are warnings. For pull-request CI, e.g. `--since origin/main`. |
@@ -91,6 +92,28 @@ register with **no Doc column**, a document that leaves the last column empty re
 `See [slice notes](slices/<file>).` there, the same pointer `migrate-project` writes, so the table
 always links to its documents. A row whose ID was renamed while its cells were edited is refused. A
 slice document whose frontmatter cannot be read exits `1` and names the file.
+
+## Machine-readable output
+
+`fold --format json` writes **one** JSON document to stdout, for wrappers and CI that must not parse
+English. Every document carries `"schema": "ewc3-docs/fold@1"` and matches
+[`schema/fold.v1.schema.json`][schema-fold-v1], a JSON Schema (draft 2020-12) shipped in the npm
+package.
+
+- **Exit codes are the contract, unchanged by the format:** 0 consistent, 1 diverged, 2 did not run.
+  `ok` is `true` exactly when the exit code is 0.
+- **Did not run is JSON too**, however early the tool stopped - a bad flag, an unreadable config or
+  commit list, a crash: `{ "ran": false, "ok": false, "reason": ... }`.
+- **Branch on `code`, never on `message`.** Every issue and problem carries a stable `code`
+  (`stranded-trailer`, `ambiguous-state`, `backwards`, ...); the schema lists them all. Messages are
+  for people and may be reworded within a version.
+- **Versioning.** Within version 1, changes are additive only: a new optional field, a new code.
+  Renaming or removing a field or a code is version 2, published as `fold.v2.schema.json` beside v1,
+  which stays. A consumer ignores fields it does not know and treats an unknown code by its
+  `severity`.
+- The schema is **closed** (`additionalProperties: false`): the toolkit's tests validate real output
+  against it, so the tool cannot emit a field the schema does not publish, and the list of codes in
+  the schema is checked against the codes the source can emit.
 
 ## Configuration
 
@@ -286,3 +309,4 @@ a specific failure, not a style preference. A check that fires on something nobo
 is noise, and noise is how a green build stops meaning anything.
 
 [for-agents]: For_Agents.md#things-you-will-get-wrong
+[schema-fold-v1]: ../schema/fold.v1.schema.json

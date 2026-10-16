@@ -15,6 +15,7 @@
   "files": [
     "bin/",
     "lib/",
+    "schema/",
     "USAGE.txt",
     "README.md",
     "LICENSE"
