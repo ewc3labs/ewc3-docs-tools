@@ -21,7 +21,7 @@ not a summary of them.
 
 | Prefix | Scope | Owner | Last Used | Series |
 | --- | --- | --- | --- | --- |
-| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-088<!--/ewc3:lastDOCS--> | toolkit features and fixes |
+| DOCS | global | ewc3-docs-tools | <!--ewc3:lastDOCS-->DOCS-089<!--/ewc3:lastDOCS--> | toolkit features and fixes |
 | FIX | repo-local | ewc3-docs-tools | <!--ewc3:lastFIX-->FIX-1<!--/ewc3:lastFIX--> | small corrections not worth a slice |
 | W | repo-local | ewc3-docs-tools | <!--ewc3:lastW-->W-7<!--/ewc3:lastW--> | decisions owed to the owner, never reused — [Decisions](Decisions.md) |
 
@@ -111,6 +111,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-086 | ⬜ planned | a cross-repository prefix registry, generated from each register, run from a workstation first | L | [DOCS-086][docs-086] |  |
 | DOCS-087 | ⬜ planned | a converted register's Last Used is emitted by the tool, from slice documents and the archive | M | [DOCS-087][docs-087] |  |
 | DOCS-088 | 🟦 tested | a trailer cut off by a blank line is refused, not passed as zero trailers | S | [DOCS-088][docs-088] |  |
+| DOCS-089 | ⬜ planned | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
 
 ## Done
 
@@ -220,6 +221,7 @@ caught.
 [docs-086]: slices/DOCS-086_a_cross_repository_prefix_registry_generated_from_each_reg.md
 [docs-087]: slices/DOCS-087_a_converted_register_s_Last_Used_is_emitted_by_the_tool_fr.md
 [docs-088]: slices/DOCS-088_a_trailer_cut_off_by_a_blank_line_is_refused_not_passed_as.md
+[docs-089]: slices/DOCS-089_one_State_under_several_Slice_lines_is_refused_it_reads_as.md
 [epqe]: https://github.com/ewc3labs/excel-power-query-editor
 [frontmatter-is-the]: ../design/frontmatter-is-the-declaration.md
 [one-template-beats]: ../design/one-template-beats-three-parsers.md
