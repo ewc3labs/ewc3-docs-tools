@@ -111,7 +111,7 @@ is never referenced from outside the repository it fixes.
 | DOCS-086 | ⬜ planned | a cross-repository prefix registry, generated from each register, run from a workstation first | L | [DOCS-086][docs-086] |  |
 | DOCS-087 | ⬜ planned | a converted register's Last Used is emitted by the tool, from slice documents and the archive | M | [DOCS-087][docs-087] |  |
 | DOCS-088 | 🟦 tested | a trailer cut off by a blank line is refused, not passed as zero trailers | S | [DOCS-088][docs-088] |  |
-| DOCS-089 | ⬜ planned | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
+| DOCS-089 | 🟦 tested | one State: under several Slice: lines is refused - it reads as all of them and moves only the last | S | [DOCS-089][docs-089] |  |
 
 ## Done
 

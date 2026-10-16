@@ -1,10 +1,12 @@
 ---
 id: DOCS-089
-state: ⬜ planned
+state: 🟦 tested
 title: "one State: under several Slice: lines is refused - it reads as all of them and moves only the last"
 est: S
 doc: "[DOCS-089](slices/DOCS-089_one_State_under_several_Slice_lines_is_refused_it_reads_as.md)"
 status: ""
+state_sha: 44e8b3d80fd2
+state_source: trailer
 ---
 
 # DOCS-089 — one State: under several Slice: lines is refused - it reads as all of them and moves only the last
